@@ -56,6 +56,7 @@ PROJET_MLOPS/
 		├── .dvc/	
      	│	├── .gitignore
 		│	└── config
+		├── configs/
 		├── data/
      	│	├── processed/
      	│	├── raw/
@@ -71,6 +72,9 @@ PROJET_MLOPS/
 		├── models/
 		├── notebooks/
 		├── src/
+     	│	├── data/
+     	│	├── inference/
+		│	└── training/
 		├── tests/
 		├── .dvcignore
 		├── .gitignore
