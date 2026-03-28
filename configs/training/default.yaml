@@ -1,0 +1,27 @@
+# Default training hyperparameters for Champy Classifier
+# Override any field via environment variables (prefix TRAIN_) or .env
+
+model_name: resnet50
+num_classes: 30
+pretrained: true
+freeze_backbone: false
+
+lr: 1.0e-3
+batch_size: 16
+epochs: 30
+seed: 42
+
+optimizer: adamw
+weight_decay: 1.0e-4
+scheduler: cosine
+warmup_epochs: 2
+
+early_stopping_patience: 5
+early_stopping_metric: val_loss
+
+mixed_precision: true
+gradient_accumulation_steps: 1
+num_workers: 0
+
+image_size: 224
+augmentation: true

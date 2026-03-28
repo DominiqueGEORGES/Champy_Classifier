@@ -1,0 +1,16 @@
+# Force LF line endings in the repo (cross-platform)
+* text=auto eol=lf
+
+# Explicitly mark binary files
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.onnx binary
+*.pt binary
+*.pth binary
+*.keras binary
+*.npy binary
+*.pkl binary
+*.pdf binary
