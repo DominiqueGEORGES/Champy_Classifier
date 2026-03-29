@@ -85,6 +85,10 @@ invoke setup               # ou pip install -r requirements.txt && dvc pull
 - Toujours verifier la stratification apres le split : le ratio par classe doit etre stable (+/- 0.5%). Un desequilibre cache peut biaiser l'evaluation.
 - Si le dataset source contient des augmentations pre-calculees (ex: transforms TF non seedees), les exclure et laisser le framework de training gerer ses propres augmentations. Les augmentations non reproductibles violent le principe de reproductibilite.
 - Un dataset naturellement desequilibre (ratio 17x entre la classe la plus grande et la plus petite) necessite un mecanisme d'equilibrage au training (WeightedRandomSampler, class weights, ou over-sampling en ligne), pas un resampling statique des donnees.
+- Le Dataset PyTorch doit exposer un attribut `targets` (tensor d'indices de classes) pour que le WeightedRandomSampler puisse calculer ses poids. Sans ca, il faut un second parcours des donnees.
+- Toujours construire le label_map depuis le split train et le partager avec val/test. Si chaque split construit le sien, les indices peuvent ne pas correspondre.
+- Sur Windows, `num_workers=0` par defaut dans le DataLoader (multiprocessing fork non supporte). Tester `num_workers=2` avec `persistent_workers=True` si le chargement est un goulot.
+- `pin_memory=True` ameliore le transfert CPU->GPU, mais genere un warning si aucun GPU n'est disponible. Acceptable (pas bloquant).
 
 **Commandes cles** :
 ```powershell

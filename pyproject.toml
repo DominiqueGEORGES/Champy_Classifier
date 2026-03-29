@@ -75,6 +75,7 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "TC003",  # Path is used at runtime everywhere (pathlib-based project)
 ]
 
 [tool.ruff.lint.isort]

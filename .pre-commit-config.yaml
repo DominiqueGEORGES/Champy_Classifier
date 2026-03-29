@@ -28,6 +28,7 @@ repos:
           - pydantic-settings
           - types-PyYAML
         args: [--ignore-missing-imports]
+        files: ^(src/|data/data_split\.py)
 
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0

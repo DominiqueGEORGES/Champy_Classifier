@@ -157,11 +157,29 @@ Stratification verifiee sur toutes les classes, y compris les plus petites (Russ
 - `.pre-commit-config.yaml` - hooks ruff + mypy + interrogate
 - `notebooks/legacy/` - 5 notebooks archives
 
+### Sous-etape 2d - Dataset PyTorch + DataLoader
+
+`src/data/dataset.py` : classe `MushroomDataset` qui lit le manifest CSV et charge les images
+depuis `data/processed/`. Transforms configurables :
+- Train : Resize(256), RandomCrop(224), RandomHorizontalFlip, RandomRotation(15), ColorJitter, Normalize(ImageNet)
+- Val/Test : Resize(256), CenterCrop(224), Normalize(ImageNet)
+
+`src/data/dataloader.py` : factory de DataLoaders avec :
+- `WeightedRandomSampler` pour le train (poids inversement proportionnels a la frequence de classe)
+- `num_workers=0` par defaut (Windows), configurable via TrainingConfig
+- `pin_memory=True` pour le transfert GPU
+- `drop_last=True` sur le train (eviter un dernier batch trop petit)
+- Label map partage entre les 3 splits (construit depuis le train, reutilise pour val/test)
+
+Tests unitaires : 23 tests, 23 passed (test_dataset.py + test_dataloader.py)
+
 ### Metriques / Resultats
 - Images : 25 850 (processed) -> 12 131 (originaux retenus apres exclusion)
 - Classes : 30, desequilibrees naturellement (52 a 900 par classe)
 - Split : train=8 491, val=1 819, test=1 821
 - Stratification : 70.0% +/- 0.8% sur toutes les classes
+- Tests : 23 passed (15 dataset + 8 dataloader)
+- Pre-commit : tous les hooks passent (ruff, mypy, interrogate)
 
 ---
 
