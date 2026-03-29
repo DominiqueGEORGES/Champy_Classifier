@@ -6,7 +6,7 @@
 - **Cadre** : TFE Master AI (DataScientest, RNCP niveau 7, promotion 2026)
 - **Equipe** : [à compléter]
 - **Repo** : DagsHub - LoicFocraud/Champy_Classifier
-- **Date de début** : [à compléter]
+- **Date de debut** : 2026-03-28
 - **Date de soutenance** : [à compléter]
 
 ---
@@ -199,29 +199,80 @@ Helpers partages : `demo/lib/data_utils.py` (load_json, load_manifest, scan_clas
 
 ## Etape 3 - Training pipeline
 
-**Date** : [à compléter]
-**Objectif** : Boucle d'entraînement PyTorch, AMP, MLflow tracking, early stopping, checkpointing.
+**Date** : 2026-03-29
+**Objectif** : Boucle d'entrainement PyTorch, AMP, MLflow tracking, early stopping, checkpointing.
 
-### Décisions prises
+### Decisions prises
 
-| Décision | Choix | Alternatives envisagées | Justification |
+| Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Optimizer | AdamW | SGD+momentum, LARS | Convergence rapide, weight decay intégré |
+| Optimizer | AdamW | SGD+momentum, LARS | Convergence rapide, weight decay integre |
 | Scheduler | CosineAnnealingLR | StepLR, OneCycleLR | Smooth decay, bon pour fine-tuning |
-| Batch size | 16 (fp16) | 32 | Contraint par 4GB VRAM |
-| | | | |
+| Batch size | 16 (fp16) | 32 | Contraint par 4GB VRAM RTX 3050 Ti |
+| Architecture tete | Dropout(0.3) + Linear(2048, 30) | Dense(512)+Dense(30), GlobalAvgPool | Simple, evite l'overfitting, 2048 features ResNet |
+| Mixed precision | AMP (autocast + GradScaler) | FP32 complet | Obligatoire pour 4GB VRAM, ~2x plus rapide |
+| Gradient accumulation | Configurable (defaut 1) | Aucune | Permet batch effectif 32 ou 64 si VRAM insuffisant |
+| Logging | loguru | print, logging stdlib | Formatage riche, rotation fichiers, pas de config |
+| @torch.no_grad() | with torch.no_grad() dans le corps | decorateur | Le decorateur rend la fonction "untyped" pour mypy du pre-commit |
 
-### Problèmes rencontrés
--
+### Sous-etape 3a - Script d'entrainement
+
+`src/training/train.py` : pipeline complet lancable en CLI.
+- Chargement config YAML via `TrainingConfig.from_yaml()`
+- Seed global (torch, numpy, random, cudnn)
+- Detection automatique GPU/CPU
+- Boucle train avec AMP + gradient accumulation
+- Validation a chaque epoch (loss, accuracy, F1 macro)
+- CosineAnnealingLR scheduler
+- Early stopping + checkpointing du meilleur modele
+
+`src/models/resnet.py` : creation ResNet50 avec tete personnalisee.
+- Poids ImageNet V2 pre-entraines
+- Tete : Dropout(0.3) + Linear(2048, 30)
+- Freeze/unfreeze progressif du backbone (par layer)
+
+### Sous-etape 3b - MLflow tracking
+
+Integre dans la boucle de train :
+- Log des hyperparams (config.model_dump())
+- Metriques par epoch (train_loss, val_loss, val_acc, val_f1_macro, lr)
+- Artefacts finaux : confusion_matrix.png, learning_curves.png, metrics.json
+- URI et credentials depuis src/config.py (.env)
+
+### Sous-etape 3c - Callbacks
+
+`src/training/callbacks.py` :
+- `EarlyStopping` : patience configurable, mode min/max, min_delta
+- `ModelCheckpoint` : sauvegarde checkpoint complet (model + optimizer + epoch + best_score)
+
+### Sous-etape 3d - Evaluation
+
+`src/training/evaluate.py` :
+- `evaluate_model()` : accuracy, F1 macro, classification report
+- `save_confusion_matrix()` : PNG annotee, normalisable
+- `save_learning_curves()` : PNG loss + metriques par epoch
+- `save_metrics_json()` : JSON pour Streamlit
+
+### Problemes rencontres
+- Le decorateur `@torch.no_grad()` rend les fonctions "untyped" pour le mypy du pre-commit (mirrors-mypy sans torch). Solution : utiliser `with torch.no_grad()` dans le corps.
+- Les `type: ignore` pour les generiques PyTorch (DataLoader, Dataset) ne sont pas necessaires avec le mypy du pre-commit qui ne connait pas torch. Il faut les retirer sinon `unused-ignore` bloque.
+- loguru, matplotlib, scikit-learn n'etaient pas installes dans l'env systeme du NUC3.
 
 ### Artefacts produits
--
+- `src/training/train.py` - script d'entrainement complet
+- `src/training/callbacks.py` - EarlyStopping + ModelCheckpoint
+- `src/training/evaluate.py` - metriques + artefacts visuels
+- `src/models/resnet.py` - ResNet50 transfer learning
+- `tests/unit/test_callbacks.py` - 9 tests (EarlyStopping + ModelCheckpoint)
+- `tests/unit/test_evaluate.py` - 6 tests (confusion matrix, courbes, JSON)
 
-### Métriques / Résultats
-- Best val accuracy :
-- Best val F1 (macro) :
-- Nombre d'epochs avant convergence :
-- Temps total d'entraînement :
+### Metriques / Resultats
+- Tests : 38 passed (23 existants + 15 nouveaux)
+- Pre-commit : tous les hooks passent
+- Best val accuracy : [a completer apres run sur XPS]
+- Best val F1 (macro) : [a completer apres run sur XPS]
+- Nombre d'epochs avant convergence : [a completer apres run sur XPS]
+- Temps total d'entrainement : [a completer apres run sur XPS]
 
 ---
 

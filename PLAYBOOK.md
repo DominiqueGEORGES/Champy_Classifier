@@ -106,21 +106,27 @@ invoke split-data
 **But** : Entraînement reproductible, traçé dans MLflow, avec early stopping.
 
 **A produire** :
-- [ ] Boucle d'entraînement (AMP si GPU)
-- [ ] Early stopping + checkpointing
-- [ ] MLflow logging (params, métriques par epoch, artefacts)
-- [ ] Config YAML externalisée (lr, batch_size, epochs, etc.)
-- [ ] Seed fixé pour reproductibilité
+- [x] Boucle d'entrainement (AMP si GPU)
+- [x] Early stopping + checkpointing
+- [x] MLflow logging (params, metriques par epoch, artefacts)
+- [x] Config YAML externalisee (lr, batch_size, epochs, etc.)
+- [x] Seed fixe pour reproductibilite
 
-**Pièges connus** :
--
+**Pieges connus** :
+- Le decorateur `@torch.no_grad()` rend les fonctions "untyped" pour mypy quand torch n'est pas installe dans l'env mypy (cas mirrors-mypy de pre-commit). Utiliser `with torch.no_grad():` dans le corps a la place.
+- Les `type: ignore` pour les generiques PyTorch (DataLoader[X], Dataset[X]) ne sont pas necessaires quand mypy ne connait pas torch (il les traite comme Any). Les laisser provoque des erreurs `unused-ignore`.
+- `torch.backends.cudnn.benchmark = True` accelere les convolutions a taille fixe, mais `deterministic = True` est prioritaire pour la reproductibilite. Ne pas activer benchmark en mode reproductible.
+- Sur Windows, AMP (mixed precision) fonctionne nativement avec CUDA sans configuration supplementaire. Par contre, `GradScaler` doit recevoir `device=device.type` et non `device="cuda"` sinon ca plante sur CPU.
+- Gradient accumulation : diviser la loss par `accumulation_steps` a chaque forward, et ne faire `optimizer.step()` que toutes les N iterations. Oublier la division = loss trop grande = divergence.
+- `loguru` est plus simple que le module `logging` stdlib mais n'est pas installe par defaut. L'ajouter dans requirements.txt et pyproject.toml.
 
-**Commandes clés** :
+**Commandes cles** :
 ```powershell
+python -m src.training.train --config configs/training/default.yaml
 invoke train --config configs/training/default.yaml
 ```
 
-**Durée typique** : 2-3 jours (code) + temps d'entraînement
+**Duree typique** : 2-3 jours (code) + 12-15h d'entrainement (XPS, RTX 3050 Ti)
 
 ---
 
