@@ -1,0 +1,43 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+        exclude: ^(notebooks/legacy/|data/)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^notebooks/legacy/
+      - id: ruff-format
+        exclude: ^notebooks/legacy/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic
+          - pydantic-settings
+          - types-PyYAML
+        args: [--ignore-missing-imports]
+
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        args:
+          - --fail-under=100
+          - --ignore-init-module
+          - --ignore-init-method
+          - --ignore-magic
+          - --ignore-module
+          - -v
+        files: ^src/|^data/|^demo/

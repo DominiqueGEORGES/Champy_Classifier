@@ -95,26 +95,73 @@
 
 ## Etape 2 - Data pipeline
 
-**Date** : [à compléter]
-**Objectif** : DVC pull, split stratifié, Dataset PyTorch, DataLoader, augmentation.
+**Date** : 2026-03-28
+**Objectif** : DVC pull, split stratifie, Dataset PyTorch, DataLoader, augmentation.
 
-### Décisions prises
+### Decisions prises
 
-| Décision | Choix | Alternatives envisagées | Justification |
+| Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Split ratio | 70/15/15 | 80/10/10 | 700K images = assez pour val/test conséquents |
-| Augmentation | Flip, Rotation(15), ColorJitter | RandAugment, CutMix | Baseline simple, augmenter si underfitting |
-| | | | |
+| Source de travail | data/processed/ (25 850 images) | data/raw/ (646K) | Deja nettoyees et classees par le notebook 0, equilibrees |
+| Immutabilite des donnees | Exclusion list (excluded.json) | Suppression des doublons | data/processed/ est partage via DVC avec l'equipe, ne jamais modifier |
+| **Option B : originaux uniquement** | Exclure les 13 690 augmentations TF, garder 12 131 originaux | Option A (tout garder), Option C (hybride) | Les augmentations TF ne sont pas reproductibles (non seedees), les originaux suffisent, PyTorch gerera ses propres augmentations + WeightedRandomSampler pour l'equilibrage |
+| Detection doublons | Hash MD5 partiel (8KB debut + 4KB fin + taille) | Hash complet, perceptual hash | Suffisant pour des fichiers identiques, rapide sur 25K images |
+| Gestion doublons | Garder l'ID le plus bas, exclure l'autre | Supprimer, deplacer dans quarantaine | Coherent avec l'immutabilite, tracable, reversible |
+| Split ratio | 70/15/15 | 80/10/10 | Distribution naturelle desequilibree (52-900/classe), besoin de val/test suffisants |
+| Augmentation | PyTorch transforms au training | Reutiliser les augmentations TF existantes | Reproductible, seedable, plus de controle |
+| Docstrings | Francais (Google style), verifie par interrogate | Anglais | Convention du projet, mieux pour le memoire |
+| Pre-commit | ruff + mypy + interrogate + hooks generaux | Verification manuelle | Garantit la qualite a chaque commit |
+| Notebooks legacy | Deplaces dans notebooks/legacy/ | Supprimer | Conserves pour reference, plus dans le chemin principal |
 
-### Problèmes rencontrés
-- 
+### Sous-etape 2a - Etat des lieux
+
+**Constat** : les donnees sont deja propres et equilibrees (850-900 images/classe, 0 corruption).
+Le gros du nettoyage a ete fait par le notebook 0 (646K -> 25 850).
+Dimensions variables (320x240 majoritaire ~55%), necessitent Resize+CenterCrop dans le pipeline.
+
+### Sous-etape 2b - Nettoyage par exclusion (Option B - originaux uniquement)
+
+**Politique** : donnees source immutables, filtrage par liste d'exclusion, pas de suppression.
+
+Audit complet du pipeline notebook 0 (voir rapport d'audit dans la conversation) :
+- Les 646K images raw viennent de mushroomobserver.org (thumbnails 320px)
+- Le notebook 0 filtre (merge top30, confidence >= 92, filtre ResNet50 ImageNet) puis resamble (under a 900, over a 850 avec augmentations TF)
+- **12 160 originaux** (copies bit-pour-bit de raw) + **13 690 augmentees** (transforms TF non seedees)
+
+Decision Option B : exclure toutes les augmentations TF + les 29 doublons.
+- 13 690 images `_N.jpg` exclues (raison : `tf_augmentation_legacy`)
+- 29 doublons entre originaux exclus (raison : `duplicate`)
+- **12 131 images originales retenues**
+
+Le desequilibre naturel est accepte (52 a 900 par classe). PyTorch gerera l'equilibrage via `WeightedRandomSampler`.
+
+### Sous-etape 2c - Split stratifie sur originaux (v2)
+
+Script `data/data_split.py` (docstrings FR) : charge `excluded.json` (13 719 exclusions), split stratifie 70/15/15 avec seed=42.
+Stratification verifiee sur toutes les classes, y compris les plus petites (Russula emetica, 52 images : 69.2/15.4/15.4%).
+
+### Problemes rencontres
+- Le repo contient 646K images brutes (data/raw/) mais seulement 25 850 sont exploitables (data/processed/)
+- Les augmentations TF du notebook 0 ne sont pas reproductibles (transforms aleatoires non seedees) - exclues
+- Le dataset naturel est tres desequilibre (ratio max/min = 17.3x) - necessitera WeightedRandomSampler
+- `reset_index(drop=True)` dans la boucle for du notebook 0 (bug de perf, non corrige car on ne relance pas)
+- Incoherence de nommage des modeles entre notebook 3 (.keras) et notebook 4 (.h5)
 
 ### Artefacts produits
-- 
+- `data/raw_stats.json` - rapport complet des donnees brutes
+- `data/excluded.json` - 13 719 exclusions (13 690 augmentees + 29 doublons)
+- `data/cleaning_report.json` - rapport avant/apres (25 850 -> 12 131)
+- `data/data_split.py` - script reproductible avec docstrings FR
+- `data/split_manifest.csv` - 12 132 lignes (header + 12 131 entrees)
+- `data/split_stats.json` - stats par classe par split
+- `.pre-commit-config.yaml` - hooks ruff + mypy + interrogate
+- `notebooks/legacy/` - 5 notebooks archives
 
-### Métriques / Résultats
-- Nombre d'images par split : train=X, val=X, test=X
-- Distribution des classes (équilibré ? déséquilibré ?)
+### Metriques / Resultats
+- Images : 25 850 (processed) -> 12 131 (originaux retenus apres exclusion)
+- Classes : 30, desequilibrees naturellement (52 a 900 par classe)
+- Split : train=8 491, val=1 819, test=1 821
+- Stratification : 70.0% +/- 0.8% sur toutes les classes
 
 ---
 
@@ -133,10 +180,10 @@
 | | | | |
 
 ### Problèmes rencontrés
-- 
+-
 
 ### Artefacts produits
-- 
+-
 
 ### Métriques / Résultats
 - Best val accuracy :
@@ -159,10 +206,10 @@
 | | | | |
 
 ### Problèmes rencontrés
-- 
+-
 
 ### Artefacts produits
-- 
+-
 
 ### Métriques / Résultats
 - Taille modèle ONNX :
@@ -183,7 +230,7 @@
 | | | | |
 
 ### Problèmes rencontrés
-- 
+-
 
 ### Endpoints implémentés
 - `POST /predict` :
@@ -220,13 +267,13 @@
 **Objectif** : Dashboards de monitoring, détection de drift.
 
 ### Métriques monitorées
-- 
+-
 
 ### Alertes configurées
-- 
+-
 
 ### Drift detection (Evidently)
-- 
+-
 
 ---
 
@@ -244,7 +291,7 @@
 | Dockerfile.demo | | | |
 
 ### Docker Compose
-- Services : 
+- Services :
 - Volumes :
 - Networks :
 
@@ -280,13 +327,13 @@
 ## Bilan final
 
 ### Ce qui a bien fonctionné
-- 
+-
 
 ### Difficultés majeures
-- 
+-
 
 ### Améliorations possibles (hors scope TFE)
-- 
+-
 
 ### Temps passé par étape
 

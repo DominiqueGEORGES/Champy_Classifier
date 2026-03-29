@@ -46,6 +46,8 @@ dev = [
     "mypy>=1.10",
     "pytest>=8.2",
     "pytest-cov>=5.0",
+    "pre-commit>=3.7",
+    "interrogate>=1.7",
 ]
 
 [build-system]
@@ -111,3 +113,17 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests",
 ]
+
+# ---------- Interrogate ----------
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = true
+ignore-module = false
+ignore-nested-functions = false
+fail-under = 100
+exclude = ["tests", "notebooks", "demo/pages"]
+verbose = 1

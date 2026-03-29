@@ -4,7 +4,10 @@
 /data/raw/
 /data/processed/
 /data/split/
-/data/*.csv
+# Large source CSVs (DVC-managed), but keep pipeline artifacts
+/data/observations_mushroom.csv
+/data/dataset_30_species.csv
+/data/champignons_france_top30.csv
 /models/
 *.onnx
 *.pt

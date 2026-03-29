@@ -51,6 +51,8 @@
 - `.gitignore` et fichiers `.dvc` : ne JAMAIS exclure les fichiers `data.dvc` / `models.dvc` du git. C'est le principe meme de DVC : les fichiers `.dvc` sont les pointeurs legers qui permettent de retrouver les donnees. Les exclure = perdre le lien vers les donnees versionnees.
 - `requirements.txt` sous Windows : certains outils d'ecriture generent du UTF-16 silencieusement. Verifier avec `file requirements.txt` ou ouvrir en hex editor. pip ne parse pas l'UTF-16.
 - Penser a `httpx` et `plotly` des le depart si le projet inclut un Streamlit qui appelle une API et affiche des graphiques : ce sont des deps de premiere classe, pas des extras
+- Installer `pre-commit` + `interrogate` des l'etape 1, pas en rattrapage. Chaque fichier cree sans docstring devra etre repris plus tard. Le cout de la retro-documentation est 3x plus eleve que de documenter au fil de l'eau.
+- Archiver les notebooks legacy dans un sous-dossier (`notebooks/legacy/`) plutot que les supprimer : ils contiennent les decisions implicites du projet initial et sont utiles pour l'audit.
 
 **Commandes cles** :
 ```powershell
@@ -73,16 +75,25 @@ invoke setup               # ou pip install -r requirements.txt && dvc pull
 - [ ] DataLoader factory (configurable via YAML)
 - [ ] Vérification : distribution des classes, nombre d'images par split
 
-**Pièges connus** :
-- 
+**Pieges connus** :
+- Les donnees brutes (raw) et les donnees nettoyees (processed) peuvent avoir des ordres de grandeur tres differents (646K vs 25K). Toujours verifier ce qu'on a reellement avant de planifier batch sizes et temps d'entrainement.
+- Ne jamais supprimer ou modifier des fichiers partages via DVC. Utiliser une liste d'exclusion (excluded.json) que les scripts consomment. Cela rend le nettoyage tracable, reversible, et evite les conflits DVC entre coequipiers.
+- Les dimensions d'images dans un dataset scrape sont rarement uniformes. Prevoir Resize + CenterCrop dans le pipeline de transforms, pas seulement Normalize.
+- La detection de doublons par hash MD5 partiel (debut + fin + taille) est un bon compromis vitesse/fiabilite pour des images identiques. Pour des near-duplicates (recadrages, recompressions), il faudrait du perceptual hashing (hors scope ici).
+- Generer des rapports JSON (raw_stats.json, cleaning_report.json) des cette etape : le Streamlit et les tests les consommeront plus tard sans recalcul.
+- Le split doit produire un fichier de mapping (CSV ou JSON avec chemins relatifs), PAS des copies d'images. Copier 25K+ images dans train/val/test triple l'espace disque et complique DVC. Le Dataset PyTorch peut lire les images depuis processed/ via le manifest.
+- Toujours verifier la stratification apres le split : le ratio par classe doit etre stable (+/- 0.5%). Un desequilibre cache peut biaiser l'evaluation.
+- Si le dataset source contient des augmentations pre-calculees (ex: transforms TF non seedees), les exclure et laisser le framework de training gerer ses propres augmentations. Les augmentations non reproductibles violent le principe de reproductibilite.
+- Un dataset naturellement desequilibre (ratio 17x entre la classe la plus grande et la plus petite) necessite un mecanisme d'equilibrage au training (WeightedRandomSampler, class weights, ou over-sampling en ligne), pas un resampling statique des donnees.
 
-**Commandes clés** :
+**Commandes cles** :
 ```powershell
 dvc pull
+python -c "from data.scan import scan_processed; scan_processed()"  # ou script ad hoc
 invoke split-data
 ```
 
-**Durée typique** : 1-2 jours
+**Duree typique** : 1-2 jours
 
 ---
 
@@ -98,7 +109,7 @@ invoke split-data
 - [ ] Seed fixé pour reproductibilité
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -121,7 +132,7 @@ invoke train --config configs/training/default.yaml
 - [ ] Script d'export automatisé
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -145,7 +156,7 @@ invoke export-onnx
 - [ ] Tests unitaires de l'API
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -169,7 +180,7 @@ invoke serve
 - [ ] Page monitoring (métriques live)
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -191,7 +202,7 @@ invoke serve   # inclut le container Streamlit
 - [ ] Alertes (optionnel) : seuils sur latence, confiance, erreurs
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -217,7 +228,7 @@ invoke serve   # Prometheus + Grafana inclus
 - [ ] .dockerignore
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell
@@ -241,7 +252,7 @@ docker compose ps
 - [ ] Branch protection sur `main`
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 - Push sur GitHub/DagsHub -> pipeline automatique
@@ -261,7 +272,7 @@ docker compose ps
 - [ ] Rapport de couverture HTML
 
 **Pièges connus** :
-- 
+-
 
 **Commandes clés** :
 ```powershell

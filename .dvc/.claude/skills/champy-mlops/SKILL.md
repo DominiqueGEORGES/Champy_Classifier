@@ -49,6 +49,71 @@ Ce logbook sert au mémoire de Master. La qualité de la documentation compte au
 - **Pas de `rm -rf`** : utiliser `Remove-Item -Recurse -Force` ou `shutil.rmtree()` en Python
 - **Variables d'environnement** : `$env:VAR` en PowerShell, pas `$VAR` ou `export VAR=`
 
+## Conventions de documentation et qualité
+
+### Langue
+- **Variables, fonctions, classes** : anglais (`train_loader`, `split_dataset`, `ModelConfig`)
+- **Docstrings, commentaires, messages** : français (Google style)
+- **Commits** : anglais (`feat:`, `fix:`, etc.)
+
+### Docstring standard (à copier tel quel)
+```python
+def load_split_manifest(
+    manifest_path: Path,
+    split: str = "train",
+) -> list[Path]:
+    """Charge le manifeste de split et retourne les chemins pour un split donné.
+
+    Filtre le fichier CSV par la colonne 'split' et retourne
+    les chemins absolus des images correspondantes.
+
+    Args:
+        manifest_path: Chemin vers le fichier split_manifest.csv.
+        split: Nom du split ('train', 'val', ou 'test').
+
+    Returns:
+        Liste des chemins vers les images du split demandé.
+
+    Raises:
+        FileNotFoundError: Si le fichier manifeste n'existe pas.
+        ValueError: Si le split demandé n'existe pas dans le manifeste.
+    """
+```
+
+### Pre-commit (cohérence automatique)
+Chaque commit passe par `.pre-commit-config.yaml` :
+- `ruff` : linting + formatting
+- `mypy` : types
+- `interrogate` : 100% des fonctions/classes ont une docstring
+- `check-added-large-files` : bloque les fichiers > 500KB (protection images)
+
+Si un hook échoue, le commit est bloqué. Pas d'exception.
+
+### Cohérence inter-fichiers
+Tous les scripts doivent suivre le même squelette :
+```python
+"""Description du module en français.
+
+Ce module gère [fonctionnalité]. Il est utilisé par [contexte].
+"""
+
+from __future__ import annotations
+
+import [stdlib]
+
+import [third-party]
+from loguru import logger
+
+from src.config import settings
+
+
+# --- Constantes ---
+
+# --- Fonctions publiques ---
+
+# --- Fonctions privées (préfixe _) ---
+```
+
 ## Patterns récurrents
 
 ### Entraînement avec contrainte VRAM (XPS, natif Windows)

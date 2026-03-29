@@ -129,10 +129,11 @@ Champy_Classifier/
 6. **Config séparée du code** : Hyperparams dans `configs/`, pas hardcodés.
 7. **ONNX export** : Le modèle servi en production est au format ONNX (ou TorchScript). Pas de PyTorch brut en inference.
 8. **Type hints partout** : Tout le code Python est typé. Mypy doit passer.
-9. **Docstrings** : Fonctions publiques documentées (Google style).
+9. **Docstrings en français** : Fonctions publiques documentées (Google style, en français). `interrogate` doit passer à 100%.
 10. **Pas d'em dash** : Utiliser des tirets normaux (-) dans tout le texte généré.
 11. **Cross-platform** : Pas de commandes bash, pas de chemins Unix hardcodés. PowerShell + pathlib.
 12. **Streamlit zéro hardcoded** : AUCUNE valeur (accuracy, nb images, noms de classes, etc.) n'est écrite en dur dans le Streamlit. Tout est lu dynamiquement aux sources (MLflow, disque, API, Prometheus). Si la source n'est pas dispo, afficher un message clair, pas une valeur par défaut silencieuse.
+13. **Pre-commit obligatoire** : Aucun commit ne passe sans les hooks (ruff, mypy, interrogate). `pre-commit install` sur chaque machine.
 
 ## Stack technique
 
@@ -153,6 +154,7 @@ Champy_Classifier/
 | Tests | Pytest + pytest-cov | Standard |
 | Config | Pydantic Settings + YAML | Validation automatique |
 | Task runner | invoke (tasks.py) | Cross-platform, Python natif, remplace Make |
+| Pre-commit | pre-commit + interrogate | Hooks automatiques : lint, types, docstrings |
 
 ## Infrastructure - Répartition des machines
 
@@ -216,6 +218,39 @@ Avec deux XPS, on peut paralléliser des expériences (ex: un teste lr=1e-3, l'a
 
 ## Conventions de code
 
+### Langue
+- **Noms de variables, fonctions, classes, modules** : anglais (`train_loader`, `ModelConfig`, `split_dataset`)
+- **Toute la documentation** : français (docstrings, commentaires, README, LOGBOOK, messages d'erreur utilisateur)
+- **Messages de commit** : anglais (format conventionnel `feat:`, `fix:`, etc.)
+- **Docstrings** : Google style, en français
+
+Exemple de docstring :
+```python
+def split_dataset(
+    data_dir: Path,
+    ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
+    seed: int = 42,
+) -> dict[str, list[Path]]:
+    """Divise le dataset en train/val/test de manière stratifiée.
+
+    Charge la liste d'exclusion (excluded.json) et ne conserve que
+    les images originales. Le split est reproductible grâce au seed.
+
+    Args:
+        data_dir: Répertoire contenant les images par classe.
+        ratios: Proportions train/val/test (doit sommer à 1.0).
+        seed: Graine pour la reproductibilité.
+
+    Returns:
+        Dictionnaire avec clés 'train', 'val', 'test' et listes de chemins.
+
+    Raises:
+        FileNotFoundError: Si data_dir n'existe pas.
+        ValueError: Si les ratios ne somment pas à 1.0.
+    """
+```
+
+### Style et qualité
 - Python 3.11+
 - Ruff pour le formatting ET le linting (config dans `pyproject.toml`)
 - Imports : stdlib, third-party, local (Ruff gère automatiquement)
@@ -224,6 +259,30 @@ Avec deux XPS, on peut paralléliser des expériences (ex: un teste lr=1e-3, l'a
 - Pas de notebooks en production (OK pour EDA uniquement)
 - **Chemins : `pathlib.Path` exclusivement** (jamais de string concatenation)
 - **Pas de commandes bash dans le code** : tout passe par Python ou PowerShell
+- Type hints sur toutes les fonctions (Mypy strict)
+
+### Pre-commit (cohérence automatique)
+
+Chaque commit passe automatiquement par ces hooks (`.pre-commit-config.yaml`) :
+
+| Hook | Rôle |
+|------|------|
+| ruff (check + format) | Linting et formatage |
+| mypy | Vérification des types |
+| interrogate | Vérifie que toutes les fonctions/classes ont une docstring |
+| trailing-whitespace | Supprime les espaces en fin de ligne |
+| end-of-file-fixer | Assure un newline en fin de fichier |
+| check-yaml | Valide les fichiers YAML |
+| check-toml | Valide pyproject.toml |
+| check-added-large-files | Empêche de commiter des fichiers > 500KB (images !) |
+
+Installation :
+```powershell
+pip install pre-commit
+pre-commit install
+```
+
+Si un hook échoue, le commit est bloqué. Aucune exception.
 
 ## Task runner (invoke) - Commandes principales
 
@@ -360,9 +419,11 @@ Si pas de WSL2, le training se fait nativement sur le XPS (plus simple, même r�
 4. **Tester avant de déclarer terminé**. Si tu crées du code, crée aussi le test.
 5. **Vérifier les contraintes VRAM (4GB)** avant de proposer des architectures ou batch sizes.
 6. **Ne jamais hardcoder** de chemins absolus. Utiliser `pathlib.Path` et la config.
-7. **Documenter les choix** dans des commentaires si non évidents.
+7. **Documenter en français** : docstrings (Google style), commentaires, messages d'erreur. Noms de variables/fonctions/classes en anglais.
 8. **Si un INVARIANT risque d'être violé**, s'arrêter et demander confirmation.
 9. **Distinguer les contextes machine** : training = XPS (GPU natif), serving/monitoring = NUC3 (Docker Desktop, CPU).
 10. **ONNX inference sur CPU** : ne jamais supposer qu'un GPU est dispo côté serving.
 11. **Environnement Windows** : PowerShell, pas bash. Pas de `rm -rf`, `grep`, `sed`, `awk`. Utiliser les équivalents Python ou PowerShell.
 12. **Mettre à jour LOGBOOK.md et PLAYBOOK.md** à chaque fin d'étape (voir SKILL.md pour le détail).
+13. **Pre-commit doit passer** : avant de déclarer un fichier terminé, vérifier que `ruff check`, `ruff format --check`, `mypy`, et `interrogate` passent sur ce fichier. Chaque fonction publique DOIT avoir une docstring en français.
+14. **Cohérence entre fichiers** : même style de docstring, mêmes patterns d'import, même gestion d'erreurs, même utilisation de loguru dans tout le projet. Si un pattern existe déjà dans un fichier, le réutiliser à l'identique.
