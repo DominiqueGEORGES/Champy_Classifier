@@ -183,15 +183,21 @@ invoke serve
 - [ ] Page métriques modèle (depuis MLflow)
 - [ ] Page monitoring (métriques live)
 
-**Pièges connus** :
--
+**Pieges connus** :
+- Le Streamlit est un portfolio narratif, pas un outil de prod. Il consomme MLflow et Prometheus, il ne les remplace pas.
+- Principe zero hardcoded : ne jamais ecrire de valeur en dur (accuracy, nb images, noms de classes). Tout lire dynamiquement depuis les fichiers JSON, MLflow, ou l'API. Si la source n'est pas dispo, afficher un `st.warning()`.
+- Les pages Streamlit se construisent incrementalement au fil des etapes. Ne pas attendre la fin du projet pour tout creer d'un coup.
+- Factoriser le code d'acces aux sources dans `demo/lib/` (data_utils, mlflow_utils, api_utils). Evite la duplication entre pages.
+- Les imports lourds (torch, plotly, pandas) doivent etre faits dans le try/except pour ne pas planter la page si le module manque.
+- `use_container_width=True` sur les images et graphiques pour un rendu responsive.
 
-**Commandes clés** :
+**Commandes cles** :
 ```powershell
-invoke serve   # inclut le container Streamlit
+streamlit run demo/app.py    # lancement local
+invoke serve                 # inclut le container Streamlit
 ```
 
-**Durée typique** : 2-3 jours
+**Duree typique** : 2-3 jours (incrementalement)
 
 ---
 

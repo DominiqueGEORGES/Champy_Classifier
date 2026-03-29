@@ -181,6 +181,20 @@ Tests unitaires : 23 tests, 23 passed (test_dataset.py + test_dataloader.py)
 - Tests : 23 passed (15 dataset + 8 dataloader)
 - Pre-commit : tous les hooks passent (ruff, mypy, interrogate)
 
+### Pages Streamlit 01-04 (construction incrementale)
+
+Portfolio Streamlit demarre avec les 4 premieres pages (donnees).
+Principe zero hardcoded : chaque page lit ses donnees depuis les rapports JSON generes.
+
+Pages creees :
+- `demo/app.py` - vue d'ensemble du pipeline, statut de chaque etape (detection dynamique des artefacts)
+- `demo/pages/01_donnees_brutes.py` - distribution classes, formats, dimensions, galerie interactive
+- `demo/pages/02_nettoyage.py` - avant/apres (25 850 -> 12 131), raisons d'exclusion, detail des fichiers
+- `demo/pages/03_augmentation.py` - demonstration live des transforms PyTorch (original vs augmentees)
+- `demo/pages/04_split.py` - distribution par classe par split, verification stratification, desequilibre
+
+Helpers partages : `demo/lib/data_utils.py` (load_json, load_manifest, scan_classes, get_random_images)
+
 ---
 
 ## Etape 3 - Training pipeline
