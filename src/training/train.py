@@ -66,7 +66,7 @@ def get_device() -> torch.device:
     if torch.cuda.is_available():
         device = torch.device("cuda")
         logger.info(f"GPU detecte : {torch.cuda.get_device_name(0)}")
-        logger.info(f"VRAM : {torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f} GB")
+        logger.info(f"VRAM : {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
     else:
         device = torch.device("cpu")
         logger.info("Pas de GPU, entrainement sur CPU")
