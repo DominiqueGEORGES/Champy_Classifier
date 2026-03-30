@@ -1,88 +1,157 @@
-PROJET MLOPS LIORA "Champy Classifier, industrialisation MLOps d’un modèle de classification de champignons"
+# Champy Classifier - Pipeline MLOps
 
+[![CI](https://github.com/LoicFocraud/Champy_Classifier/actions/workflows/ci.yml/badge.svg)](https://github.com/LoicFocraud/Champy_Classifier/actions/workflows/ci.yml)
 
-Etudiants :
-	- FOCRAUD Loïc
-	- GEORGES Dominique
-	- PREGASSAME Saravana
-	- SCHNEIDER Lionel
+Classification de champignons (30 especes de France metropolitaine) avec un pipeline MLOps complet.
 
+**Equipe** : FOCRAUD Loic, GEORGES Dominique, PREGASSAME Saravana, SCHNEIDER Lionel
+**Cadre** : TFE Master AI (DataScientest, RNCP niveau 7)
 
-Contexte :
-	Mise en production et cycle de vie MLOps d’un CNN Keras (ResNet50 fine-tuning) pour la reconnaissance de 30 espèces de champignons de France métropolitaine.
+## Resultats
 
+| Metrique | Valeur |
+|----------|--------|
+| Test accuracy | 83.9% |
+| Test F1 macro | 77.8% |
+| Classes | 30 especes |
+| Images | 20 572 (curatees depuis 646K brutes) |
+| Modele | ResNet50 (transfer learning PyTorch) |
+| Inference | ONNX Runtime (CPU, < 50ms/image) |
 
-Résumé :
+## Architecture
 
-	Champy Classifier est une application Streamlit basée sur un modèle Deep Learning (CNN) en transfer learning et fine-tuning de ResNet50 (Keras).
+```
+XPS (training, GPU)                    NUC3 (serving/monitoring, CPU)
++-------------------+                 +----------------------------+
+| dvc pull          |                 | Docker Desktop             |
+| python train.py   |--MLflow logs--->|   api (FastAPI + ONNX)     |
+| export ONNX       |                 |   demo (Streamlit)         |
+| dvc push model    |--model.onnx---->|   prometheus               |
++-------------------+   (via DVC)     |   grafana                  |
+                                      +----------------------------+
+```
 
-	Le modèle classe des images de champignons parmi 30 espèces courantes en France métropolitaine, avec une accuracy moyenne de 95,6% et une précision moyenne de 96,2%.
+## Installation
 
-	Aujourd’hui, l’application fonctionne en local mais n’est pas encore déployée en raison de contraintes de volumétrie (poids des artefacts, dataset d’images, limites GitHub sans LFS)
-	et d’un manque d’industrialisation du cycle de vie : reproductibilité des entraînements, versioning des données et des modèles, automatisation des tests, packaging et déploiement,
-	monitoring et ré-entraînement.
+```powershell
+# Cloner le repo
+git clone https://dagshub.com/LoicFocraud/Champy_Classifier.git
+cd Champy_Classifier
 
+# Installer les dependances
+pip install -e ".[dev]"
+pre-commit install
 
-	Ce projet MLOps vise à transformer ce prototype en produit déployable et maintenable : structuration d’un pipeline de données et d’entraînement reproductible,
-	mise en place d’un registre d’artefacts (modèles, métriques), CI/CD pour valider et livrer automatiquement, déploiement via conteners, et supervision (latence, taux d’erreur, …) avec des alertes.
+# Recuperer les donnees (DVC)
+dvc pull
+```
 
-	L’impact attendu est une réduction du temps de mise en production, une fiabilité accrue des releases, et un cadre d’exploitation permettant des mises à jour fréquentes et sûres du modèle.
+## Utilisation
 
+### Curation et split des donnees
 
-Modèle existant :
+```powershell
+python data/curate.py         # Pipeline de curation depuis les CSV bruts
+python data/data_split.py     # Split stratifie 70/15/15 (seed=42)
+```
 
-	Modèle => CNN Keras basé sur ResNet50 (transfer learning + fine-tuning)
+### Entrainement (sur XPS avec GPU)
 
-	Usage => classification d’images (photos) en 30 classes (espèces)
+```powershell
+python -m src.training.train --config configs/training/default.yaml
+```
 
-	Interface => application Streamlit (inférence + affichage résultats)
+### Export ONNX
 
-	Pré-traitements => pipeline de transformations/normalisation d’images (TensorFlow)
+```powershell
+python -m src.models.export_onnx
+```
 
-	Contexte de déploiement => prototype local, non déployé en production à ce stade
+### API FastAPI (inference)
 
+```powershell
+uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
+```
 
-Objectif de l'approche MLOps :
+### Demo Streamlit
 
-	Le modèle est destiné à évoluer (nouvelles données, nouvelles espèces, amélioration des performances). Sans outillage MLOps, chaque mise à jour est risquée (régression, fuite de données, …),
-	et le déploiement reste bloqué par la gestion des volumes. L’objectif est d’installer un cadre standard de production ML, réutilisable pour d’autres projets de vision.
+```powershell
+streamlit run demo/app.py
+```
 
+### Docker Compose (tout-en-un)
 
-Architecture du projet :
+```powershell
+docker compose up -d    # api + demo + prometheus + grafana
+docker compose ps       # statut des services
+docker compose down     # arret
+```
 
-PROJET_MLOPS/
-	├── .venv/
-	└── Champy_Classifier/
-		├── .dvc/	
-     	│	├── .gitignore
-		│	└── config
-		├── configs/
-		├── data/
-     	│	├── processed/
-     	│	├── raw/
-		│	├── split/
-     	│	│	├── test/
-     	│	│	├── train/
-		│	│	├── val/
-     	│	│	├── split_manifest.csv
-		│	│	└── split_summary.csv
-		│	├── champignons_france_top30.csv
-		│	├── dataset_30_species.csv
-		│	└── observations_mushrooms.csv
-		├── models/
-		├── notebooks/
-		├── src/
-     	│	├── data/
-     	│	├── inference/
-		│	└── training/
-		├── tests/
-		├── .dvcignore
-		├── .gitignore
-		├── data.dvc
-		├── models.dvc
-		├── README.md
-		└── requirements.txt
-		
+| Service | Port | URL |
+|---------|------|-----|
+| API FastAPI | 8000 | http://localhost:8000/docs |
+| Streamlit | 8501 | http://localhost:8501 |
+| Prometheus | 9090 | http://localhost:9090 |
+| Grafana | 3000 | http://localhost:3000 |
 
-A FINIR DE COMPLETER
+### Tests et qualite
 
+```powershell
+pytest tests/unit/ -v              # Tests unitaires
+ruff check src/ tests/ demo/       # Linting
+mypy src/                          # Type checking
+interrogate src/ -c pyproject.toml # Docstrings
+```
+
+## Structure du projet
+
+```
+Champy_Classifier/
++-- src/
+|   +-- config.py              # Pydantic Settings (MLflow, Training, Serving)
+|   +-- data/
+|   |   +-- dataset.py         # PyTorch Dataset + transforms
+|   |   +-- dataloader.py      # DataLoader factory + WeightedRandomSampler
+|   +-- models/
+|   |   +-- resnet.py          # ResNet50 transfer learning
+|   |   +-- export_onnx.py     # Export ONNX + validation
+|   +-- training/
+|   |   +-- train.py           # Boucle d'entrainement (AMP, MLflow)
+|   |   +-- evaluate.py        # Metriques, confusion matrix
+|   |   +-- callbacks.py       # Early stopping, checkpointing
+|   +-- serving/
+|   |   +-- app.py             # FastAPI (predict, health, metrics)
+|   |   +-- schemas.py         # Pydantic request/response
+|   |   +-- middleware.py      # Metriques Prometheus
+|   +-- monitoring/
+|       +-- drift.py           # Detection de drift (Evidently)
++-- demo/
+|   +-- app.py                 # Streamlit - page d'accueil
+|   +-- lib/                   # Helpers partages
+|   +-- pages/                 # 12 pages du portfolio MLOps
++-- data/
+|   +-- curate.py              # Pipeline de curation from scratch
+|   +-- data_split.py          # Split stratifie reproductible
++-- configs/training/
+|   +-- default.yaml           # Hyperparametres par defaut
++-- docker/
+|   +-- Dockerfile.api         # Image API
+|   +-- Dockerfile.demo        # Image Streamlit
++-- docker-compose.yml         # Orchestration 4 services
++-- tests/unit/                # 51 tests unitaires
+```
+
+## Stack technique
+
+| Composant | Techno |
+|-----------|--------|
+| ML Framework | PyTorch + torchvision |
+| Inference | ONNX Runtime |
+| Data versioning | DVC (DagsHub) |
+| Experiment tracking | MLflow (DagsHub) |
+| API | FastAPI |
+| Demo | Streamlit (12 pages) |
+| Monitoring | Prometheus + Grafana |
+| CI/CD | GitHub Actions |
+| Qualite | Ruff, Mypy, Interrogate, pre-commit |
+| Containerisation | Docker Compose |

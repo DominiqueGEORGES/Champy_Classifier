@@ -1,0 +1,82 @@
+name: CI - Lint, Test, Build
+
+on:
+  push:
+    branches: [main, dev-dominique]
+  pull_request:
+    branches: [main, dev-dominique]
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check
+        run: ruff check src/ data/data_split.py data/curate.py demo/lib/
+      - name: Ruff format check
+        run: ruff format --check src/ data/data_split.py data/curate.py demo/lib/
+
+  typecheck:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install mypy pydantic pydantic-settings types-PyYAML
+      - name: Mypy
+        run: mypy src/ data/data_split.py --ignore-missing-imports
+
+  docstrings:
+    name: Docstrings (interrogate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install interrogate
+        run: pip install interrogate
+      - name: Check docstrings
+        run: |
+          interrogate src/ -c pyproject.toml -v
+          interrogate data/data_split.py data/curate.py -c pyproject.toml -v
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install onnx onnxruntime onnxscript
+          pip install pytest pytest-cov scikit-learn pillow numpy pandas
+          pip install pydantic pydantic-settings pyyaml python-dotenv loguru
+          pip install fastapi httpx python-multipart uvicorn prometheus-client
+          pip install matplotlib
+      - name: Run tests
+        run: pytest tests/unit/ -v --tb=short
+
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f docker/Dockerfile.api -t champy-api .
+      - name: Build Demo image
+        run: docker build -f docker/Dockerfile.demo -t champy-demo .

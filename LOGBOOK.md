@@ -446,33 +446,46 @@ Integre dans la boucle de train :
 
 ## Etape 6 - Demo Streamlit
 
-**Date** : [à compléter]
-**Objectif** : Interface de démonstration multi-page.
+**Date** : 2026-03-30
+**Objectif** : Portfolio MLOps interactif (12 pages, zero hardcoded).
 
-### Pages implémentées
-1. Prédiction (upload + top-5 + GradCAM) :
-2. Exploration dataset :
-3. Métriques modèle (MLflow) :
-4. Monitoring live :
+### Pages implementees
+1. Accueil (vue pipeline, statut dynamique des etapes)
+2. Donnees brutes (distribution, formats, galerie)
+3. Nettoyage (avant/apres, raisons d'exclusion)
+4. Augmentation (demo live PyTorch transforms)
+5. Split (distribution par classe par split, stratification)
+6. Entrainement (courbes MLflow ou local, hyperparams)
+7. Evaluation (confusion matrix, F1/classe, classes faibles)
+8. Model Registry (checkpoint, ONNX, benchmark)
+9. Prediction (upload image, appel API /predict, top-5)
+10. API (statut /health, Swagger, metriques brutes)
+11. Monitoring (metriques Prometheus, latence, confiance)
+12. Drift (rapport Evidently on-demand, indicateurs proxy)
+13. Infrastructure (schema architecture, Docker, CI/CD, stack)
 
-### Captures d'écran
-[à ajouter]
+### Helpers partages
+- `demo/lib/data_utils.py` : scan disque, chargement JSON/CSV
+- `demo/lib/mlflow_utils.py` : search_runs, metric_history, fallback local
+- `demo/lib/api_utils.py` : predict, health, metrics, PromQL
 
 ---
 
 ## Etape 7 - Monitoring (Prometheus + Grafana)
 
-**Date** : [à compléter]
-**Objectif** : Dashboards de monitoring, détection de drift.
+**Date** : 2026-03-30
+**Objectif** : Metriques de monitoring integrees dans l'API et visualisees.
 
-### Métriques monitorées
--
+### Metriques monitorees
+- `champy_predictions_total` (counter par espece)
+- `champy_prediction_latency_seconds` (histogramme, buckets 10ms-2.5s)
+- `champy_prediction_confidence` (summary, confiance top-1)
+- `champy_http_errors_total` (counter par status_code)
+- `champy_requests_total` (counter par method+endpoint)
 
-### Alertes configurées
--
-
-### Drift detection (Evidently)
--
+### Configuration
+- `configs/prometheus.yml` : scrape API /metrics toutes les 15s
+- Grafana : port 3000, dashboards a configurer
 
 ---
 
@@ -508,16 +521,17 @@ Integre dans la boucle de train :
 
 ## Etape 9 - CI/CD (GitHub Actions)
 
-**Date** : [à compléter]
-**Objectif** : Pipeline automatisé lint + test + build.
+**Date** : 2026-03-30
+**Objectif** : Pipeline automatise lint + test + build sur chaque push/PR.
 
-### Workflows
-- `ci.yml` :
-- `cd.yml` :
+### Workflow ci.yml
+5 jobs : lint (ruff), typecheck (mypy), docstrings (interrogate), test (pytest), build (docker)
+Declenche sur push/PR vers main et dev-dominique.
+Le job build depend de lint + typecheck + test.
 
-### Résultats
-- Coverage :
-- Temps de build CI :
+### Artefacts produits
+- `.github/workflows/ci.yml` - pipeline CI complet
+- `README.md` - complet avec architecture, installation, badges CI
 
 ---
 
