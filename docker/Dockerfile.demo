@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Dependances systeme pour Pillow
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libjpeg62-turbo-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Installer les deps Streamlit
+RUN pip install --no-cache-dir \
+    streamlit plotly pandas numpy pillow httpx \
+    pydantic pydantic-settings pyyaml python-dotenv loguru
+
+# Copier le code
+COPY demo/ demo/
+COPY src/ src/
+COPY data/raw_stats.json data/cleaning_report.json data/split_stats.json data/split_manifest.csv data/
+COPY .env.example .env
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "demo/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]

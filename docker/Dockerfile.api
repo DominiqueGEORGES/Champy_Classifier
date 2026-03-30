@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Dependances systeme pour Pillow
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libjpeg62-turbo-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copier les requirements et installer
+COPY requirements.txt .
+RUN pip install --no-cache-dir \
+    fastapi uvicorn[standard] python-multipart \
+    onnxruntime pillow numpy \
+    prometheus-client pydantic pydantic-settings \
+    loguru pyyaml python-dotenv
+
+# Copier le code source
+COPY src/ src/
+COPY configs/ configs/
+COPY .env.example .env
+
+EXPOSE 8000
+
+CMD ["uvicorn", "src.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]

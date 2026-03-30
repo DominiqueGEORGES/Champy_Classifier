@@ -375,28 +375,41 @@ Integre dans la boucle de train :
 
 ## Etape 5 - API serving (FastAPI)
 
-**Date** : [à compléter]
-**Objectif** : API REST pour inference, métriques Prometheus, health checks.
+**Date** : 2026-03-30
+**Objectif** : API REST pour inference, metriques Prometheus, health checks.
 
-### Décisions prises
+### Decisions prises
 
-| Décision | Choix | Alternatives envisagées | Justification |
+| Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| | | | |
+| Framework | FastAPI | Flask, TorchServe | Async natif, Pydantic, OpenAPI auto-generee |
+| Runtime inference | ONNX Runtime (CPU) | PyTorch, TensorRT | Portable, pas de dep PyTorch en prod, CPU-optimise |
+| Preprocessing | Numpy pur (identique val/test) | torchvision transforms | Evite la dep torch en prod, meme resultat |
+| Metriques | prometheus-client natif | starlette-prometheus | Controle fin des labels, pas de dep supplementaire |
+| Schemas | Pydantic v2 models | dicts bruts | Validation automatique, documentation OpenAPI |
+| Graceful degradation | 503 si modele absent | 500, refuser de demarrer | Permet de deployer l'API avant d'avoir le modele |
 
-### Problèmes rencontrés
--
+### Endpoints implementes
+- `POST /predict` : upload image -> top-5 predictions avec scores de confiance
+- `GET /health` : statut du service + etat du modele (healthy/no_model)
+- `GET /metrics` : metriques Prometheus (latence, predictions, confiance, erreurs)
+- `GET /model/info` : metadata du modele (classes, input_shape, version)
 
-### Endpoints implémentés
-- `POST /predict` :
-- `GET /health` :
-- `GET /metrics` :
-- `GET /model/info` :
+### Problemes rencontres
+- Les decorateurs FastAPI (`@app.get`, `@app.post`) rendent les fonctions "untyped" pour mypy du pre-commit (mirrors-mypy sans starlette). Solution : `# type: ignore[misc]` sur chaque decorateur.
+- B008 ruff : `File()` dans les arguments par defaut. Solution : extraire dans une constante module-level `_FILE_PARAM`.
+- Le preprocessing numpy doit etre identique aux transforms val/test (Resize 256, CenterCrop 224, Normalize ImageNet). Verifie par test unitaire.
 
-### Métriques / Résultats
-- Latence p50 :
-- Latence p95 :
-- Throughput max :
+### Artefacts produits
+- `src/serving/app.py` - serveur FastAPI complet (4 endpoints)
+- `src/serving/schemas.py` - 5 modeles Pydantic
+- `src/serving/middleware.py` - 5 metriques Prometheus
+- `tests/unit/test_api.py` - 9 tests (health, predict mock, metrics, model_info, preprocess)
+
+### Metriques / Resultats
+- Tests : 47 passed (38 existants + 9 nouveaux)
+- Latence p50 : [a mesurer apres deploiement]
+- Latence p95 : [a mesurer apres deploiement]
 
 ---
 
@@ -434,21 +447,31 @@ Integre dans la boucle de train :
 
 ## Etape 8 - Dockerisation
 
-**Date** : [à compléter]
+**Date** : 2026-03-30
 **Objectif** : Containeriser tous les services, docker-compose fonctionnel.
 
 ### Images Docker
 
-| Image | Base | Taille | Build time |
-|-------|------|--------|-----------|
-| Dockerfile.train | | | |
-| Dockerfile.api | | | |
-| Dockerfile.demo | | | |
+| Image | Base | Contenu |
+|-------|------|---------|
+| docker/Dockerfile.api | python:3.11-slim | FastAPI + ONNX Runtime + Prometheus |
+| docker/Dockerfile.demo | python:3.11-slim | Streamlit + Plotly + data artifacts |
 
-### Docker Compose
-- Services :
-- Volumes :
-- Networks :
+### Docker Compose (docker-compose.yml)
+- Services : api (port 8000), demo (port 8501), prometheus (port 9090), grafana (port 3000)
+- Volumes : models/ monte en read-only sur l'API, grafana-data pour la persistance
+- Healthcheck : api verifie /health toutes les 30s
+- Demo depend de api (service_healthy)
+
+### Artefacts produits
+- `docker/Dockerfile.api` - image API inference
+- `docker/Dockerfile.demo` - image Streamlit
+- `docker-compose.yml` - orchestration 4 services
+- `configs/prometheus.yml` - scrape l'API sur /metrics
+- `.dockerignore` - exclut venv, data raw, tests, caches
+
+### Taille / Build time
+- [a mesurer apres premier build]
 
 ---
 
