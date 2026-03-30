@@ -13,7 +13,11 @@ import random
 from pathlib import Path
 from typing import Any
 
-from src.config import DATA_DIR, RAW_DIR
+# Chemins calcules directement (evite d'importer src.config qui
+# necessite pydantic-settings, pas toujours installe dans l'env Streamlit)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = _PROJECT_ROOT / "data"
+RAW_DIR = _PROJECT_ROOT / "data" / "raw"
 
 
 def load_json(path: Path) -> dict[str, Any]:
