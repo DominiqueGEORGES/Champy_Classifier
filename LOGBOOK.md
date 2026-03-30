@@ -372,26 +372,35 @@ Integre dans la boucle de train :
 
 ## Etape 4 - Model registry et export
 
-**Date** : [à compléter]
-**Objectif** : Enregistrer le modèle dans MLflow, promouvoir en Production, exporter ONNX.
+**Date** : 2026-03-30
+**Objectif** : Exporter le modele PyTorch en ONNX, valider, comparer les sorties.
 
-### Décisions prises
+### Decisions prises
 
-| Décision | Choix | Alternatives envisagées | Justification |
+| Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Format export | ONNX (opset 17) | TorchScript | Portable, optimisé CPU, runtime léger |
-| | | | |
+| Format export | ONNX opset 17 (legacy exporter) | TorchScript, dynamo exporter | Portable, CPU-optimise, pas de dep PyTorch en prod |
+| Exporteur | torch.onnx.export(dynamo=False) | Nouveau dynamo exporter | Le dynamo exporter (torch 2.11) produit un fichier de 240 KB au lieu de 90 MB - bug/incompatibilite avec la conversion opset 17. Legacy stable. |
+| Axes dynamiques | batch_size dynamique | Taille fixe | Permet l'inference batch variable sans re-export |
+| Validation | onnx.checker + comparaison numerique | Checker seul | La comparaison PyTorch vs ONNX (max_diff < 1e-4) garantit l'equivalence |
 
-### Problèmes rencontrés
--
+### Problemes rencontres
+- Le nouveau dynamo exporter de torch 2.11 exporte un modele de 240 KB (au lieu de 90 MB) avec un warning "Failed to convert to target version 17". Le fichier passe onnx.checker mais est quasi vide. Solution : `dynamo=False` pour forcer l'exporteur legacy.
+- `onnxscript` est une dependance requise par torch 2.11 pour l'export ONNX, meme en mode legacy (il est importe avant le fallback).
 
 ### Artefacts produits
--
+- `src/models/export_onnx.py` - script d'export CLI complet (charge checkpoint, export, valide, compare, sauve class_names)
+- `models/best_model.onnx` - modele ONNX exporte (89.8 MB)
+- `models/class_names.json` - 30 noms d'especes (ordre alphabetique = label_map)
+- `tests/unit/test_export_onnx.py` - 4 tests
+- Pages Streamlit 05-07 (entrainement, evaluation, model registry)
+- `demo/lib/mlflow_utils.py` - helpers MLflow + fallback local
 
-### Métriques / Résultats
-- Taille modèle ONNX :
-- Latence inference CPU (NUC3) :
-- Ecart accuracy PyTorch vs ONNX :
+### Metriques / Resultats
+- Taille modele ONNX : 89.8 MB (vs 270 MB checkpoint PyTorch = 3x compression)
+- Ecart PyTorch vs ONNX : max_diff=0.000006 (< 1e-4 = OK)
+- Tests : 51 passed (47 existants + 4 nouveaux)
+- Pre-commit : tous les hooks passent
 
 ---
 

@@ -143,21 +143,26 @@ invoke train --config configs/training/default.yaml
 **But** : Modèle versionné, promu, exporté en format optimisé pour la prod.
 
 **A produire** :
+- [x] Export ONNX avec validation
+- [x] Comparaison numerique PyTorch vs ONNX
+- [x] Script d'export automatise (CLI)
 - [ ] Enregistrement dans MLflow Model Registry
 - [ ] Promotion Staging -> Production
-- [ ] Export ONNX (ou TorchScript)
-- [ ] Validation : comparaison accuracy PyTorch vs ONNX
-- [ ] Script d'export automatisé
 
-**Pièges connus** :
--
+**Pieges connus** :
+- Le nouveau dynamo exporter de torch >= 2.9 est le defaut mais peut produire des fichiers quasi vides lors de la conversion d'opset. Toujours verifier la taille du fichier ONNX (ResNet50 = ~90 MB, pas 240 KB). Utiliser `dynamo=False` si probleme.
+- `onnxscript` est requis par torch >= 2.9 pour l'export ONNX. L'ajouter dans les deps meme si on utilise le legacy exporter.
+- Toujours comparer les sorties numeriques (pas juste onnx.checker) : generer N inputs aleatoires, comparer les logits PyTorch vs ONNX, max_diff < 1e-4.
+- Sauvegarder class_names.json a cote du modele ONNX : l'API en a besoin pour mapper les indices de sortie vers les noms d'especes.
+- Les axes dynamiques (batch_size) evitent de devoir re-exporter si on change la taille du batch d'inference.
 
-**Commandes clés** :
+**Commandes cles** :
 ```powershell
-invoke export-onnx
+python -m src.models.export_onnx
+python -m src.models.export_onnx --checkpoint models/best_model.pt --output models/best_model.onnx
 ```
 
-**Durée typique** : 0.5-1 jour
+**Duree typique** : 0.5 jour (script + validation + debug dynamo)
 
 ---
 
