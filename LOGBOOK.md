@@ -197,6 +197,78 @@ Helpers partages : `demo/lib/data_utils.py` (load_json, load_manifest, scan_clas
 
 ---
 
+## Etape 2bis - Pipeline de curation from scratch depuis raw/
+
+**Date** : 2026-03-30
+**Objectif** : Reconstruire le pipeline de donnees depuis les CSV bruts, sans dependre du notebook 0 ni du filtre ResNet50 ImageNet.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Source de donnees | data/raw/Mushrooms_images/ (20 572) | data/processed/ (12 131 originaux) | 70% de donnees en plus, pipeline reproductible, pas de dependance ResNet50 |
+| Filtre ResNet50 | Pas de filtre | Filtre top-3 ImageNet classes champignon | Non reproductible (modele telechargeable varie), inegal (75% filtre sur Amanita muscaria vs 8% sur Russula olivacea), les images sont deja labelisees par des experts (GBIF confidence >= 94) |
+| Augmentation statique | Aucune | Over-sampling TF (notebook 0) | PyTorch gere ses propres augmentations au training (reproductible, seedable) |
+| Equilibrage | WeightedRandomSampler au training | Resampling statique, class weights | Pas de duplication de donnees, equilibrage dynamique a chaque epoch |
+| Conflits d'especes | Retirer les 12 images avec 2 especes | Garder la premiere | Label ambigu, pas fiable pour l'entrainement |
+
+### Investigation menee
+
+Audit complet du pipeline du notebook 0 :
+1. Le notebook 0 charge observations_mushroom.csv (647K obs, 11 999 especes)
+2. Croise avec champignons_france_top30.csv (30 especes) -> 20 592 obs
+3. Filtre GBIF confidence >= 92 -> 20 592 (aucune filtree, min=94)
+4. Filtre ResNet50 ImageNet "est-ce un champignon ?" -> retire 40.9% (8 423 images)
+5. Resample : under-sample a 900, over-sample a 850 avec augmentations TF non seedees
+6. Resultat : 12 160 originaux + 13 690 augmentees = 25 850 images
+
+Le filtre ResNet50 est tres inegal par espece (8% a 75% de rejet).
+Les augmentations TF ne sont pas reproductibles (transforms aleatoires non seedees).
+
+### Notre pipeline (data/curate.py)
+
+```
+observations_mushroom.csv (647 623 obs)
+    |  inner join sur gbif_info/species
+champignons_france_top30.csv (30 especes)
+    |  20 592 observations
+Filtre confiance GBIF >= 92 (aucune retiree)
+    |  20 592
+Dedup image_lien (8 doublons meme espece retires)
+    |  20 584
+Retrait conflits especes (12 images 2 especes retires)
+    |  20 572
+Verification fichiers raw/ (100% presents)
+    |  20 572 images finales, 30 classes
+```
+
+### Problemes rencontres
+- Le filtre confiance >= 92 ne retire rien (toutes les obs sont deja >= 94)
+- 12 images ont un conflit d'especes (pas juste 2 comme identifie initialement - la recherche de conflits couvre tout le CSV, pas juste les top30)
+- Le .venv du projet n'a pas pip, il faut utiliser le python systeme pour les scripts de curation
+- Le manifest change de format : `path` contient `image_lien` (ex: `120022.jpg`) au lieu de `Espece/120022.jpg`
+
+### Artefacts produits
+- `data/curate.py` - pipeline de curation reproductible
+- `data/curated_manifest.csv` - 20 572 lignes (image_lien, species)
+- `data/curation_report.json` - rapport detaille de chaque etape
+- `data/raw_stats.json` - regenere avec les stats des 20 572 images
+- `data/cleaning_report.json` - regenere avec le nouveau pipeline
+- `data/split_manifest.csv` - regenere (20 572 images)
+- `data/split_stats.json` - regenere
+- `data/data_split.py` - reecrit pour lire curated_manifest.csv
+- `src/data/dataloader.py` - mis a jour pour pointer vers raw/Mushrooms_images/
+- `data/excluded.json` - supprime (plus necessaire)
+
+### Metriques / Resultats
+- Images : 20 572 (vs 12 131 avant, +69%)
+- Classes : 30
+- Distribution : min=58 (Russula emetica), max=3 579 (Amanita muscaria), ratio=61.7x
+- Split : train=14 400, val=3 085, test=3 087
+- Tests : 38 passed
+
+---
+
 ## Etape 3 - Training pipeline
 
 **Date** : 2026-03-29

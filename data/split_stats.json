@@ -5,192 +5,192 @@
     "val": 0.15,
     "test": 0.15
   },
-  "total": 12131,
+  "total": 20572,
   "splits": {
-    "train": 8491,
-    "val": 1819,
-    "test": 1821
+    "train": 14400,
+    "val": 3085,
+    "test": 3087
   },
   "per_class": {
     "Agaricus bisporus": {
-      "total": 81,
-      "train": 57,
-      "val": 12,
-      "test": 12
+      "total": 107,
+      "train": 75,
+      "val": 16,
+      "test": 16
     },
     "Agaricus campestris": {
-      "total": 428,
-      "train": 300,
-      "val": 64,
-      "test": 64
+      "total": 641,
+      "train": 449,
+      "val": 96,
+      "test": 96
     },
     "Amanita muscaria": {
-      "total": 900,
-      "train": 630,
-      "val": 135,
-      "test": 135
+      "total": 3575,
+      "train": 2502,
+      "val": 536,
+      "test": 537
     },
     "Amanita phalloides": {
-      "total": 897,
-      "train": 628,
-      "val": 134,
-      "test": 135
+      "total": 1032,
+      "train": 722,
+      "val": 155,
+      "test": 155
     },
     "Amanita rubescens": {
-      "total": 482,
-      "train": 337,
+      "total": 734,
+      "train": 514,
+      "val": 110,
+      "test": 110
+    },
+    "Armillaria mellea": {
+      "total": 794,
+      "train": 556,
+      "val": 119,
+      "test": 119
+    },
+    "Auricularia auricula-judae": {
+      "total": 136,
+      "train": 95,
+      "val": 21,
+      "test": 20
+    },
+    "Boletus edulis": {
+      "total": 2049,
+      "train": 1434,
+      "val": 307,
+      "test": 308
+    },
+    "Cantharellus cibarius": {
+      "total": 260,
+      "train": 182,
+      "val": 39,
+      "test": 39
+    },
+    "Clitocybe nebularis": {
+      "total": 302,
+      "train": 211,
+      "val": 45,
+      "test": 46
+    },
+    "Coprinus comatus": {
+      "total": 1153,
+      "train": 807,
+      "val": 173,
+      "test": 173
+    },
+    "Craterellus cornucopioides": {
+      "total": 227,
+      "train": 159,
+      "val": 34,
+      "test": 34
+    },
+    "Craterellus lutescens": {
+      "total": 473,
+      "train": 331,
+      "val": 71,
+      "test": 71
+    },
+    "Ganoderma applanatum": {
+      "total": 1351,
+      "train": 946,
+      "val": 202,
+      "test": 203
+    },
+    "Hydnum repandum": {
+      "total": 495,
+      "train": 346,
+      "val": 74,
+      "test": 75
+    },
+    "Lactarius deliciosus": {
+      "total": 455,
+      "train": 319,
+      "val": 68,
+      "test": 68
+    },
+    "Macrolepiota procera": {
+      "total": 299,
+      "train": 209,
+      "val": 45,
+      "test": 45
+    },
+    "Marasmius oreades": {
+      "total": 485,
+      "train": 340,
       "val": 72,
       "test": 73
     },
-    "Armillaria mellea": {
-      "total": 493,
-      "train": 345,
-      "val": 74,
-      "test": 74
-    },
-    "Auricularia auricula-judae": {
-      "total": 91,
-      "train": 64,
-      "val": 14,
-      "test": 13
-    },
-    "Boletus edulis": {
-      "total": 898,
-      "train": 629,
-      "val": 134,
-      "test": 135
-    },
-    "Cantharellus cibarius": {
-      "total": 222,
-      "train": 155,
-      "val": 34,
-      "test": 33
-    },
-    "Clitocybe nebularis": {
-      "total": 262,
-      "train": 183,
-      "val": 39,
-      "test": 40
-    },
-    "Coprinus comatus": {
-      "total": 893,
-      "train": 625,
-      "val": 134,
-      "test": 134
-    },
-    "Craterellus cornucopioides": {
-      "total": 184,
-      "train": 129,
-      "val": 28,
+    "Phallus impudicus": {
+      "total": 179,
+      "train": 125,
+      "val": 27,
       "test": 27
     },
-    "Craterellus lutescens": {
-      "total": 362,
-      "train": 253,
-      "val": 54,
-      "test": 55
-    },
-    "Ganoderma applanatum": {
-      "total": 899,
-      "train": 629,
-      "val": 135,
-      "test": 135
-    },
-    "Hydnum repandum": {
-      "total": 388,
-      "train": 272,
-      "val": 58,
-      "test": 58
-    },
-    "Lactarius deliciosus": {
-      "total": 365,
-      "train": 255,
-      "val": 55,
-      "test": 55
-    },
-    "Macrolepiota procera": {
-      "total": 250,
-      "train": 175,
-      "val": 38,
-      "test": 37
-    },
-    "Marasmius oreades": {
-      "total": 337,
-      "train": 236,
-      "val": 50,
-      "test": 51
-    },
-    "Phallus impudicus": {
-      "total": 158,
-      "train": 111,
-      "val": 24,
-      "test": 23
-    },
     "Pleurotus ostreatus": {
-      "total": 896,
-      "train": 627,
-      "val": 134,
-      "test": 135
+      "total": 1712,
+      "train": 1198,
+      "val": 257,
+      "test": 257
     },
     "Russula cyanoxantha": {
-      "total": 240,
-      "train": 168,
-      "val": 36,
-      "test": 36
+      "total": 265,
+      "train": 186,
+      "val": 40,
+      "test": 39
     },
     "Russula emetica": {
-      "total": 52,
-      "train": 36,
-      "val": 8,
+      "total": 58,
+      "train": 41,
+      "val": 9,
       "test": 8
     },
     "Russula olivacea": {
-      "total": 114,
-      "train": 80,
-      "val": 17,
-      "test": 17
+      "total": 123,
+      "train": 86,
+      "val": 19,
+      "test": 18
     },
     "Russula rosea": {
-      "total": 92,
-      "train": 64,
-      "val": 14,
-      "test": 14
+      "total": 111,
+      "train": 78,
+      "val": 17,
+      "test": 16
     },
     "Russula sanguinea": {
-      "total": 205,
-      "train": 143,
-      "val": 31,
-      "test": 31
+      "total": 234,
+      "train": 164,
+      "val": 35,
+      "test": 35
     },
     "Russula vesca": {
-      "total": 60,
-      "train": 42,
-      "val": 9,
-      "test": 9
+      "total": 73,
+      "train": 51,
+      "val": 11,
+      "test": 11
     },
     "Russula virescens": {
-      "total": 150,
-      "train": 105,
-      "val": 23,
-      "test": 22
+      "total": 169,
+      "train": 118,
+      "val": 26,
+      "test": 25
     },
     "Schizophyllum commune": {
-      "total": 501,
-      "train": 351,
-      "val": 75,
-      "test": 75
+      "total": 925,
+      "train": 647,
+      "val": 139,
+      "test": 139
     },
     "Scleroderma citrinum": {
-      "total": 334,
-      "train": 234,
-      "val": 50,
-      "test": 50
+      "total": 444,
+      "train": 311,
+      "val": 66,
+      "test": 67
     },
     "Trametes versicolor": {
-      "total": 897,
-      "train": 628,
-      "val": 134,
-      "test": 135
+      "total": 1711,
+      "train": 1198,
+      "val": 256,
+      "test": 257
     }
   }
 }

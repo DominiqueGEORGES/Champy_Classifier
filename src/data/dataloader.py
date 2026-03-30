@@ -2,7 +2,7 @@
 
 Cree les DataLoaders PyTorch a partir du manifest CSV, avec
 WeightedRandomSampler pour le split train afin de compenser
-le desequilibre des classes (52 a 900 images par classe).
+le desequilibre des classes (58 a 3579 images par classe).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from src.config import PROCESSED_DIR, TrainingConfig
+from src.config import DATA_DIR, RAW_DIR, TrainingConfig
 from src.data.dataset import (
     MushroomDataset,
     build_label_map,
@@ -21,8 +21,8 @@ from src.data.dataset import (
     load_manifest,
 )
 
-DATA_DIR = PROCESSED_DIR.parent
 DEFAULT_MANIFEST = DATA_DIR / "split_manifest.csv"
+DEFAULT_IMAGES_DIR = RAW_DIR / "Mushrooms_images"
 
 
 def compute_sample_weights(targets: torch.Tensor) -> torch.Tensor:
@@ -68,7 +68,7 @@ def create_train_loader(
         DataLoader pret pour l'entrainement.
     """
     manifest = manifest_path or DEFAULT_MANIFEST
-    images_dir = data_dir or PROCESSED_DIR
+    images_dir = data_dir or DEFAULT_IMAGES_DIR
 
     transform = get_train_transforms(config.image_size)
     dataset = MushroomDataset(
@@ -119,7 +119,7 @@ def create_eval_loader(
         DataLoader pret pour l'evaluation.
     """
     manifest = manifest_path or DEFAULT_MANIFEST
-    images_dir = data_dir or PROCESSED_DIR
+    images_dir = data_dir or DEFAULT_IMAGES_DIR
 
     transform = get_eval_transforms(config.image_size)
     dataset = MushroomDataset(
@@ -158,7 +158,7 @@ def create_all_loaders(
         Tuple (train_loader, val_loader, test_loader).
     """
     manifest = manifest_path or DEFAULT_MANIFEST
-    images_dir = data_dir or PROCESSED_DIR
+    images_dir = data_dir or DEFAULT_IMAGES_DIR
 
     # Construire le label_map depuis le train pour le partager
     train_paths, train_labels = load_manifest(manifest, "train")

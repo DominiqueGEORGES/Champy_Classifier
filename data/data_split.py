@@ -1,7 +1,8 @@
 """Split stratifie reproductible du dataset.
 
-Lit data/processed/, filtre les images exclues (data/excluded.json),
-et produit un manifest CSV + un fichier JSON de statistiques.
+Lit le manifest de curation (data/curated_manifest.csv) produit par
+data/curate.py et effectue un split train/val/test stratifie.
+Produit un manifest CSV et un fichier JSON de statistiques.
 Aucune copie d'image n'est effectuee.
 
 Usage:
@@ -17,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from sklearn.model_selection import train_test_split
 
 # ---------------------------------------------------------------------------
@@ -24,54 +26,31 @@ from sklearn.model_selection import train_test_split
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-PROCESSED_DIR = DATA_DIR / "processed"
-EXCLUDED_PATH = DATA_DIR / "excluded.json"
+CURATED_MANIFEST = DATA_DIR / "curated_manifest.csv"
 MANIFEST_PATH = DATA_DIR / "split_manifest.csv"
 STATS_PATH = DATA_DIR / "split_stats.json"
 
 
-def load_excluded(path: Path) -> set[str]:
-    """Charge la liste des fichiers exclus depuis un fichier JSON.
+def load_curated(path: Path) -> tuple[list[str], list[str]]:
+    """Charge le manifest de curation et retourne les chemins et labels.
+
+    Le manifest contient les colonnes 'image_lien' (nom de fichier)
+    et 'species' (nom scientifique de l'espece).
 
     Args:
-        path: Chemin vers le fichier excluded.json.
+        path: Chemin vers curated_manifest.csv.
 
     Returns:
-        Ensemble de chemins relatifs (separateurs '/') a ignorer.
+        Tuple (image_liens, species) - listes paralleles.
+
+    Raises:
+        FileNotFoundError: Si le manifest n'existe pas.
     """
     if not path.exists():
-        return set()
-    with open(path, encoding="utf-8") as f:
-        entries = json.load(f)
-    return {e["path"].replace("\\", "/") for e in entries}
-
-
-def collect_samples(processed_dir: Path, excluded: set[str]) -> tuple[list[str], list[str]]:
-    """Collecte tous les couples (chemin_relatif, label) en excluant les fichiers filtres.
-
-    Args:
-        processed_dir: Repertoire contenant les sous-dossiers par classe.
-        excluded: Ensemble des chemins relatifs a ignorer.
-
-    Returns:
-        Tuple (chemins, labels) ou chaque chemin est relatif a processed_dir
-        avec des separateurs '/'.
-    """
-    paths: list[str] = []
-    labels: list[str] = []
-    for cls_dir in sorted(processed_dir.iterdir()):
-        if not cls_dir.is_dir():
-            continue
-        class_name = cls_dir.name
-        for img_path in sorted(cls_dir.glob("*")):
-            if not img_path.is_file():
-                continue
-            rel = f"{class_name}/{img_path.name}"
-            if rel in excluded:
-                continue
-            paths.append(rel)
-            labels.append(class_name)
-    return paths, labels
+        msg = f"Manifest de curation introuvable : {path}. Lancez d'abord data/curate.py"
+        raise FileNotFoundError(msg)
+    df = pd.read_csv(path)
+    return df["image_lien"].tolist(), df["species"].tolist()
 
 
 def split_data(
@@ -87,15 +66,15 @@ def split_data(
     pour garantir la stratification par classe.
 
     Args:
-        paths: Liste des chemins relatifs des images.
-        labels: Liste des labels correspondants.
+        paths: Liste des noms de fichiers (image_lien).
+        labels: Liste des especes correspondantes.
         train_ratio: Proportion du split train (defaut 0.70).
         val_ratio: Proportion du split validation (defaut 0.15).
         seed: Graine pour la reproductibilite.
 
     Returns:
         Dictionnaire avec cles 'train', 'val', 'test', chacune contenant
-        une liste de tuples (chemin, label).
+        une liste de tuples (image_lien, species).
 
     Raises:
         ValueError: Si les ratios ne laissent pas assez pour le test.
@@ -135,14 +114,17 @@ def split_data(
 def write_manifest(splits: dict[str, list[tuple[str, str]]], path: Path) -> None:
     """Ecrit le manifest de split au format CSV : split,path,label.
 
+    Le champ 'path' contient le nom du fichier image (image_lien),
+    a resoudre relativement a data/raw/Mushrooms_images/.
+
     Args:
         splits: Dictionnaire des splits (train/val/test).
         path: Chemin de sortie du fichier CSV.
     """
     lines = ["split,path,label"]
     for split_name in ("train", "val", "test"):
-        for img_path, label in sorted(splits[split_name]):
-            lines.append(f"{split_name},{img_path},{label}")
+        for img_file, label in sorted(splits[split_name]):
+            lines.append(f"{split_name},{img_file},{label}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -208,13 +190,9 @@ def main() -> None:
         f"test={round(1 - args.train_ratio - args.val_ratio, 2)}"
     )
 
-    # Charger la liste d'exclusion
-    excluded = load_excluded(EXCLUDED_PATH)
-    print(f"Images exclues : {len(excluded)}")
-
-    # Collecter les echantillons
-    paths, labels = collect_samples(PROCESSED_DIR, excluded)
-    print(f"Images retenues : {len(paths)}")
+    # Charger le manifest de curation
+    paths, labels = load_curated(CURATED_MANIFEST)
+    print(f"Images curatees : {len(paths)}")
 
     # Split
     splits = split_data(paths, labels, args.train_ratio, args.val_ratio, args.seed)

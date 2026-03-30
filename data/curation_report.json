@@ -1,10 +1,31 @@
 {
-  "policy": "Pipeline de curation from scratch depuis raw/. Pas de filtre ResNet50 ImageNet (non reproductible). Pas d'augmentation statique (PyTorch gere au training). Source : observations_mushroom.csv + champignons_france_top30.csv.",
-  "before": {
-    "total_images": 647623,
-    "description": "observations_mushroom.csv (toutes especes)"
-  },
-  "after": {
+  "steps": [
+    {
+      "name": "filtre_top30",
+      "count": 20592
+    },
+    {
+      "name": "filtre_confidence_92",
+      "count": 20592
+    },
+    {
+      "name": "dedup_image_lien",
+      "count": 20584,
+      "removed": 8
+    },
+    {
+      "name": "retrait_conflits_especes",
+      "count": 20572,
+      "removed": 12
+    },
+    {
+      "name": "verif_fichiers_disque",
+      "count": 20572,
+      "missing": 0
+    }
+  ],
+  "total_observations": 647623,
+  "final": {
     "total_images": 20572,
     "num_classes": 30,
     "class_counts": {
@@ -38,13 +59,16 @@
       "Agaricus bisporus": 107,
       "Russula vesca": 73,
       "Russula emetica": 58
-    }
+    },
+    "min_class": {
+      "name": "Russula emetica",
+      "count": 58
+    },
+    "max_class": {
+      "name": "Amanita muscaria",
+      "count": 3575
+    },
+    "imbalance_ratio": 61.6
   },
-  "excluded_count": 627051,
-  "exclusion_reasons": {
-    "hors_top30": 627031,
-    "dedup_image_lien": 8,
-    "conflit_especes": 12,
-    "fichier_manquant": 0
-  }
+  "policy": "Pipeline de curation from scratch depuis raw/. Pas de filtre ResNet50 ImageNet (non reproductible). Pas d'augmentation statique (PyTorch gere au training). Source : observations_mushroom.csv + champignons_france_top30.csv."
 }
