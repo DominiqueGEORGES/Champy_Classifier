@@ -338,13 +338,35 @@ Integre dans la boucle de train :
 - `tests/unit/test_callbacks.py` - 9 tests (EarlyStopping + ModelCheckpoint)
 - `tests/unit/test_evaluate.py` - 6 tests (confusion matrix, courbes, JSON)
 
-### Metriques / Resultats
-- Tests : 38 passed (23 existants + 15 nouveaux)
+### Metriques / Resultats (premier run, 2026-03-30)
+
+**Hardware** : XPS 9520, RTX 3050 Ti (4 GB VRAM), batch=16, fp16 (AMP)
+**Run MLflow** : https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow/#/experiments/0/runs/1e7b1dda43ca467ead7c2c887ffdbece
+
+| Metrique | Valeur |
+|----------|--------|
+| Best val accuracy | 83.2% (epoch 30) |
+| Best val F1 macro | 78.7% (epoch 30) |
+| Test accuracy | 83.9% |
+| Test F1 macro | 77.8% |
+| Meilleur checkpoint | epoch 27 (val_loss=0.7483) |
+| Temps total | 48.1 min (30 epochs, ~93s/epoch) |
+| Early stopping | Non declenche (30 epochs complets) |
+
+**Points forts** (classes bien predites) :
+- Coprinus comatus : 92% F1
+- Craterellus cornucopioides : 92% F1
+- Schizophyllum commune : 92% F1
+
+**Points faibles** (classes rares et visuellement similaires) :
+- Russula vesca : 20% F1 (9 images test seulement)
+- Russula rosea : 58% F1
+- Russula emetica : 67% F1
+
+**Analyse** : les Russules sont un genre de champignons visuellement tres similaires (memes formes, couleurs proches). Les classes rares (< 100 images) souffrent du manque de donnees d'entrainement malgre le WeightedRandomSampler. Les classes a moins de 15 images test donnent des metriques instables (Russula vesca : 9 images).
+
+- Tests code : 38 passed (23 existants + 15 nouveaux)
 - Pre-commit : tous les hooks passent
-- Best val accuracy : [a completer apres run sur XPS]
-- Best val F1 (macro) : [a completer apres run sur XPS]
-- Nombre d'epochs avant convergence : [a completer apres run sur XPS]
-- Temps total d'entrainement : [a completer apres run sur XPS]
 
 ---
 

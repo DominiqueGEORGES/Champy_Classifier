@@ -122,6 +122,11 @@ invoke split-data
 - Sur Windows, AMP (mixed precision) fonctionne nativement avec CUDA sans configuration supplementaire. Par contre, `GradScaler` doit recevoir `device=device.type` et non `device="cuda"` sinon ca plante sur CPU.
 - Gradient accumulation : diviser la loss par `accumulation_steps` a chaque forward, et ne faire `optimizer.step()` que toutes les N iterations. Oublier la division = loss trop grande = divergence.
 - `loguru` est plus simple que le module `logging` stdlib mais n'est pas installe par defaut. L'ajouter dans requirements.txt et pyproject.toml.
+- `torch.cuda.get_device_properties(0).total_mem` n'existe PAS. L'attribut correct est `total_memory`. Erreur subtile qui ne plante que sur GPU.
+- MLflow sur DagsHub necessite `MLFLOW_TRACKING_USERNAME` et `MLFLOW_TRACKING_PASSWORD` dans le .env, pas juste l'URI. Sans ca, erreur 401 silencieuse.
+- Batch 16 + AMP tient en 4 GB VRAM sur RTX 3050 Ti pour ResNet50 (~93s/epoch sur 20K images). Pas besoin de gradient accumulation pour ce modele.
+- Les classes a moins de ~15 images dans le split test donnent des metriques F1 instables. Interpreter avec prudence (Russula vesca : 9 images test -> F1 oscille entre 0% et 40% selon le run).
+- Les especes visuellement similaires du meme genre (ex: 7 Russules) sont les plus dures a separer. C'est un probleme de fine-grained classification, pas de pipeline.
 
 **Commandes cles** :
 ```powershell
