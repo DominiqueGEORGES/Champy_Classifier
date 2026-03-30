@@ -78,6 +78,11 @@ ignore = [
     "TC003",  # Path is used at runtime everywhere (pathlib-based project)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Les pages Streamlit ont besoin de sys.path.insert avant les imports
+"demo/pages/*.py" = ["E402"]
+"demo/app.py" = ["E402"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 

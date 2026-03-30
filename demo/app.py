@@ -7,12 +7,17 @@ presence des artefacts correspondants.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# Ajouter la racine du projet au sys.path pour les imports
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import streamlit as st
 
-# Racine du projet (demo/ est un sous-dossier de la racine)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = _PROJECT_ROOT
 DATA_DIR = PROJECT_ROOT / "data"
 
 st.set_page_config(

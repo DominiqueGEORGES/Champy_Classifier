@@ -6,6 +6,13 @@ depuis MLflow. Fallback sur le fichier JSON local si MLflow est indisponible.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import streamlit as st
 
 st.set_page_config(page_title="05 - Entrainement", layout="wide")

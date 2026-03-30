@@ -13,7 +13,7 @@ import random
 from pathlib import Path
 from typing import Any
 
-from src.config import DATA_DIR, PROCESSED_DIR
+from src.config import DATA_DIR, RAW_DIR
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -98,51 +98,54 @@ def load_manifest(split: str | None = None) -> list[dict[str, str]]:
     return rows
 
 
-def scan_classes(data_dir: Path | None = None) -> dict[str, int]:
-    """Scanne un repertoire d'images et compte les fichiers par classe.
+def scan_classes() -> dict[str, int]:
+    """Retourne le nombre d'images par classe depuis raw_stats.json.
 
-    Args:
-        data_dir: Repertoire contenant les sous-dossiers par classe.
-            Par defaut data/processed/.
+    Lit les class_counts depuis le rapport de statistiques
+    genere par data/curate.py. Ne scanne pas le disque.
 
     Returns:
         Dictionnaire {nom_classe: nombre_images} trie par nom.
     """
-    root = data_dir or PROCESSED_DIR
-    counts: dict[str, int] = {}
-    if not root.exists():
-        return counts
-    for cls_dir in sorted(root.iterdir()):
-        if cls_dir.is_dir():
-            n = sum(1 for f in cls_dir.iterdir() if f.is_file())
-            counts[cls_dir.name] = n
-    return counts
+    try:
+        stats = load_raw_stats()
+        return dict(sorted(stats.get("class_counts", {}).items()))
+    except FileNotFoundError:
+        return {}
 
 
 def get_random_images(
     class_name: str,
     n: int = 4,
-    data_dir: Path | None = None,
 ) -> list[Path]:
     """Retourne n images aleatoires d'une classe donnee.
 
+    Lit le manifest de curation pour trouver les images de la classe,
+    puis selectionne n images au hasard parmi celles existantes sur disque.
+
     Args:
-        class_name: Nom de la classe (sous-dossier).
+        class_name: Nom scientifique de l'espece.
         n: Nombre d'images a retourner.
-        data_dir: Repertoire des images. Par defaut data/processed/.
 
     Returns:
         Liste de chemins vers les images selectionnees.
     """
-    root = data_dir or PROCESSED_DIR
-    cls_dir = root / class_name
-    if not cls_dir.exists():
+    raw_images_dir = RAW_DIR / "Mushrooms_images"
+    curated_path = DATA_DIR / "curated_manifest.csv"
+
+    if not curated_path.exists():
         return []
-    images = [
-        f
-        for f in cls_dir.iterdir()
-        if f.is_file() and f.suffix.lower() in {".jpg", ".jpeg", ".png"}
-    ]
-    if not images:
+
+    # Lire le manifest pour trouver les fichiers de cette classe
+    class_files: list[Path] = []
+    with open(curated_path, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["species"] == class_name:
+                img_path = raw_images_dir / row["image_lien"]
+                if img_path.exists():
+                    class_files.append(img_path)
+
+    if not class_files:
         return []
-    return random.sample(images, min(n, len(images)))
+    return random.sample(class_files, min(n, len(class_files)))
