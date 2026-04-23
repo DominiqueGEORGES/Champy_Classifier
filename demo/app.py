@@ -1,8 +1,8 @@
 """Page d'accueil du portfolio Streamlit Champy Classifier.
 
 Affiche une vue d'ensemble du pipeline MLOps avec le statut
-de chaque etape, determine dynamiquement en verifiant la
-presence des artefacts correspondants.
+de chaque étape, déterminé dynamiquement en vérifiant la
+présence des artefacts correspondants.
 """
 
 from __future__ import annotations
@@ -27,56 +27,56 @@ st.set_page_config(
 )
 
 st.title(":mushroom: Champy Classifier")
-st.subheader("Portfolio MLOps - Classification de champignons (30 especes)")
+st.subheader("Portfolio MLOps - Classification de champignons (30 espèces)")
 
 st.markdown("""
 Ce portfolio interactif retrace l'ensemble du pipeline MLOps
-du projet Champy Classifier, de l'exploration des donnees brutes
+du projet Champy Classifier, de l'exploration des données brutes
 au monitoring en production.
 
-**Principe fondamental** : aucune valeur n'est ecrite en dur.
-Toutes les statistiques, metriques et visualisations sont lues
+**Principe fondamental** : aucune valeur n'est écrite en dur.
+Toutes les statistiques, métriques et visualisations sont lues
 dynamiquement aux sources (fichiers JSON, MLflow, API, Prometheus).
 """)
 
 st.divider()
 
-# --- Statut des etapes (detection dynamique des artefacts) ---
+# --- Statut des étapes (détection dynamique des artefacts) ---
 st.header("Statut du pipeline")
 
 
 def check_artifact(path: Path) -> str:
-    """Retourne une icone selon l'existence d'un artefact.
+    """Retourne une icône selon l'existence d'un artefact.
 
     Args:
-        path: Chemin vers le fichier ou repertoire a verifier.
+        path: Chemin vers le fichier ou répertoire à vérifier.
 
     Returns:
-        Chaine avec emoji de statut.
+        Chaîne avec emoji de statut.
     """
     if path.exists():
         return ":white_check_mark:"
     return ":x:"
 
 
-# Definition des etapes et de leurs artefacts de validation
+# Definition des étapes et de leurs artefacts de validation
 pipeline_steps = [
-    ("1. Donnees brutes", DATA_DIR / "raw_stats.json", "Exploration et statistiques"),
+    ("1. Données brutes", DATA_DIR / "raw_stats.json", "Exploration et statistiques"),
     ("2. Nettoyage", DATA_DIR / "cleaning_report.json", "Exclusion doublons et augmentations TF"),
     (
         "3. Augmentation",
         PROJECT_ROOT / "src" / "data" / "dataset.py",
         "Transforms PyTorch configurables",
     ),
-    ("4. Split", DATA_DIR / "split_stats.json", "Split stratifie 70/15/15"),
-    ("5. Entrainement", PROJECT_ROOT / "models" / "model.onnx", "Training PyTorch + MLflow"),
+    ("4. Split", DATA_DIR / "split_stats.json", "Split stratifié 70/15/15"),
+    ("5. Entraînement", PROJECT_ROOT / "models" / "model.onnx", "Training PyTorch + MLflow"),
     (
-        "6. Evaluation",
+        "6. Évaluation",
         PROJECT_ROOT / "models" / "model.onnx",
-        "Metriques, confusion matrix, GradCAM",
+        "Métriques, confusion matrix, GradCAM",
     ),
     ("7. Model Registry", PROJECT_ROOT / "models" / "model.onnx", "MLflow Model Registry"),
-    ("8. Prediction", PROJECT_ROOT / "src" / "serving" / "app.py", "API FastAPI + inference ONNX"),
+    ("8. Prédiction", PROJECT_ROOT / "src" / "serving" / "app.py", "API FastAPI + inférence ONNX"),
     ("9. API", PROJECT_ROOT / "src" / "serving" / "app.py", "Endpoints REST"),
     ("10. Monitoring", PROJECT_ROOT / "configs" / "prometheus.yml", "Prometheus + Grafana"),
     ("11. Drift", PROJECT_ROOT / "src" / "monitoring" / "drift.py", "Evidently AI"),
@@ -92,8 +92,8 @@ for i, (name, artifact, description) in enumerate(pipeline_steps):
 
 st.divider()
 
-# --- Metriques rapides si disponibles ---
-st.header("Metriques cles")
+# --- Métriques rapides si disponibles ---
+st.header("Métriques clés")
 
 try:
     import json
@@ -108,7 +108,7 @@ try:
 except FileNotFoundError:
     st.warning("Statistiques de split non disponibles (data/split_stats.json manquant).")
 except Exception as e:
-    st.warning(f"Erreur lors du chargement des metriques : {e}")
+    st.warning(f"Erreur lors du chargement des métriques : {e}")
 
 st.divider()
-st.caption("Utilisez le menu lateral pour naviguer entre les etapes du pipeline.")
+st.caption("Utilisez le menu latéral pour naviguer entre les étapes du pipeline.")

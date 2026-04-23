@@ -1,6 +1,6 @@
 """Page Streamlit : infrastructure et architecture.
 
-Affiche le schema d'architecture du projet, le statut des services
+Affiche le schéma d'architecture du projet, le statut des services
 Docker, et les liens vers les outils CI/CD.
 """
 
@@ -39,9 +39,9 @@ XPS (training, GPU)                    NUC3 (serving/monitoring, CPU)
 
 | Service | Port | Role |
 |---------|------|------|
-| api | 8000 | FastAPI + ONNX Runtime (inference) |
+| api | 8000 | FastAPI + ONNX Runtime (inférence) |
 | demo | 8501 | Streamlit (ce portfolio) |
-| prometheus | 9090 | Scraping metriques /metrics |
+| prometheus | 9090 | Scraping métriques /metrics |
 | grafana | 3000 | Dashboards de monitoring |
 """)
 
@@ -85,13 +85,13 @@ try:
                 df[display_cols] if display_cols else df, use_container_width=True, hide_index=True
             )
         else:
-            st.info("Aucun service Docker en cours d'execution.")
+            st.info("Aucun service Docker en cours d'exécution.")
     else:
         st.info("Docker Compose non disponible ou aucun service actif.")
 except FileNotFoundError:
-    st.info("Docker n'est pas installe ou pas dans le PATH.")
+    st.info("Docker n'est pas installé ou pas dans le PATH.")
 except Exception as e:
-    st.warning(f"Erreur lors de la verification Docker : {e}")
+    st.warning(f"Erreur lors de la vérification Docker : {e}")
 
 st.divider()
 
@@ -101,7 +101,7 @@ st.divider()
 st.header("CI/CD")
 
 st.markdown("""
-**GitHub Actions** : pipeline automatise sur chaque push/PR.
+**GitHub Actions** : pipeline automatisé sur chaque push/PR.
 
 | Job | Description |
 |-----|-------------|
@@ -125,15 +125,15 @@ st.markdown("""
 | Composant | Techno | Justification |
 |-----------|--------|---------------|
 | ML Framework | PyTorch + torchvision | Standard industrie, GPU support |
-| Modele | ResNet50 (transfer learning) | Prouve sur le projet |
-| Data versioning | DVC (DagsHub remote) | Deja en place |
-| Experiment tracking | MLflow (DagsHub) | Integre DagsHub, gratuit |
+| Modèle | ResNet50 (transfer learning) | Prouvé sur le projet |
+| Data versioning | DVC (DagsHub remote) | Déjà en place |
+| Experiment tracking | MLflow (DagsHub) | Intègre DagsHub, gratuit |
 | API serving | FastAPI | Async, Pydantic, OpenAPI auto |
 | Demo UI | Streamlit (multi-page) | Python natif, rapide |
 | Monitoring | Prometheus + Grafana | Standard industrie |
-| Drift detection | Evidently AI | Rapports HTML |
+| Drift détection | Evidently AI | Rapports HTML |
 | Containerisation | Docker Compose | Suffisant pour l'echelle |
-| CI/CD | GitHub Actions | Integre DagsHub |
+| CI/CD | GitHub Actions | Intègre DagsHub |
 | Linting | Ruff | Rapide, tout-en-un |
 | Type checking | Mypy (strict) | Rigueur |
 | Tests | Pytest + pytest-cov | Standard |

@@ -1,8 +1,8 @@
-"""Page Streamlit : exploration des donnees brutes.
+"""Page Streamlit : exploration des données brutes.
 
 Lit data/raw_stats.json et affiche la distribution des classes,
-les formats, dimensions, et une galerie d'exemples aleatoires.
-Zero valeur hardcodee - tout est lu dynamiquement.
+les formats, dimensions, et une galerie d'exemples aléatoires.
+Zéro valeur hardcodée - tout est lu dynamiquement.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-st.set_page_config(page_title="01 - Donnees brutes", layout="wide")
-st.title(":file_folder: Donnees brutes")
+st.set_page_config(page_title="01 - Données brutes", layout="wide")
+st.title(":file_folder: Données brutes")
 
 try:
     from demo.lib.data_utils import get_random_images, load_raw_stats
@@ -25,10 +25,10 @@ try:
     stats = load_raw_stats()
 except Exception as e:
     st.error(f"Impossible de charger les statistiques : {e}")
-    st.info("Lancez le script d'analyse des donnees pour generer data/raw_stats.json.")
+    st.info("Lancez le script d'analyse des données pour générer data/raw_stats.json.")
     st.stop()
 
-# --- Metriques globales ---
+# --- Métriques globales ---
 st.header("Vue d'ensemble")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total images", f"{stats['total_images']:,}")
@@ -48,15 +48,15 @@ if class_counts:
 
     df_classes = pd.DataFrame(
         sorted(class_counts.items(), key=lambda x: x[1], reverse=True),
-        columns=["Espece", "Nombre d'images"],
+        columns=["Espèce", "Nombre d'images"],
     )
 
     fig = px.bar(
         df_classes,
         x="Nombre d'images",
-        y="Espece",
+        y="Espèce",
         orientation="h",
-        title="Nombre d'images par espece (data/processed/)",
+        title="Nombre d'images par espèce (data/processed/)",
         color="Nombre d'images",
         color_continuous_scale="Viridis",
     )
@@ -68,9 +68,9 @@ if class_counts:
     col1, col2, col3 = st.columns(3)
     col1.metric("Min par classe", min(counts))
     col2.metric("Max par classe", max(counts))
-    col3.metric("Ratio max/min", f"{max(counts)/min(counts):.2f}")
+    col3.metric("Ratio max/min", f"{max(counts) / min(counts):.2f}")
 else:
-    st.warning("Aucune donnee de distribution disponible.")
+    st.warning("Aucune donnée de distribution disponible.")
 
 st.divider()
 
@@ -117,7 +117,7 @@ st.divider()
 st.header("Galerie d'exemples")
 
 selected_class = st.selectbox(
-    "Choisir une espece",
+    "Choisir une espèce",
     options=sorted(class_counts.keys()) if class_counts else [],
 )
 
@@ -131,4 +131,4 @@ if selected_class:
             col = cols[i % len(cols)]
             col.image(str(img_path), caption=img_path.name, use_container_width=True)
     else:
-        st.warning(f"Aucune image trouvee pour {selected_class}.")
+        st.warning(f"Aucune image trouvée pour {selected_class}.")

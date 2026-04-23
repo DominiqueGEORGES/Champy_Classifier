@@ -1,7 +1,7 @@
 """Page Streamlit : monitoring via Prometheus et Grafana.
 
-Affiche les metriques de monitoring (latence, predictions, confiance)
-depuis Prometheus via requetes PromQL, avec lien vers Grafana.
+Affiche les métriques de monitoring (latence, prédictions, confiance)
+depuis Prometheus via requêtes PromQL, avec lien vers Grafana.
 """
 
 from __future__ import annotations
@@ -32,46 +32,46 @@ st.header("Outils de monitoring")
 col1, col2 = st.columns(2)
 col1.markdown("""
 **Prometheus** : [http://localhost:9090](http://localhost:9090)
-- Requetes PromQL
+- Requêtes PromQL
 - Alertes
 - Targets et scrape status
 """)
 col2.markdown("""
 **Grafana** : [http://localhost:3000](http://localhost:3000)
-- Dashboards pre-configures
+- Dashboards pré-configurés
 - Login : admin / (voir .env GRAFANA_PASSWORD)
 """)
 
 st.divider()
 
 # =====================================================================
-# Section 2 : Metriques en temps reel
+# Section 2 : Métriques en temps reel
 # =====================================================================
-st.header("Metriques en temps reel")
+st.header("Métriques en temps reel")
 
-if st.button("Rafraichir", type="primary"):
+if st.button("Rafraîchir", type="primary"):
     st.cache_data.clear()
 
-# Predictions totales
+# Prédictions totales
 predictions = query_prometheus("champy_predictions_total")
 if predictions:
-    st.subheader("Predictions par espece")
+    st.subheader("Prédictions par espèce")
     import pandas as pd
 
     rows = []
     for result in predictions:
         species = result.get("metric", {}).get("species", "?")
         value = float(result.get("value", [0, 0])[1])
-        rows.append({"Espece": species, "Predictions": int(value)})
+        rows.append({"Espèce": species, "Prédictions": int(value)})
 
     if rows:
-        df = pd.DataFrame(rows).sort_values("Predictions", ascending=False)
+        df = pd.DataFrame(rows).sort_values("Prédictions", ascending=False)
         st.dataframe(df, use_container_width=True, hide_index=True)
 else:
-    st.info("Aucune donnee de prediction disponible (Prometheus hors ligne ou aucune requete).")
+    st.info("Aucune donnée de prédiction disponible (Prometheus hors ligne ou aucune requête).")
 
 # Latence
-st.subheader("Latence d'inference")
+st.subheader("Latence d'inférence")
 latency = query_prometheus(
     "histogram_quantile(0.95, rate(champy_prediction_latency_seconds_bucket[5m]))"
 )
@@ -80,7 +80,7 @@ if latency:
         value = float(result.get("value", [0, 0])[1])
         st.metric("Latence p95", f"{value * 1000:.0f} ms")
 else:
-    st.info("Donnees de latence non disponibles.")
+    st.info("Données de latence non disponibles.")
 
 # Confiance moyenne
 confidence = query_prometheus(
@@ -94,9 +94,9 @@ if confidence:
 st.divider()
 
 # =====================================================================
-# Section 3 : Metriques brutes
+# Section 3 : Métriques brutes
 # =====================================================================
-with st.expander("Metriques Prometheus brutes"):
+with st.expander("Métriques Prometheus brutes"):
     raw = get_prometheus_metrics()
     if raw:
         st.code(raw, language="text")

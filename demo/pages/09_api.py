@@ -1,7 +1,7 @@
 """Page Streamlit : statut et documentation de l'API FastAPI.
 
-Affiche l'etat de sante de l'API, les metadonnees du modele,
-un lien vers la documentation Swagger, et les metriques brutes.
+Affiche l'état de santé de l'API, les métadonnées du modèle,
+un lien vers la documentation Swagger, et les métriques brutes.
 """
 
 from __future__ import annotations
@@ -35,15 +35,15 @@ if health is not None:
     if status == "healthy":
         st.success(f"API en ligne - statut : {status}")
     elif status == "no_model":
-        st.warning(f"API en ligne mais sans modele : {status}")
+        st.warning(f"API en ligne mais sans modèle : {status}")
     else:
         st.error(f"API en erreur : {status}")
 
     col1, col2 = st.columns(2)
-    col1.metric("Modele charge", "Oui" if health.get("model_loaded") else "Non")
+    col1.metric("Modèle charge", "Oui" if health.get("model_loaded") else "Non")
     col2.metric("Version", health.get("model_version", "?"))
 else:
-    st.error("API indisponible. Verifiez que le serveur est demarre.")
+    st.error("API indisponible. Vérifiez que le serveur est démarré.")
 
 st.divider()
 
@@ -59,20 +59,20 @@ st.markdown(f"""
 - **OpenAPI JSON** : [{api_url}/openapi.json]({api_url}/openapi.json)
 
 **Endpoints disponibles** :
-| Methode | Endpoint | Description |
+| Méthode | Endpoint | Description |
 |---------|----------|-------------|
-| POST | /predict | Prediction top-5 depuis une image |
-| GET | /health | Etat de sante du service |
-| GET | /metrics | Metriques Prometheus |
-| GET | /model/info | Metadonnees du modele |
+| POST | /predict | Prédiction top-5 depuis une image |
+| GET | /health | État de santé du service |
+| GET | /metrics | Métriques Prometheus |
+| GET | /model/info | Métadonnées du modèle |
 """)
 
 st.divider()
 
 # =====================================================================
-# Section 3 : Informations du modele
+# Section 3 : Informations du modèle
 # =====================================================================
-st.header("Informations du modele")
+st.header("Informations du modèle")
 
 model_info = get_model_info()
 if model_info is not None:
@@ -85,16 +85,16 @@ if model_info is not None:
         for i, name in enumerate(model_info.get("class_names", [])):
             st.write(f"{i:2d}. {name}")
 else:
-    st.info("Informations du modele non disponibles (API hors ligne ou modele non charge).")
+    st.info("Informations du modèle non disponibles (API hors ligne ou modèle non charge).")
 
 st.divider()
 
 # =====================================================================
-# Section 4 : Metriques brutes
+# Section 4 : Métriques brutes
 # =====================================================================
-st.header("Metriques Prometheus (brutes)")
+st.header("Métriques Prometheus (brutes)")
 
-if st.button("Rafraichir les metriques"):
+if st.button("Rafraîchir les métriques"):
     st.cache_data.clear()
 
 metrics_text = get_prometheus_metrics()
@@ -104,6 +104,6 @@ if metrics_text:
     if champy_lines:
         st.code("\n".join(champy_lines), language="text")
     else:
-        st.info("Aucune metrique champy_ disponible (aucune prediction effectuee).")
+        st.info("Aucune métrique champy_ disponible (aucune prédiction effectuée).")
 else:
-    st.info("Metriques non disponibles (API hors ligne).")
+    st.info("Métriques non disponibles (API hors ligne).")

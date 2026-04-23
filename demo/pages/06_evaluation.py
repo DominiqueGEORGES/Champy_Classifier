@@ -1,4 +1,4 @@
-"""Page Streamlit : evaluation du modele.
+"""Page Streamlit : évaluation du modèle.
 
 Affiche la confusion matrix, le F1 par classe, et le rapport
 de classification depuis les artefacts locaux ou MLflow.
@@ -15,12 +15,12 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-st.set_page_config(page_title="06 - Evaluation", layout="wide")
-st.title(":bar_chart: Evaluation du modele")
+st.set_page_config(page_title="06 - Évaluation", layout="wide")
+st.title(":bar_chart: Évaluation du modèle")
 
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "artifacts"
 
-# --- Charger les metriques ---
+# --- Charger les métriques ---
 metrics = None
 try:
     from demo.lib.mlflow_utils import load_local_metrics
@@ -30,13 +30,13 @@ except Exception:
     pass
 
 if metrics is None:
-    st.warning("Aucune metrique disponible. Lancez un entrainement d'abord.")
+    st.warning("Aucune métrique disponible. Lancez un entraînement d'abord.")
     st.stop()
 
 # =====================================================================
-# Section 1 : Metriques globales
+# Section 1 : Métriques globales
 # =====================================================================
-st.header("Metriques globales")
+st.header("Métriques globales")
 
 col1, col2 = st.columns(2)
 col1.metric("Test accuracy", f"{metrics.get('accuracy', 0):.1%}")
@@ -73,7 +73,7 @@ if report:
     import pandas as pd
     import plotly.express as px
 
-    # Extraire les metriques par classe (exclure les moyennes)
+    # Extraire les métriques par classe (exclure les moyennes)
     class_metrics = {
         cls: vals
         for cls, vals in report.items()
@@ -85,7 +85,7 @@ if report:
         for cls, vals in sorted(class_metrics.items()):
             rows.append(
                 {
-                    "Espece": cls,
+                    "Espèce": cls,
                     "Precision": vals.get("precision", 0),
                     "Recall": vals.get("recall", 0),
                     "F1-score": vals.get("f1-score", 0),
@@ -99,9 +99,9 @@ if report:
         fig = px.bar(
             df_class.sort_values("F1-score"),
             x="F1-score",
-            y="Espece",
+            y="Espèce",
             orientation="h",
-            title="F1-score par espece",
+            title="F1-score par espèce",
             color="F1-score",
             color_continuous_scale="RdYlGn",
             range_color=[0, 1],
@@ -109,8 +109,8 @@ if report:
         fig.update_layout(height=800, yaxis={"categoryorder": "total ascending"})
         st.plotly_chart(fig, use_container_width=True)
 
-        # Tableau detaille
-        st.subheader("Detail par classe")
+        # Tableau détaillé
+        st.subheader("Détail par classe")
         st.dataframe(
             df_class.sort_values("F1-score", ascending=False),
             use_container_width=True,
@@ -120,10 +120,10 @@ if report:
         # Identifier les classes faibles
         weak = df_class[df_class["F1-score"] < 0.7].sort_values("F1-score")
         if not weak.empty:
-            st.subheader("Classes a ameliorer (F1 < 70%)")
+            st.subheader("Classes à améliorer (F1 < 70%)")
             st.dataframe(weak, use_container_width=True, hide_index=True)
     else:
-        st.info("Aucun detail par classe dans le rapport.")
+        st.info("Aucun détail par classe dans le rapport.")
 else:
     st.info("Rapport de classification non disponible.")
 
@@ -137,7 +137,7 @@ st.header("Courbes d'apprentissage")
 curves_path = ARTIFACTS_DIR / "learning_curves.png"
 if curves_path.exists():
     st.image(
-        str(curves_path), caption="Evolution loss et metriques par epoch", use_container_width=True
+        str(curves_path), caption="Évolution loss et métriques par epoch", use_container_width=True
     )
 else:
     st.info("Image des courbes non disponible (models/artifacts/learning_curves.png).")

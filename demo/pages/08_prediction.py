@@ -1,6 +1,6 @@
-"""Page Streamlit : prediction interactive.
+"""Page Streamlit : prédiction interactive.
 
-Upload d'une image de champignon, appel a l'API /predict,
+Upload d'une image de champignon, appel à l'API /predict,
 affichage du top-5 avec barres de confiance.
 """
 
@@ -15,13 +15,13 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-st.set_page_config(page_title="08 - Prediction", layout="wide")
-st.title(":crystal_ball: Prediction")
+st.set_page_config(page_title="08 - Prédiction", layout="wide")
+st.title(":crystal_ball: Prédiction")
 
 st.markdown("""
-Uploadez une photo de champignon pour obtenir une prediction
-du modele. L'image est envoyee a l'API FastAPI qui effectue
-l'inference via ONNX Runtime.
+Uploadez une photo de champignon pour obtenir une prédiction
+du modèle. L'image est envoyée à l'API FastAPI qui effectue
+l'inférence via ONNX Runtime.
 """)
 
 # --- Upload ---
@@ -35,7 +35,7 @@ if uploaded_file is not None:
     col_img, col_results = st.columns([1, 2])
 
     with col_img:
-        st.image(uploaded_file, caption="Image uploadee", use_container_width=True)
+        st.image(uploaded_file, caption="Image uploadée", use_container_width=True)
 
     with col_results:
         image_bytes = uploaded_file.getvalue()
@@ -43,17 +43,17 @@ if uploaded_file is not None:
         try:
             from demo.lib.api_utils import predict_image
 
-            with st.spinner("Inference en cours..."):
+            with st.spinner("Inférence en cours..."):
                 result = predict_image(image_bytes, top_n=5)
 
             if result is None:
                 st.error(
-                    "API indisponible. Verifiez que le serveur est demarre "
-                    "(uvicorn src.serving.app:app --port 8000)."
+                    "API indisponible. Vérifiez que le serveur est démarré "
+                    "(uvicorn src.serving.app:app --port 8010)."
                 )
             elif "predictions" in result:
                 predictions = result["predictions"]
-                st.subheader("Resultats")
+                st.subheader("Résultats")
 
                 # Top-1 en grand
                 top1 = predictions[0]
@@ -65,7 +65,7 @@ if uploaded_file is not None:
                 st.divider()
 
                 # Barres de confiance pour le top-5
-                st.subheader("Top-5 predictions")
+                st.subheader("Top-5 prédictions")
                 import pandas as pd
                 import plotly.express as px
 
@@ -77,8 +77,8 @@ if uploaded_file is not None:
                     x="confidence_pct",
                     y="species",
                     orientation="h",
-                    title="Confiance par espece",
-                    labels={"confidence_pct": "Confiance (%)", "species": "Espece"},
+                    title="Confiance par espèce",
+                    labels={"confidence_pct": "Confiance (%)", "species": "Espèce"},
                     color="confidence_pct",
                     color_continuous_scale="Greens",
                     range_color=[0, 100],
@@ -89,12 +89,12 @@ if uploaded_file is not None:
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Version du modele
-                st.caption(f"Modele version : {result.get('model_version', '?')}")
+                # Version du modèle
+                st.caption(f"Modèle version : {result.get('model_version', '?')}")
             else:
-                st.error(f"Reponse inattendue de l'API : {result}")
+                st.error(f"Réponse inattendue de l'API : {result}")
 
         except Exception as e:
-            st.error(f"Erreur lors de la prediction : {e}")
+            st.error(f"Erreur lors de la prédiction : {e}")
 else:
-    st.info("Uploadez une image pour lancer une prediction.")
+    st.info("Uploadez une image pour lancer une prédiction.")

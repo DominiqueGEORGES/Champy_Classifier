@@ -1,7 +1,7 @@
 """Configuration du sys.path pour les imports Streamlit.
 
-Streamlit execute chaque page comme un script independant.
-Le repertoire racine du projet doit etre dans sys.path pour
+Streamlit exécute chaque page comme un script independant.
+Le répertoire racine du projet doit etre dans sys.path pour
 que les imports 'from src...' et 'from demo...' fonctionnent.
 
 Usage (en tete de chaque page et de app.py) :

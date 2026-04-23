@@ -1,8 +1,8 @@
-"""Page Streamlit : split stratifie train/val/test.
+"""Page Streamlit : split stratifié train/val/test.
 
 Lit data/split_stats.json et data/split_manifest.csv pour afficher
-la distribution par classe par split, la verification de la
-stratification, et le desequilibre naturel du dataset.
+la distribution par classe par split, la vérification de la
+stratification, et le déséquilibre naturel du dataset.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 st.set_page_config(page_title="04 - Split", layout="wide")
-st.title(":scissors: Split stratifie")
+st.title(":scissors: Split stratifié")
 
 try:
     from demo.lib.data_utils import load_split_stats
@@ -27,8 +27,8 @@ except Exception as e:
     st.error(f"Impossible de charger les statistiques de split : {e}")
     st.stop()
 
-# --- Parametres du split ---
-st.header("Parametres")
+# --- Paramètres du split ---
+st.header("Paramètres")
 
 col1, col2, col3, col4 = st.columns(4)
 ratios = stats.get("ratios", {})
@@ -67,7 +67,7 @@ if per_class:
         for split_name in ("train", "val", "test"):
             rows.append(
                 {
-                    "Espece": cls,
+                    "Espèce": cls,
                     "Split": split_name,
                     "Nombre": counts.get(split_name, 0),
                 }
@@ -78,7 +78,7 @@ if per_class:
     fig = px.bar(
         df_split,
         x="Nombre",
-        y="Espece",
+        y="Espèce",
         color="Split",
         orientation="h",
         title="Images par classe et par split",
@@ -90,15 +90,15 @@ if per_class:
 
     st.divider()
 
-    # --- Verification de la stratification ---
-    st.header("Verification de la stratification")
+    # --- Vérification de la stratification ---
+    st.header("Vérification de la stratification")
 
     strat_rows = []
     for cls, counts in sorted(per_class.items()):
         cls_total = counts.get("total", 1)
         strat_rows.append(
             {
-                "Espece": cls,
+                "Espèce": cls,
                 "Total": cls_total,
                 "Train %": round(counts.get("train", 0) / cls_total * 100, 1),
                 "Val %": round(counts.get("val", 0) / cls_total * 100, 1),
@@ -121,8 +121,8 @@ if per_class:
 
     st.divider()
 
-    # --- Desequilibre naturel ---
-    st.header("Desequilibre naturel du dataset")
+    # --- Déséquilibre naturel ---
+    st.header("Déséquilibre naturel du dataset")
 
     totals = {cls: counts["total"] for cls, counts in per_class.items()}
     sorted_totals = sorted(totals.items(), key=lambda x: x[1])
@@ -133,12 +133,12 @@ if per_class:
     col1, col2, col3 = st.columns(3)
     col1.metric("Classe la plus petite", f"{min_cls}", f"{min_count} images")
     col2.metric("Classe la plus grande", f"{max_cls}", f"{max_count} images")
-    col3.metric("Ratio desequilibre", f"{max_count / min_count:.1f}x")
+    col3.metric("Ratio déséquilibre", f"{max_count / min_count:.1f}x")
 
     st.markdown("""
-    **Strategie d'equilibrage** : `WeightedRandomSampler` au training.
-    Chaque classe a un poids inversement proportionnel a sa taille,
+    **Stratégie d'equilibrage** : `WeightedRandomSampler` au training.
+    Chaque classe a un poids inversement proportionnel à sa taille,
     de sorte que les classes rares sont surechantillonnees a chaque epoch.
     """)
 else:
-    st.warning("Aucune donnee de distribution par classe disponible.")
+    st.warning("Aucune donnée de distribution par classe disponible.")

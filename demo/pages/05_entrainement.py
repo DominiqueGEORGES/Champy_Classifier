@@ -1,6 +1,6 @@
-"""Page Streamlit : suivi de l'entrainement.
+"""Page Streamlit : suivi de l'entraînement.
 
-Affiche les courbes d'apprentissage, les hyperparametres et les metriques
+Affiche les courbes d'apprentissage, les hyperparamètres et les métriques
 depuis MLflow. Fallback sur le fichier JSON local si MLflow est indisponible.
 """
 
@@ -15,8 +15,8 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-st.set_page_config(page_title="05 - Entrainement", layout="wide")
-st.title(":chart_with_upwards_trend: Entrainement")
+st.set_page_config(page_title="05 - Entraînement", layout="wide")
+st.title(":chart_with_upwards_trend: Entraînement")
 
 # --- Tenter de charger depuis MLflow, sinon fallback local ---
 mlflow_available = False
@@ -31,7 +31,7 @@ try:
 except Exception as e:
     st.warning(f"MLflow non disponible : {e}")
 
-# --- Fallback : metriques locales ---
+# --- Fallback : métriques locales ---
 local_metrics = None
 if not mlflow_available:
     try:
@@ -39,12 +39,12 @@ if not mlflow_available:
 
         local_metrics = load_local_metrics()
         if local_metrics:
-            st.info("Metriques chargees depuis le fichier local (models/artifacts/metrics.json)")
+            st.info("Métriques chargées depuis le fichier local (models/artifacts/metrics.json)")
     except Exception:
         pass
 
 if not mlflow_available and local_metrics is None:
-    st.error("Aucune source de metriques disponible (ni MLflow ni fichier local).")
+    st.error("Aucune source de métriques disponible (ni MLflow ni fichier local).")
     st.stop()
 
 # =====================================================================
@@ -99,11 +99,11 @@ if mlflow_available and runs:
                 )
             )
             fig.update_layout(
-                title="Evolution de la loss", xaxis_title="Epoch", yaxis_title="Loss"
+                title="Évolution de la loss", xaxis_title="Epoch", yaxis_title="Loss"
             )
             st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
-        st.warning(f"Impossible de charger l'historique des metriques : {e}")
+        st.warning(f"Impossible de charger l'historique des métriques : {e}")
 
     try:
         val_acc_hist = get_metric_history(run_id, "val_acc")
@@ -127,11 +127,11 @@ if mlflow_available and runs:
                     )
                 )
             fig2.update_layout(
-                title="Evolution des metriques", xaxis_title="Epoch", yaxis_title="Score"
+                title="Évolution des métriques", xaxis_title="Epoch", yaxis_title="Score"
             )
             st.plotly_chart(fig2, use_container_width=True)
     except Exception as e:
-        st.warning(f"Impossible de charger les metriques val : {e}")
+        st.warning(f"Impossible de charger les métriques val : {e}")
 
 elif local_metrics and "history" in local_metrics:
     import plotly.graph_objects as go
@@ -144,7 +144,7 @@ elif local_metrics and "history" in local_metrics:
         fig.add_trace(go.Scatter(x=epochs, y=history["train_loss"], name="Train loss"))
     if "val_loss" in history:
         fig.add_trace(go.Scatter(x=epochs, y=history["val_loss"], name="Val loss"))
-    fig.update_layout(title="Evolution de la loss", xaxis_title="Epoch", yaxis_title="Loss")
+    fig.update_layout(title="Évolution de la loss", xaxis_title="Epoch", yaxis_title="Loss")
     st.plotly_chart(fig, use_container_width=True)
 
     fig2 = go.Figure()
@@ -152,15 +152,15 @@ elif local_metrics and "history" in local_metrics:
         fig2.add_trace(go.Scatter(x=epochs, y=history["val_acc"], name="Val accuracy"))
     if "val_f1" in history:
         fig2.add_trace(go.Scatter(x=epochs, y=history["val_f1"], name="Val F1 macro"))
-    fig2.update_layout(title="Evolution des metriques", xaxis_title="Epoch", yaxis_title="Score")
+    fig2.update_layout(title="Évolution des métriques", xaxis_title="Epoch", yaxis_title="Score")
     st.plotly_chart(fig2, use_container_width=True)
 
 st.divider()
 
 # =====================================================================
-# Section 3 : Hyperparametres
+# Section 3 : Hyperparamètres
 # =====================================================================
-st.header("Hyperparametres")
+st.header("Hyperparamètres")
 
 if mlflow_available and runs:
     try:
@@ -172,20 +172,20 @@ if mlflow_available and runs:
 
             df_params = pd.DataFrame(
                 sorted(params.items()),
-                columns=["Parametre", "Valeur"],
+                columns=["Paramètre", "Valeur"],
             )
             st.dataframe(df_params, use_container_width=True, hide_index=True)
     except Exception as e:
-        st.warning(f"Impossible de charger les hyperparametres : {e}")
+        st.warning(f"Impossible de charger les hyperparamètres : {e}")
 elif local_metrics and "report" in local_metrics:
     st.json(local_metrics.get("report", {}))
 
 st.divider()
 
 # =====================================================================
-# Section 4 : Metriques finales
+# Section 4 : Métriques finales
 # =====================================================================
-st.header("Metriques finales")
+st.header("Métriques finales")
 
 if mlflow_available and runs:
     metrics = {

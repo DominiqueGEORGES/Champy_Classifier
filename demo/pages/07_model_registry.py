@@ -1,7 +1,7 @@
 """Page Streamlit : model registry et export ONNX.
 
-Affiche les versions du modele, le benchmark PyTorch vs ONNX,
-et les metadonnees du modele exporte.
+Affiche les versions du modèle, le benchmark PyTorch vs ONNX,
+et les métadonnées du modèle exporté.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ st.title(":package: Model Registry & Export ONNX")
 MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 
 # =====================================================================
-# Section 1 : Fichiers modele disponibles
+# Section 1 : Fichiers modèle disponibles
 # =====================================================================
-st.header("Modeles disponibles")
+st.header("Modèles disponibles")
 
 model_files = []
 if MODELS_DIR.exists():
@@ -45,7 +45,7 @@ if model_files:
 
     st.dataframe(pd.DataFrame(model_files), use_container_width=True, hide_index=True)
 else:
-    st.warning("Aucun modele trouve dans models/.")
+    st.warning("Aucun modèle trouve dans models/.")
 
 st.divider()
 
@@ -72,9 +72,9 @@ else:
 st.divider()
 
 # =====================================================================
-# Section 3 : Modele ONNX
+# Section 3 : Modèle ONNX
 # =====================================================================
-st.header("Modele ONNX")
+st.header("Modèle ONNX")
 
 onnx_path = MODELS_DIR / "best_model.onnx"
 class_names_path = MODELS_DIR / "class_names.json"
@@ -100,7 +100,7 @@ if onnx_path.exists():
 
         model = onnx.load(str(onnx_path))
         onnx.checker.check_model(model)
-        st.success("Validation ONNX : modele valide")
+        st.success("Validation ONNX : modèle valide")
 
         # Afficher les entrees/sorties
         st.subheader("Architecture ONNX")
@@ -111,12 +111,12 @@ if onnx_path.exists():
             shape = [d.dim_value for d in out.type.tensor_type.shape.dim]
             st.write(f"**Sortie** : `{out.name}` - shape {shape}")
     except ImportError:
-        st.info("Module onnx non installe, validation non disponible.")
+        st.info("Module onnx non installé, validation non disponible.")
     except Exception as e:
-        st.error(f"Validation ONNX echouee : {e}")
+        st.error(f"Validation ONNX échouée : {e}")
 else:
     st.info(
-        "Pas de modele ONNX (models/best_model.onnx). Lancez `python -m src.models.export_onnx`."
+        "Pas de modèle ONNX (models/best_model.onnx). Lancez `python -m src.models.export_onnx`."
     )
 
 st.divider()
@@ -124,16 +124,16 @@ st.divider()
 # =====================================================================
 # Section 4 : Benchmark PyTorch vs ONNX
 # =====================================================================
-st.header("Benchmark inference")
+st.header("Benchmark inférence")
 
 if onnx_path.exists() and checkpoint_path.exists():
     st.markdown("""
-    Le modele ONNX doit produire des sorties identiques au modele PyTorch.
-    La comparaison est effectuee lors de l'export (voir logs de `export_onnx.py`).
+    Le modèle ONNX doit produire des sorties identiques au modèle PyTorch.
+    La comparaison est effectuée lors de l'export (voir logs de `export_onnx.py`).
 
     **Avantages ONNX en production** :
-    - Pas de dependance PyTorch (~2 GB) - seul ONNX Runtime (~50 MB) suffit
-    - Inference CPU optimisee (quantification possible)
+    - Pas de dépendance PyTorch (~2 GB) - seul ONNX Runtime (~50 MB) suffit
+    - Inférence CPU optimisée (quantification possible)
     - Portable (Python, C++, C#, Java, JavaScript)
     """)
 

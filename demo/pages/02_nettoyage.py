@@ -1,8 +1,8 @@
 """Page Streamlit : nettoyage et exclusions.
 
 Lit data/cleaning_report.json et data/excluded.json pour afficher
-le bilan avant/apres, les raisons d'exclusion, et le detail
-des fichiers exclus. Zero valeur hardcodee.
+le bilan avant/après, les raisons d'exclusion, et le détail
+des fichiers exclus. Zéro valeur hardcodée.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 st.set_page_config(page_title="02 - Nettoyage", layout="wide")
-st.title(":broom: Nettoyage des donnees")
+st.title(":broom: Nettoyage des données")
 
 try:
     from demo.lib.data_utils import load_cleaning_report, load_excluded
@@ -29,12 +29,12 @@ except Exception as e:
     st.stop()
 
 # --- Politique de nettoyage ---
-st.info(f"**Politique** : {report.get('policy', 'Non definie')}")
+st.info(f"**Politique** : {report.get('policy', 'Non définie')}")
 
 st.divider()
 
-# --- Metriques avant/apres ---
-st.header("Avant / Apres")
+# --- Métriques avant/après ---
+st.header("Avant / Après")
 
 before = report.get("before", {})
 after = report.get("after", {})
@@ -45,7 +45,7 @@ col1.metric(
     f"{before.get('total_images', 0):,}",
 )
 col2.metric(
-    "Images apres",
+    "Images après",
     f"{after.get('total_images', 0):,}",
     delta=f"-{before.get('total_images', 0) - after.get('total_images', 0):,}",
     delta_color="inverse",
@@ -73,16 +73,16 @@ if reasons:
         df_reasons,
         values="Nombre",
         names="Raison",
-        title="Repartition des exclusions par raison",
+        title="Répartition des exclusions par raison",
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("Aucune exclusion enregistree.")
+    st.info("Aucune exclusion enregistrée.")
 
 st.divider()
 
-# --- Distribution par classe apres nettoyage ---
-st.header("Distribution par classe apres nettoyage")
+# --- Distribution par classe après nettoyage ---
+st.header("Distribution par classe après nettoyage")
 
 after_counts = after.get("class_counts", {})
 if after_counts:
@@ -91,13 +91,13 @@ if after_counts:
 
     df_after = pd.DataFrame(
         sorted(after_counts.items(), key=lambda x: x[1]),
-        columns=["Espece", "Nombre d'images"],
+        columns=["Espèce", "Nombre d'images"],
     )
 
     fig = px.bar(
         df_after,
         x="Nombre d'images",
-        y="Espece",
+        y="Espèce",
         orientation="h",
         title="Images retenues par classe (originaux uniquement)",
         color="Nombre d'images",
@@ -110,12 +110,12 @@ if after_counts:
     col1, col2, col3 = st.columns(3)
     col1.metric("Min par classe", min(counts_list))
     col2.metric("Max par classe", max(counts_list))
-    col3.metric("Ratio max/min", f"{max(counts_list)/min(counts_list):.1f}x")
+    col3.metric("Ratio max/min", f"{max(counts_list) / min(counts_list):.1f}x")
 
 st.divider()
 
-# --- Detail des exclusions ---
-st.header("Detail des fichiers exclus")
+# --- Détail des exclusions ---
+st.header("Détail des fichiers exclus")
 
 if excluded:
     import pandas as pd
@@ -131,7 +131,7 @@ if excluded:
     st.write(f"**{len(filtered)}** fichiers affiches sur {len(excluded)} total")
 
     df_excluded = pd.DataFrame(filtered)
-    # Limiter l'affichage a 200 lignes pour la performance
+    # Limiter l'affichage à 200 lignes pour la performance
     st.dataframe(
         df_excluded.head(200),
         use_container_width=True,

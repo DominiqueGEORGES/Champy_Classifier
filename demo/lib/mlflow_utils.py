@@ -1,8 +1,8 @@
-"""Helpers partages pour l'acces a MLflow depuis les pages Streamlit.
+"""Helpers partagés pour l'acces a MLflow depuis les pages Streamlit.
 
-Fournit des fonctions cachees pour recuperer les runs, metriques,
-artefacts et versions du modele depuis le serveur MLflow DagsHub.
-Principe : zero hardcoded, tout est lu dynamiquement.
+Fournit des fonctions cachées pour récupérer les runs, métriques,
+artefacts et versions du modèle depuis le serveur MLflow DagsHub.
+Principe : zéro hardcoded, tout est lu dynamiquement.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ def search_runs(
     max_results: int = 100,
     order_by: str = "start_time DESC",
 ) -> list[dict[str, Any]]:
-    """Recherche les runs MLflow et retourne les resultats.
+    """Recherche les runs MLflow et retourne les résultats.
 
     Args:
-        max_results: Nombre maximum de runs a retourner.
-        order_by: Critere de tri (ex: 'metrics.val_acc DESC').
+        max_results: Nombre maximum de runs à retourner.
+        order_by: Critère de tri (ex: 'metrics.val_acc DESC').
 
     Returns:
         Liste de dictionnaires avec les infos de chaque run.
@@ -53,10 +53,10 @@ def search_runs(
 
 @st.cache_data(ttl=120)
 def get_best_run(metric: str = "val_acc") -> dict[str, Any] | None:
-    """Recupere le meilleur run selon une metrique donnee.
+    """Récupère le meilleur run selon une métrique donnée.
 
     Args:
-        metric: Nom de la metrique a maximiser.
+        metric: Nom de la métrique à maximiser.
 
     Returns:
         Dictionnaire du meilleur run, ou None si aucun run.
@@ -67,7 +67,7 @@ def get_best_run(metric: str = "val_acc") -> dict[str, Any] | None:
 
 @st.cache_data(ttl=300)
 def get_run_metrics(run_id: str) -> dict[str, Any]:
-    """Recupere toutes les metriques d'un run specifique.
+    """Récupère toutes les métriques d'un run spécifique.
 
     Args:
         run_id: Identifiant du run MLflow.
@@ -84,7 +84,7 @@ def get_run_metrics(run_id: str) -> dict[str, Any]:
 
 @st.cache_data(ttl=300)
 def get_run_params(run_id: str) -> dict[str, str]:
-    """Recupere les hyperparametres d'un run specifique.
+    """Récupère les hyperparamètres d'un run spécifique.
 
     Args:
         run_id: Identifiant du run MLflow.
@@ -101,11 +101,11 @@ def get_run_params(run_id: str) -> dict[str, str]:
 
 @st.cache_data(ttl=300)
 def get_metric_history(run_id: str, metric_name: str) -> list[dict[str, Any]]:
-    """Recupere l'historique d'une metrique par epoch.
+    """Récupère l'historique d'une métrique par epoch.
 
     Args:
         run_id: Identifiant du run MLflow.
-        metric_name: Nom de la metrique (ex: 'val_loss').
+        metric_name: Nom de la métrique (ex: 'val_loss').
 
     Returns:
         Liste de dictionnaires avec 'step' et 'value'.
@@ -119,12 +119,12 @@ def get_metric_history(run_id: str, metric_name: str) -> list[dict[str, Any]]:
 
 
 def load_local_metrics() -> dict[str, Any] | None:
-    """Charge les metriques depuis le fichier JSON local (fallback).
+    """Charge les métriques depuis le fichier JSON local (fallback).
 
     Utilise models/artifacts/metrics.json si MLflow n'est pas disponible.
 
     Returns:
-        Dictionnaire de metriques ou None si le fichier n'existe pas.
+        Dictionnaire de métriques ou None si le fichier n'existe pas.
     """
     import json
 
