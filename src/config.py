@@ -57,17 +57,22 @@ class TrainingConfig(BaseSettings):
     model_name: str = "resnet50"
     num_classes: int = 30
     pretrained: bool = True
-    freeze_backbone: bool = False
 
-    lr: float = 1e-3
+    # Fine-tuning deux phases :
+    # - phase 1 : backbone gele, seule la tete est entrainee (lr_phase1)
+    # - phase 2 : backbone degele, fine-tuning complet (lr_phase2)
+    # Si freeze_backbone_epochs == 0, la phase 1 est sautee.
+    freeze_backbone_epochs: int = 10
+    total_epochs: int = 30
+    lr_phase1: float = 1e-3
+    lr_phase2: float = 1e-5
+
     batch_size: int = 16
-    epochs: int = 30
     seed: int = 42
 
     optimizer: str = "adamw"
     weight_decay: float = 1e-4
     scheduler: str = "cosine"
-    warmup_epochs: int = 2
 
     early_stopping_patience: int = 5
     early_stopping_metric: str = "val_loss"

@@ -4,17 +4,22 @@
 model_name: resnet50
 num_classes: 30
 pretrained: true
-freeze_backbone: false
 
-lr: 1.0e-3
+# Fine-tuning two phases :
+# - phase 1 : backbone frozen, only the head is trained (lr_phase1)
+# - phase 2 : backbone unfrozen, full fine-tuning (lr_phase2)
+# Set freeze_backbone_epochs to 0 to skip phase 1 entirely.
+freeze_backbone_epochs: 10
+total_epochs: 30
+lr_phase1: 1.0e-3
+lr_phase2: 1.0e-5
+
 batch_size: 16
-epochs: 30
 seed: 42
 
 optimizer: adamw
 weight_decay: 1.0e-4
 scheduler: cosine
-warmup_epochs: 2
 
 early_stopping_patience: 5
 early_stopping_metric: val_loss

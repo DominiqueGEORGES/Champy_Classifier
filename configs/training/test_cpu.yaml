@@ -1,0 +1,30 @@
+# Config CPU test smoke : 2 epochs total, 1 par phase, batch petit.
+# A lancer pour valider le code sur NUC3 sans GPU :
+#     python -m src.training.train --config configs/training/test_cpu.yaml
+
+model_name: resnet50
+num_classes: 30
+pretrained: true
+
+# Phase 1 = 1 epoch (tête seule), Phase 2 = 1 epoch (fine-tuning)
+freeze_backbone_epochs: 1
+total_epochs: 2
+lr_phase1: 1.0e-3
+lr_phase2: 1.0e-5
+
+batch_size: 8
+seed: 42
+
+optimizer: adamw
+weight_decay: 1.0e-4
+scheduler: cosine
+
+early_stopping_patience: 5
+early_stopping_metric: val_loss
+
+mixed_precision: false  # Pas de GPU sur NUC3
+gradient_accumulation_steps: 1
+num_workers: 0
+
+image_size: 224
+augmentation: true
