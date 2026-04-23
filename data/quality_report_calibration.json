@@ -1,0 +1,188 @@
+{
+  "model": "OpenCLIP ViT-B-32 / laion2b_s34b_b79k",
+  "device": "cpu",
+  "batch_size": 32,
+  "elapsed_seconds": 12.9,
+  "positive_prompts": [
+    "a photo of a mushroom",
+    "a fungus growing in nature",
+    "a close-up photograph of a mushroom"
+  ],
+  "negative_prompts": [
+    "a photo of a person",
+    "an indoor scene",
+    "a landscape without mushrooms",
+    "a photo of text"
+  ],
+  "threshold": 0.0,
+  "total_images": 551,
+  "valid_images": 551,
+  "unreadable_images": 0,
+  "passed": 535,
+  "failed": 16,
+  "score_final_stats": {
+    "min": -0.1259,
+    "max": 0.1546,
+    "mean": 0.0786,
+    "std": 0.0321,
+    "quantiles": {
+      "0.05": 0.0234,
+      "0.25": 0.0647,
+      "0.5": 0.084,
+      "0.75": 0.0997,
+      "0.95": 0.1198
+    }
+  },
+  "per_class": {
+    "Agaricus bisporus": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Agaricus campestris": {
+      "total": 16,
+      "kept": 14,
+      "excluded": 2
+    },
+    "Amanita muscaria": {
+      "total": 87,
+      "kept": 84,
+      "excluded": 3
+    },
+    "Amanita phalloides": {
+      "total": 25,
+      "kept": 24,
+      "excluded": 1
+    },
+    "Amanita rubescens": {
+      "total": 18,
+      "kept": 18,
+      "excluded": 0
+    },
+    "Armillaria mellea": {
+      "total": 19,
+      "kept": 19,
+      "excluded": 0
+    },
+    "Auricularia auricula-judae": {
+      "total": 8,
+      "kept": 5,
+      "excluded": 3
+    },
+    "Boletus edulis": {
+      "total": 50,
+      "kept": 50,
+      "excluded": 0
+    },
+    "Cantharellus cibarius": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Clitocybe nebularis": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Coprinus comatus": {
+      "total": 28,
+      "kept": 26,
+      "excluded": 2
+    },
+    "Craterellus cornucopioides": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Craterellus lutescens": {
+      "total": 11,
+      "kept": 11,
+      "excluded": 0
+    },
+    "Ganoderma applanatum": {
+      "total": 33,
+      "kept": 31,
+      "excluded": 2
+    },
+    "Hydnum repandum": {
+      "total": 12,
+      "kept": 12,
+      "excluded": 0
+    },
+    "Lactarius deliciosus": {
+      "total": 11,
+      "kept": 11,
+      "excluded": 0
+    },
+    "Macrolepiota procera": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Marasmius oreades": {
+      "total": 12,
+      "kept": 12,
+      "excluded": 0
+    },
+    "Phallus impudicus": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Pleurotus ostreatus": {
+      "total": 42,
+      "kept": 41,
+      "excluded": 1
+    },
+    "Russula cyanoxantha": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Russula emetica": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Russula olivacea": {
+      "total": 8,
+      "kept": 7,
+      "excluded": 1
+    },
+    "Russula rosea": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Russula sanguinea": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Russula vesca": {
+      "total": 8,
+      "kept": 7,
+      "excluded": 1
+    },
+    "Russula virescens": {
+      "total": 8,
+      "kept": 8,
+      "excluded": 0
+    },
+    "Schizophyllum commune": {
+      "total": 22,
+      "kept": 22,
+      "excluded": 0
+    },
+    "Scleroderma citrinum": {
+      "total": 11,
+      "kept": 11,
+      "excluded": 0
+    },
+    "Trametes versicolor": {
+      "total": 42,
+      "kept": 42,
+      "excluded": 0
+    }
+  }
+}

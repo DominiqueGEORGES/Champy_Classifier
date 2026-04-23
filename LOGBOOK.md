@@ -269,6 +269,71 @@ Verification fichiers raw/ (100% presents)
 
 ---
 
+## Etape 2ter - Filtre de qualité OpenCLIP (faux positifs dans raw/)
+
+**Date** : 2026-04-23
+**Objectif** : Eliminer les faux positifs du dataset brut avant training. Le pipeline de curation (Etape 2bis) conserve toutes les images dont le label GBIF est correct, mais ne peut pas détecter qu'une image étiquetée `Amanita muscaria` représente en fait un homme dans un ascenseur (photo prise par l'observateur, uploadée par erreur sur la fiche).
+
+### Déclencheur
+Détection visuelle dans la page Streamlit 03 (augmentation) : une image du dataset montrait clairement un homme dans un ascenseur, étiquetée comme champignon. Audit sur un échantillon a révélé de nombreux cas similaires : intérieurs, personnes, paysages sans sujet, cuisine, vues microscopiques de spores, graphiques, textes scannés.
+
+### Décisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Modèle | OpenCLIP ViT-B-32 / laion2b_s34b_b79k | CLIP OpenAI original, BLIP-2 | 150 MB, rapide sur CPU (37 img/s), pré-entraîné sur LAION-2B (plus diversifié qu'ImageNet) |
+| Prompts positifs | "a photo of a mushroom", "a fungus growing in nature", "a close-up photograph of a mushroom" | Un seul prompt, ou prompts par espèce | Couvre les trois types d'image dominants (plein champ, environnement naturel, macro) |
+| Prompts négatifs | person, indoor scene, landscape without mushrooms, photo of text | Pas de prompts négatifs | Explicite les classes parasites observées dans le dataset |
+| Score | max(positifs) - max(négatifs) | Softmax sur tous les prompts | Plus stable, plus interprétable, pas d'hyperparamètre de température |
+| Device | CPU sur NUC3 | GPU sur XPS | 9 min vs 3-5 min, pas besoin de déplacer les données, NUC3 dispo |
+| Calibration | Echantillon stratifié 500 images + visualisation | Seuil fixe a priori | Le seuil dépend de la distribution réelle des scores, qu'on ne peut connaître sans mesurer |
+| Seuil retenu | 0.03 | 0.0 (trop permissif), 0.05 (perd des polypores valides) | Coupe les parasites évidents tout en préservant les cas limites (polypores sur écorce, lichens, angles atypiques) |
+| Application | Manifest séparé `curated_manifest_filtered.csv` + fallback dans `data_split.py` | Ecrasement de curated_manifest.csv | Non destructif, reproductible, on peut toujours revenir en arrière |
+
+### Calibration
+Script `scripts/inspect_quality_scores.py` génère un histogramme + 3 panels (top/bottom/borderline) à partir du CSV de scores.
+
+- Distribution (500 images stratifiées) : min=-0.126, médiane=0.084, max=0.155, Q5=0.023, Q95=0.120
+- Panel `top20` : 100% de vrais champignons avec scores 0.12-0.15
+- Panel `bottom20` : 15/20 parasites évidents (hallway, kitchen, personnes, graphiques), 5/20 polypores valides à score bas
+- Panel `borderline20` autour de 0.03 : mix de polypores, champignons en groupe, spores sur papier étiqueté → seuil bien placé
+
+### Resultats du filtrage complet
+
+- Images scorées : 20 572 (9.4 min sur CPU NUC3, 36.6 img/s)
+- Images gardées : **19 138** (93.0%)
+- Images exclues : **1 434** (7.0%, seuil 0.03)
+- Images illisibles : 0
+
+Taux d'exclusion par classe (5 plus touchées) :
+- Auricularia auricula-judae : 24/136 (17.6%) - oreille-de-Judas, blob gélatineux
+- Ganoderma applanatum : 235/1351 (17.4%) - polypore, confondu avec écorce
+- Russula vesca : 11/73 (15.1%) - petite classe, reste 62 images
+- Craterellus cornucopioides : 30/227 (13.2%) - trompette-de-la-mort, forme inhabituelle
+- Russula rosea : 14/111 (12.6%) - petite classe
+
+Aucune classe rare n'est gravement impactée (min post-filtrage : Russula emetica 58→54, Russula vesca 73→62).
+
+### Artefacts produits
+- `data/quality_filter.py` - script OpenCLIP (scoring + flag `--apply`)
+- `data/quality_scores.csv` - scores détaillés par image (20 572 lignes)
+- `data/quality_report.json` - synthèse du run + per-class
+- `data/quality_scores_calibration.csv` - échantillon de calibration (551 lignes)
+- `data/quality_report_calibration.json` - synthèse calibration
+- `data/curated_manifest_filtered.csv` - 19 138 images post-filtrage (source pour data_split.py)
+- `data/excluded.json` - 1 434 entrées avec score + raison + modèle (traçabilité)
+- `data/cleaning_report.json` - mis à jour avec `clip_quality_filter` dans exclusion_reasons
+- `data/split_manifest.csv` + `data/split_stats.json` - régénérés (train 13 396, val 2 870, test 2 872)
+- `scripts/inspect_quality_scores.py` - utilitaire de visualisation (histogramme + panels)
+- `models/artifacts/quality_calibration/` et `quality_final/` - PNG de validation visuelle
+
+### Metriques / Resultats
+- Dataset post-filtrage : 19 138 images, 30 classes
+- Split : train=13 396 / val=2 870 / test=2 872
+- Ratio min/max classe inchangé : Russula emetica 54 vs Amanita muscaria 3396 = 62.9x
+
+---
+
 ## Etape 3 - Training pipeline
 
 **Date** : 2026-03-29

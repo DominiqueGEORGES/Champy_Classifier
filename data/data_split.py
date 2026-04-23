@@ -27,8 +27,24 @@ from sklearn.model_selection import train_test_split
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 CURATED_MANIFEST = DATA_DIR / "curated_manifest.csv"
+CURATED_MANIFEST_FILTERED = DATA_DIR / "curated_manifest_filtered.csv"
 MANIFEST_PATH = DATA_DIR / "split_manifest.csv"
 STATS_PATH = DATA_DIR / "split_stats.json"
+
+
+def resolve_curated_manifest() -> Path:
+    """Résout le manifest de curation à utiliser.
+
+    Priorise ``curated_manifest_filtered.csv`` (produit par le filtre CLIP)
+    s'il existe, sinon retombe sur ``curated_manifest.csv`` (sortie brute
+    de ``data/curate.py``).
+
+    Returns:
+        Chemin absolu du manifest à lire.
+    """
+    if CURATED_MANIFEST_FILTERED.exists():
+        return CURATED_MANIFEST_FILTERED
+    return CURATED_MANIFEST
 
 
 def load_curated(path: Path) -> tuple[list[str], list[str]]:
@@ -190,15 +206,16 @@ def main() -> None:
         f"test={round(1 - args.train_ratio - args.val_ratio, 2)}"
     )
 
-    # Charger le manifest de curation
-    paths, labels = load_curated(CURATED_MANIFEST)
+    # Charger le manifest de curation (filtré CLIP si dispo)
+    curated_path = resolve_curated_manifest()
+    paths, labels = load_curated(curated_path)
+    print(f"Manifest source : {curated_path.name}")
     print(f"Images curatees : {len(paths)}")
 
     # Split
     splits = split_data(paths, labels, args.train_ratio, args.val_ratio, args.seed)
     print(
-        f"Train : {len(splits['train'])}, Val : {len(splits['val'])}, "
-        f"Test : {len(splits['test'])}"
+        f"Train : {len(splits['train'])}, Val : {len(splits['val'])}, Test : {len(splits['test'])}"
     )
 
     # Ecrire le manifest CSV

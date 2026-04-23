@@ -5,192 +5,192 @@
     "val": 0.15,
     "test": 0.15
   },
-  "total": 20572,
+  "total": 19138,
   "splits": {
-    "train": 14400,
-    "val": 3085,
-    "test": 3087
+    "train": 13396,
+    "val": 2870,
+    "test": 2872
   },
   "per_class": {
     "Agaricus bisporus": {
-      "total": 107,
-      "train": 75,
-      "val": 16,
-      "test": 16
+      "total": 94,
+      "train": 66,
+      "val": 14,
+      "test": 14
     },
     "Agaricus campestris": {
-      "total": 641,
-      "train": 449,
-      "val": 96,
-      "test": 96
+      "total": 593,
+      "train": 415,
+      "val": 89,
+      "test": 89
     },
     "Amanita muscaria": {
-      "total": 3575,
-      "train": 2502,
-      "val": 536,
-      "test": 537
+      "total": 3396,
+      "train": 2377,
+      "val": 509,
+      "test": 510
     },
     "Amanita phalloides": {
-      "total": 1032,
-      "train": 722,
-      "val": 155,
-      "test": 155
+      "total": 981,
+      "train": 687,
+      "val": 147,
+      "test": 147
     },
     "Amanita rubescens": {
-      "total": 734,
-      "train": 514,
-      "val": 110,
-      "test": 110
+      "total": 714,
+      "train": 500,
+      "val": 107,
+      "test": 107
     },
     "Armillaria mellea": {
-      "total": 794,
-      "train": 556,
-      "val": 119,
-      "test": 119
+      "total": 757,
+      "train": 530,
+      "val": 113,
+      "test": 114
     },
     "Auricularia auricula-judae": {
-      "total": 136,
-      "train": 95,
-      "val": 21,
-      "test": 20
-    },
-    "Boletus edulis": {
-      "total": 2049,
-      "train": 1434,
-      "val": 307,
-      "test": 308
-    },
-    "Cantharellus cibarius": {
-      "total": 260,
-      "train": 182,
-      "val": 39,
-      "test": 39
-    },
-    "Clitocybe nebularis": {
-      "total": 302,
-      "train": 211,
-      "val": 45,
-      "test": 46
-    },
-    "Coprinus comatus": {
-      "total": 1153,
-      "train": 807,
-      "val": 173,
-      "test": 173
-    },
-    "Craterellus cornucopioides": {
-      "total": 227,
-      "train": 159,
-      "val": 34,
-      "test": 34
-    },
-    "Craterellus lutescens": {
-      "total": 473,
-      "train": 331,
-      "val": 71,
-      "test": 71
-    },
-    "Ganoderma applanatum": {
-      "total": 1351,
-      "train": 946,
-      "val": 202,
-      "test": 203
-    },
-    "Hydnum repandum": {
-      "total": 495,
-      "train": 346,
-      "val": 74,
-      "test": 75
-    },
-    "Lactarius deliciosus": {
-      "total": 455,
-      "train": 319,
-      "val": 68,
-      "test": 68
-    },
-    "Macrolepiota procera": {
-      "total": 299,
-      "train": 209,
-      "val": 45,
-      "test": 45
-    },
-    "Marasmius oreades": {
-      "total": 485,
-      "train": 340,
-      "val": 72,
-      "test": 73
-    },
-    "Phallus impudicus": {
-      "total": 179,
-      "train": 125,
-      "val": 27,
-      "test": 27
-    },
-    "Pleurotus ostreatus": {
-      "total": 1712,
-      "train": 1198,
-      "val": 257,
-      "test": 257
-    },
-    "Russula cyanoxantha": {
-      "total": 265,
-      "train": 186,
-      "val": 40,
-      "test": 39
-    },
-    "Russula emetica": {
-      "total": 58,
-      "train": 41,
-      "val": 9,
-      "test": 8
-    },
-    "Russula olivacea": {
-      "total": 123,
-      "train": 86,
-      "val": 19,
-      "test": 18
-    },
-    "Russula rosea": {
-      "total": 111,
+      "total": 112,
       "train": 78,
       "val": 17,
-      "test": 16
+      "test": 17
     },
-    "Russula sanguinea": {
-      "total": 234,
-      "train": 164,
-      "val": 35,
-      "test": 35
+    "Boletus edulis": {
+      "total": 1919,
+      "train": 1343,
+      "val": 288,
+      "test": 288
     },
-    "Russula vesca": {
-      "total": 73,
-      "train": 51,
-      "val": 11,
-      "test": 11
+    "Cantharellus cibarius": {
+      "total": 244,
+      "train": 171,
+      "val": 37,
+      "test": 36
     },
-    "Russula virescens": {
-      "total": 169,
-      "train": 118,
-      "val": 26,
-      "test": 25
+    "Clitocybe nebularis": {
+      "total": 286,
+      "train": 200,
+      "val": 43,
+      "test": 43
     },
-    "Schizophyllum commune": {
-      "total": 925,
-      "train": 647,
-      "val": 139,
-      "test": 139
+    "Coprinus comatus": {
+      "total": 1020,
+      "train": 714,
+      "val": 153,
+      "test": 153
     },
-    "Scleroderma citrinum": {
-      "total": 444,
-      "train": 311,
+    "Craterellus cornucopioides": {
+      "total": 197,
+      "train": 138,
+      "val": 30,
+      "test": 29
+    },
+    "Craterellus lutescens": {
+      "total": 445,
+      "train": 312,
       "val": 66,
       "test": 67
     },
+    "Ganoderma applanatum": {
+      "total": 1116,
+      "train": 781,
+      "val": 167,
+      "test": 168
+    },
+    "Hydnum repandum": {
+      "total": 475,
+      "train": 332,
+      "val": 71,
+      "test": 72
+    },
+    "Lactarius deliciosus": {
+      "total": 443,
+      "train": 310,
+      "val": 66,
+      "test": 67
+    },
+    "Macrolepiota procera": {
+      "total": 280,
+      "train": 196,
+      "val": 42,
+      "test": 42
+    },
+    "Marasmius oreades": {
+      "total": 434,
+      "train": 304,
+      "val": 65,
+      "test": 65
+    },
+    "Phallus impudicus": {
+      "total": 171,
+      "train": 120,
+      "val": 26,
+      "test": 25
+    },
+    "Pleurotus ostreatus": {
+      "total": 1614,
+      "train": 1130,
+      "val": 242,
+      "test": 242
+    },
+    "Russula cyanoxantha": {
+      "total": 257,
+      "train": 180,
+      "val": 38,
+      "test": 39
+    },
+    "Russula emetica": {
+      "total": 54,
+      "train": 38,
+      "val": 8,
+      "test": 8
+    },
+    "Russula olivacea": {
+      "total": 115,
+      "train": 81,
+      "val": 17,
+      "test": 17
+    },
+    "Russula rosea": {
+      "total": 97,
+      "train": 68,
+      "val": 15,
+      "test": 14
+    },
+    "Russula sanguinea": {
+      "total": 212,
+      "train": 148,
+      "val": 32,
+      "test": 32
+    },
+    "Russula vesca": {
+      "total": 62,
+      "train": 43,
+      "val": 10,
+      "test": 9
+    },
+    "Russula virescens": {
+      "total": 162,
+      "train": 113,
+      "val": 25,
+      "test": 24
+    },
+    "Schizophyllum commune": {
+      "total": 872,
+      "train": 610,
+      "val": 131,
+      "test": 131
+    },
+    "Scleroderma citrinum": {
+      "total": 414,
+      "train": 290,
+      "val": 62,
+      "test": 62
+    },
     "Trametes versicolor": {
-      "total": 1711,
-      "train": 1198,
-      "val": 256,
-      "test": 257
+      "total": 1602,
+      "train": 1121,
+      "val": 240,
+      "test": 241
     }
   }
 }

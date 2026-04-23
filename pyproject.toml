@@ -49,6 +49,12 @@ dev = [
     "pre-commit>=3.7",
     "interrogate>=1.7",
 ]
+# Pipeline de curation/filtrage des données brutes (step one-off, pas
+# requis par le training ni le serving).
+filter = [
+    "open_clip_torch>=2.20",
+    "matplotlib>=3.8",
+]
 
 [build-system]
 requires = ["hatchling"]
