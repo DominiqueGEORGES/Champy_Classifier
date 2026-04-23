@@ -1,0 +1,31 @@
+# Config ConvNeXt-Tiny - comparaison d'architecture.
+# Basée sur aggressive.yaml mais avec batch_size prudent (ConvNeXt a
+# des activations plus lourdes que ResNet50). A comparer via MLflow
+# avec default.yaml et aggressive.yaml.
+
+model_name: convnext_tiny
+num_classes: 30
+pretrained: true
+
+# Fine-tuning two phases identique à aggressive.yaml
+freeze_backbone_epochs: 10
+total_epochs: 40
+lr_phase1: 1.0e-3
+lr_phase2: 3.0e-5
+
+batch_size: 16
+seed: 42
+
+optimizer: adamw
+weight_decay: 1.0e-4
+scheduler: cosine
+
+early_stopping_patience: 7
+early_stopping_metric: val_loss
+
+mixed_precision: true
+gradient_accumulation_steps: 1
+num_workers: 0
+
+image_size: 224
+augmentation: true

@@ -43,7 +43,7 @@ from torch.amp import GradScaler, autocast
 
 from src.config import MODELS_DIR, TrainingConfig, get_mlflow_settings, get_training_config
 from src.data.dataloader import create_all_loaders
-from src.models.resnet import create_resnet50, unfreeze_backbone_layers
+from src.models.backbone import create_backbone, unfreeze_backbone
 from src.training.callbacks import EarlyStopping, ModelCheckpoint
 from src.training.evaluate import (
     evaluate_model,
@@ -395,7 +395,8 @@ def train(
 
     # -- Modèle : backbone gelé si phase 1 activée --
     has_phase1 = config.freeze_backbone_epochs > 0
-    model = create_resnet50(
+    model = create_backbone(
+        model_name=config.model_name,
         num_classes=config.num_classes,
         pretrained=config.pretrained,
         freeze_backbone=has_phase1,
@@ -463,7 +464,7 @@ def train(
 
         # -- Phase 2 : backbone dégelé, fine-tuning complet --
         if config.total_epochs > last_epoch:
-            unfreeze_backbone_layers(model)
+            unfreeze_backbone(model)
             phase2_epochs = config.total_epochs - last_epoch
             optimizer_p2 = build_optimizer(model, config, lr=config.lr_phase2)
             scheduler_p2 = build_scheduler(optimizer_p2, phase2_epochs, config)

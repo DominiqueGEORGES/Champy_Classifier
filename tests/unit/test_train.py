@@ -9,7 +9,13 @@ import torch
 import torch.nn as nn
 
 from src.config import TrainingConfig
-from src.models.resnet import create_resnet50
+from src.models.backbone import (
+    SUPPORTED_MODELS,
+    create_backbone,
+    freeze_backbone,
+    get_head_module_name,
+    unfreeze_backbone,
+)
 from src.training.callbacks import EarlyStopping, ModelCheckpoint
 from src.training.train import build_optimizer, build_scheduler, run_phase
 
@@ -141,7 +147,8 @@ class TestRunPhase:
             config, manifest_path=manifest, data_dir=data_dir
         )
 
-        model = create_resnet50(
+        model = create_backbone(
+            model_name=config.model_name,
             num_classes=config.num_classes,
             pretrained=False,
             freeze_backbone=True,
@@ -234,27 +241,79 @@ class TestRunPhase:
         assert len(setup["history"]["phase"]) == last_epoch
 
 
-class TestPhaseFreezingFlow:
-    """Tests pour la logique de gel/degel du backbone entre phases."""
+class TestBackboneFactory:
+    """Tests pour la factory unifiee create_backbone et ses helpers."""
 
-    def test_phase1_model_has_frozen_backbone(self) -> None:
+    def test_supported_models_includes_both_backbones(self) -> None:
+        """Verifie que resnet50 et convnext_tiny sont tous deux supportes."""
+        assert "resnet50" in SUPPORTED_MODELS
+        assert "convnext_tiny" in SUPPORTED_MODELS
+
+    def test_unknown_model_raises(self) -> None:
+        """Verifie qu'un nom de modele inconnu leve ValueError."""
+        with pytest.raises(ValueError, match="Modèle inconnu"):
+            create_backbone(model_name="mobilenet", num_classes=30, pretrained=False)
+
+    def test_resnet50_head_module_name(self) -> None:
+        """Verifie que la tete ResNet50 est nommee 'fc'."""
+        model = create_backbone(model_name="resnet50", num_classes=30, pretrained=False)
+        assert get_head_module_name(model) == "fc"
+
+    def test_convnext_tiny_head_module_name(self) -> None:
+        """Verifie que la tete ConvNeXt est nommee 'classifier'."""
+        model = create_backbone(model_name="convnext_tiny", num_classes=30, pretrained=False)
+        assert get_head_module_name(model) == "classifier"
+
+    def test_convnext_tiny_head_output_dim(self) -> None:
+        """Verifie que la tete ConvNeXt est adaptee au nombre de classes."""
+        model = create_backbone(model_name="convnext_tiny", num_classes=30, pretrained=False)
+        # model.classifier[2] est la couche Linear finale
+        assert model.classifier[2].out_features == 30
+
+    def test_resnet50_head_output_dim(self) -> None:
+        """Verifie que la tete ResNet50 est adaptee au nombre de classes."""
+        model = create_backbone(model_name="resnet50", num_classes=30, pretrained=False)
+        # model.fc = Sequential(Dropout, Linear)
+        assert model.fc[1].out_features == 30
+
+
+@pytest.mark.parametrize("model_name", ["resnet50", "convnext_tiny"])
+class TestPhaseFreezingFlow:
+    """Tests de gel/degel du backbone, parametres par architecture."""
+
+    def test_phase1_model_has_frozen_backbone(self, model_name: str) -> None:
         """Verifie qu'avec freeze_backbone=True, seule la tete est entrainable."""
-        model = create_resnet50(num_classes=30, pretrained=False, freeze_backbone=True)
+        model = create_backbone(
+            model_name=model_name, num_classes=30, pretrained=False, freeze_backbone=True
+        )
         n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         n_total = sum(p.numel() for p in model.parameters())
         assert n_trainable < n_total
-        # Seule la tete fc doit etre entrainable
+        # Seule la tete (fc pour ResNet, classifier pour ConvNeXt) doit etre entrainable
+        head_name = get_head_module_name(model)
         for name, param in model.named_parameters():
-            if name.startswith("fc."):
+            if name.startswith(head_name + "."):
                 assert param.requires_grad, f"{name} devrait etre entrainable"
             else:
                 assert not param.requires_grad, f"{name} devrait etre gele"
 
-    def test_unfreeze_restores_full_training(self) -> None:
-        """Verifie que unfreeze_backbone_layers debloque toutes les couches."""
-        from src.models.resnet import unfreeze_backbone_layers
-
-        model = create_resnet50(num_classes=30, pretrained=False, freeze_backbone=True)
-        unfreeze_backbone_layers(model, unfreeze_from=0)
+    def test_unfreeze_backbone_restores_full_training(self, model_name: str) -> None:
+        """Verifie que unfreeze_backbone rend tous les params entrainables."""
+        model = create_backbone(
+            model_name=model_name, num_classes=30, pretrained=False, freeze_backbone=True
+        )
+        unfreeze_backbone(model)
         for _name, param in model.named_parameters():
             assert param.requires_grad
+
+    def test_freeze_then_unfreeze_roundtrip(self, model_name: str) -> None:
+        """Verifie que freeze puis unfreeze laisse le modele dans l'etat dégelé."""
+        model = create_backbone(
+            model_name=model_name, num_classes=30, pretrained=False, freeze_backbone=False
+        )
+        freeze_backbone(model)
+        n_after_freeze = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        unfreeze_backbone(model)
+        n_after_unfreeze = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        assert n_after_freeze < n_after_unfreeze
+        assert n_after_unfreeze == sum(p.numel() for p in model.parameters())
