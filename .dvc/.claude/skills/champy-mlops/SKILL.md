@@ -16,6 +16,7 @@ description: >
 
 **A chaque fin d'étape ou de bloc de travail**, mettre à jour le fichier `LOGBOOK.md` à la racine du projet :
 1. Remplir la section correspondante (date, décisions, problèmes, artefacts, métriques)
+2. **La date est obligatoire** : format YYYY-MM-DD, remplie dès le début de l'étape. Ne JAMAIS laisser "[à compléter]" sur un champ date.
 2. Le tableau "Décisions prises" doit TOUJOURS contenir : le choix fait, les alternatives envisagées, et la justification
 3. Les problèmes rencontrés et leurs solutions doivent être documentés - y compris les erreurs et les culs-de-sac
 4. Les métriques et résultats chiffrés sont obligatoires quand ils existent
