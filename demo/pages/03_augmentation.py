@@ -56,17 +56,21 @@ def denormalize(tensor: torch.Tensor) -> np.ndarray:  # type: ignore[type-arg]
 st.header("Pipeline d'augmentation")
 
 st.markdown("""
-**Train** (augmentation aléatoire à chaque epoch) :
-1. `Resize(256)` - redimensionne le côté le plus petit a 256px
-2. `RandomCrop(224)` - crop aléatoire 224x224
-3. `RandomHorizontalFlip()` - retournement horizontal (p=0.5)
-4. `RandomRotation(15)` - rotation aléatoire [-15, +15] degrés
-5. `ColorJitter(0.2, 0.2, 0.2)` - variations de luminosité, contraste, saturation
-6. `ToTensor()` + `Normalize(ImageNet)` - normalisation standard
+**Train** (augmentation aléatoire à chaque epoch, pipeline renforcé pour les classes rares) :
+1. `RandomResizedCrop(224, scale=(0.7, 1.0))` - zoom/cadrage aléatoire (70-100%)
+2. `RandomHorizontalFlip()` - retournement horizontal (p=0.5)
+3. `RandomAffine(degrees=15, translate=(0.1, 0.1))` - rotation + translation
+4. `ColorJitter(0.3, 0.3, 0.3, 0.1)` - luminosité, contraste, saturation, teinte
+5. `ToTensor()` + `Normalize(ImageNet)` - normalisation standard
+6. `RandomErasing(p=0.25)` - masquage aléatoire d'une région (sur tensor)
 
 **Val / Test** (déterministe, sans augmentation) :
 1. `Resize(256)` -> `CenterCrop(224)` -> `ToTensor()` -> `Normalize(ImageNet)`
 """)
+
+# Pipeline réel introspecté depuis src.data.dataset (zero hardcoded).
+with st.expander("Pipeline réel (introspection de `get_train_transforms()`)"):
+    st.code(repr(get_train_transforms(224)), language="text")
 
 st.divider()
 
@@ -126,5 +130,5 @@ if st.button("Générer les augmentations", type="primary"):
 
     st.caption(
         "Chaque version est différente grâce aux transforms aléatoires. "
-        "Le modèle voit des variations a chaque epoch, ce qui améliore la généralisation."
+        "Le modèle voit des variations à chaque epoch, ce qui améliore la généralisation."
     )

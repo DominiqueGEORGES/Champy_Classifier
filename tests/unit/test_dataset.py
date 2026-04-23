@@ -28,7 +28,7 @@ class TestLoadManifest:
     def test_val_split(self, tmp_dataset: tuple[Path, Path, list[str]]) -> None:
         """Verifie le chargement du split validation."""
         manifest, _, _ = tmp_dataset
-        paths, labels = load_manifest(manifest, "val")
+        paths, _labels = load_manifest(manifest, "val")
         assert len(paths) == 3  # 1 par classe * 3 classes
 
     def test_raises_on_missing_file(self, tmp_path: Path) -> None:
@@ -92,6 +92,51 @@ class TestTransforms:
         out1 = t(img)
         out2 = t(img)
         assert torch.equal(out1, out2)
+
+    def test_train_transforms_includes_expected_augmentations(self) -> None:
+        """Verifie que le pipeline train contient les augmentations renforcees."""
+        t = get_train_transforms(224)
+        transform_types = {type(op).__name__ for op in t.transforms}
+        expected = {
+            "RandomResizedCrop",
+            "RandomHorizontalFlip",
+            "RandomAffine",
+            "ColorJitter",
+            "ToTensor",
+            "Normalize",
+            "RandomErasing",
+        }
+        missing = expected - transform_types
+        assert not missing, f"Transforms manquants dans le pipeline train : {missing}"
+
+    def test_train_transforms_non_deterministic(self) -> None:
+        """Verifie que les transforms d'entrainement produisent des tenseurs differents."""
+        from PIL import Image, ImageDraw
+
+        t = get_train_transforms(224)
+        # Image non-uniforme pour maximiser la variabilite apres augmentation.
+        img = Image.new("RGB", (320, 240), color=(100, 150, 200))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([(50, 50), (150, 150)], fill=(255, 0, 0))
+        out1 = t(img)
+        out2 = t(img)
+        assert not torch.equal(out1, out2)
+
+    def test_train_transforms_colorjitter_parameters(self) -> None:
+        """Verifie les parametres renforces de ColorJitter (brightness/contrast/saturation/hue)."""
+        t = get_train_transforms(224)
+        color_jitter = next(op for op in t.transforms if type(op).__name__ == "ColorJitter")
+        # torchvision stocke les ranges sous forme de tuples (min, max) centres sur 1.0.
+        assert color_jitter.brightness == (0.7, 1.3)
+        assert color_jitter.contrast == (0.7, 1.3)
+        assert color_jitter.saturation == (0.7, 1.3)
+        assert color_jitter.hue == (-0.1, 0.1)
+
+    def test_train_transforms_random_erasing_probability(self) -> None:
+        """Verifie la probabilite de RandomErasing (p=0.25)."""
+        t = get_train_transforms(224)
+        random_erasing = next(op for op in t.transforms if type(op).__name__ == "RandomErasing")
+        assert random_erasing.p == 0.25
 
 
 class TestMushroomDataset:

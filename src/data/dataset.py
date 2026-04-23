@@ -24,25 +24,43 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 def get_train_transforms(image_size: int = 224) -> transforms.Compose:
     """Retourne les transforms d'augmentation pour le split train.
 
-    Applique des augmentations geometriques et colorimeriques
-    adaptees a la classification de champignons, suivies de la
-    normalisation ImageNet.
+    Pipeline renforcé conçu pour améliorer la robustesse, notamment
+    sur les classes rares (sous-représentées), en introduisant de la
+    variabilité géométrique, photométrique et d'occlusion :
+
+    - ``RandomResizedCrop(scale=(0.7, 1.0))`` : zoom/cadrage aléatoire
+      pour varier l'échelle et le cadrage du sujet.
+    - ``RandomHorizontalFlip()`` : retournement horizontal (p=0.5).
+    - ``RandomAffine(degrees=15, translate=(0.1, 0.1))`` : rotation
+      aléatoire [-15°, +15°] et translations jusqu'à 10% de chaque axe.
+    - ``ColorJitter(0.3, 0.3, 0.3, 0.1)`` : variations de luminosité,
+      contraste, saturation et teinte pour simuler des conditions de
+      prise de vue différentes.
+    - ``Normalize(ImageNet)`` : normalisation standard ResNet.
+    - ``RandomErasing(p=0.25)`` : masquage aléatoire d'une région
+      (appliqué sur tensor, après ``Normalize``) pour forcer le modèle
+      à s'appuyer sur plusieurs zones de l'image.
 
     Args:
-        image_size: Taille cible des images en pixels (carre).
+        image_size: Taille cible des images en pixels (carré).
 
     Returns:
-        Pipeline de transforms compose.
+        Pipeline de transforms composé.
     """
     return transforms.Compose(
         [
-            transforms.Resize(256),
-            transforms.RandomCrop(image_size),
+            transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0)),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            transforms.RandomAffine(degrees=15, translate=(0.1, 0.1)),
+            transforms.ColorJitter(
+                brightness=0.3,
+                contrast=0.3,
+                saturation=0.3,
+                hue=0.1,
+            ),
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            transforms.RandomErasing(p=0.25),
         ]
     )
 
