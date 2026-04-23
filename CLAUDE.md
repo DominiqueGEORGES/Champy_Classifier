@@ -79,14 +79,14 @@ Champy_Classifier/
 │   │   ├── api_utils.py         # Helpers : appels FastAPI, Prometheus
 │   │   └── viz.py               # Helpers : plots Plotly/Matplotlib réutilisables
 │   ├── pages/
-│   │   ├── 01_donnees_brutes.py      # EDA, distribution classes, qualité
+│   │   ├── 01_données_brutes.py      # EDA, distribution classes, qualité
 │   │   ├── 02_nettoyage.py           # Avant/après, doublons, corruptions
 │   │   ├── 03_augmentation.py        # Exemples visuels des transforms
 │   │   ├── 04_split.py               # Stratification, stats par split
-│   │   ├── 05_entrainement.py        # Courbes live depuis MLflow
-│   │   ├── 06_evaluation.py          # Confusion matrix, F1, GradCAM
+│   │   ├── 05_entraînement.py        # Courbes live depuis MLflow
+│   │   ├── 06_évaluation.py          # Confusion matrix, F1, GradCAM
 │   │   ├── 07_model_registry.py      # Versions, staging/prod, ONNX benchmark
-│   │   ├── 08_prediction.py          # Upload image, top-5, confiance live
+│   │   ├── 08_prédiction.py          # Upload image, top-5, confiance live
 │   │   ├── 09_api.py                 # Swagger embed, latence, throughput
 │   │   ├── 10_monitoring.py          # Métriques Prometheus, Grafana embed
 │   │   ├── 11_drift.py               # Rapports Evidently on-demand
