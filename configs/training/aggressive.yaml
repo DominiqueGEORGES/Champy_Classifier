@@ -1,0 +1,32 @@
+# Config aggressive - plus d'epochs phase 2, lr fine-tuning plus franc.
+# A comparer avec default.yaml via MLflow.
+
+model_name: resnet50
+num_classes: 30
+pretrained: true
+
+# Fine-tuning two phases :
+# - phase 1 : backbone frozen, only the head is trained (lr_phase1)
+# - phase 2 : backbone unfrozen, full fine-tuning (lr_phase2)
+# Set freeze_backbone_epochs to 0 to skip phase 1 entirely.
+freeze_backbone_epochs: 10
+total_epochs: 40
+lr_phase1: 1.0e-3
+lr_phase2: 3.0e-5
+
+batch_size: 24
+seed: 42
+
+optimizer: adamw
+weight_decay: 1.0e-4
+scheduler: cosine
+
+early_stopping_patience: 7
+early_stopping_metric: val_loss
+
+mixed_precision: true
+gradient_accumulation_steps: 1
+num_workers: 0
+
+image_size: 224
+augmentation: true
