@@ -260,7 +260,15 @@ invoke serve   # Prometheus + Grafana inclus
 - [ ] .dockerignore
 
 **Pièges connus** :
--
+- **Cohabitation sur hôte partagé** : sur une machine qui héberge plusieurs projets (plusieurs docker-compose en parallèle), les ports standards (8000, 3000, 9090, etc.) entrent rapidement en collision. Avant tout `docker compose up`, auditer les ports occupés :
+  ```powershell
+  Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -lt 10000} `
+    | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique
+  ```
+  Appliquer un **offset projet explicite** (ex: +10) sur chaque port déjà occupé par un autre service. Exemple Champy : API `8010:8000` (8000 pris), Grafana `3010:3000` (3000 pris), Streamlit `8501:8501` et Prometheus `9090:9090` (libres, pas de remap). Documenter le mapping en commentaire YAML en tête de `docker-compose.yml` pour que le rationnel survive au temps.
+- **Port host vs port interne du container** : un remap `8010:8000` ne change que le port host. Les containers d'un même compose se parlent par nom de service sur le port interne (ex: Prometheus scrape `api:8000`, pas `host.docker.internal:8010`). Utiliser `host.docker.internal` uniquement si un service docker doit atteindre un process tournant nativement sur le host (rare, et casse la portabilité Linux/Mac).
+- **Zéro hardcoded d'URL dans la demo** : Streamlit ne doit jamais écrire `http://localhost:8000` en dur. Passer par une env var (ex: `CHAMPY_API_URL`, `CHAMPY_PROMETHEUS_URL`, `CHAMPY_GRAFANA_URL`) avec un défaut raisonnable, exposée par un helper `get_api_url()` / `get_prometheus_url()` / `get_grafana_url()` dans `demo/lib/`. Sinon, dès qu'on change le mapping des ports, la demo affiche des liens morts.
+- **Nommer les env vars avec un préfixe projet** (`CHAMPY_*`) plutôt que générique (`API_URL`, `PROMETHEUS_URL`) : sur un hôte partagé, les env vars sans préfixe se télescopent entre projets et on passe 30 min à comprendre pourquoi Streamlit tape sur la mauvaise API.
 
 **Commandes clés** :
 ```powershell

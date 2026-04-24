@@ -1,10 +1,27 @@
+# Docker Compose - stack Champy Classifier (NUC3).
+#
+# Mapping des ports : le NUC3 est un hôte partagé qui héberge plusieurs
+# projets. On applique un offset projet (+10) sur les ports standards
+# déjà occupés par d'autres services. Voir PLAYBOOK.md (piège
+# "cohabitation sur hôte partagé").
+#
+#   API FastAPI  8010:8000  (8000 pris par un autre projet)
+#   Streamlit    8501:8501  (libre, pas de remap)
+#   Prometheus   9090:9090  (libre, pas de remap)
+#   Grafana      3010:3000  (3000 pris par un autre projet)
+#
+# Le port interne du container reste standard : les services entre
+# containers se parlent via le network docker-compose par nom de
+# service (ex: prometheus scrape api:8000), donc seul le port host
+# change.
+
 services:
   api:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
     ports:
-      - "8000:8000"
+      - "8010:8000"
     volumes:
       - ./models:/app/models:ro
     env_file: .env
@@ -23,6 +40,9 @@ services:
     ports:
       - "8501:8501"
     env_file: .env
+    environment:
+      # La demo Streamlit tape sur l'API via le network interne du compose.
+      - CHAMPY_API_URL=http://api:8000
     depends_on:
       api:
         condition: service_healthy

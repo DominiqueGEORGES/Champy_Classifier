@@ -431,7 +431,7 @@ def train(
         os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_settings.dagshub_user
         os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_settings.dagshub_token
 
-    with mlflow.start_run(run_name=f"resnet50_2phase_{config.seed}"):
+    with mlflow.start_run(run_name=f"{config.model_name}_2phase_{config.seed}"):
         mlflow.log_params(config.model_dump())
         mlflow.set_tag("training_mode", "two_phase" if has_phase1 else "single_phase")
         mlflow.set_tag("phase2_start_epoch", config.freeze_backbone_epochs + 1)

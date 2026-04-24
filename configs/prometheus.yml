@@ -2,10 +2,14 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Cible : service API via le network interne docker-compose.
+# Le nom 'api' est resolu par le DNS interne du compose, le port 8000
+# est le port ecoute dans le container (le port host 8010 n'est pas utilise
+# ici, c'est une communication container-to-container).
 scrape_configs:
   - job_name: "champy-api"
     metrics_path: "/metrics"
     static_configs:
-      - targets: ["host.docker.internal:8010"]
+      - targets: ["api:8000"]
         labels:
           service: "champy-classifier"

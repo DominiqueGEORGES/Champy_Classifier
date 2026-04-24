@@ -12,19 +12,47 @@ from typing import Any
 import streamlit as st
 
 DEFAULT_API_URL = os.environ.get("CHAMPY_API_URL", "http://localhost:8010")
-DEFAULT_PROMETHEUS_URL = "http://localhost:9090"
+DEFAULT_PROMETHEUS_URL = os.environ.get("CHAMPY_PROMETHEUS_URL", "http://localhost:9090")
+DEFAULT_GRAFANA_URL = os.environ.get("CHAMPY_GRAFANA_URL", "http://localhost:3010")
 
 
-def _get_api_url() -> str:
+def get_api_url() -> str:
     """Retourne l'URL de l'API depuis la variable d'environnement ou le défaut.
 
-    Priorité : CHAMPY_API_URL > DEFAULT_API_URL (http://localhost:8010).
-    N'importe pas src.config pour éviter les deps lourdes.
+    Priorité : ``CHAMPY_API_URL`` (env) > ``http://localhost:8010`` (défaut).
+    Le NUC3 étant un hôte partagé, le port 8010 a été choisi avec un offset
+    +10 par rapport au standard 8000 (occupé par un autre projet). Voir
+    PLAYBOOK.md pour le rationnel de mapping des ports.
 
     Returns:
         URL de base de l'API FastAPI.
     """
     return DEFAULT_API_URL
+
+
+def get_prometheus_url() -> str:
+    """Retourne l'URL de Prometheus depuis l'environnement ou le défaut.
+
+    Priorité : ``CHAMPY_PROMETHEUS_URL`` (env) > ``http://localhost:9090``
+    (défaut). Voir PLAYBOOK.md pour le mapping des ports sur hôte partagé.
+
+    Returns:
+        URL de base de Prometheus.
+    """
+    return DEFAULT_PROMETHEUS_URL
+
+
+def get_grafana_url() -> str:
+    """Retourne l'URL de Grafana depuis l'environnement ou le défaut.
+
+    Priorité : ``CHAMPY_GRAFANA_URL`` (env) > ``http://localhost:3010``
+    (défaut). Le port 3000 étant occupé par un autre projet sur le NUC3,
+    Grafana est mappé sur 3010 (offset +10). Voir PLAYBOOK.md.
+
+    Returns:
+        URL de base de Grafana.
+    """
+    return DEFAULT_GRAFANA_URL
 
 
 @st.cache_data(ttl=30)
@@ -37,7 +65,7 @@ def get_health() -> dict[str, Any] | None:
     import httpx
 
     try:
-        response = httpx.get(f"{_get_api_url()}/health", timeout=5)
+        response = httpx.get(f"{get_api_url()}/health", timeout=5)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
     except Exception:
@@ -58,7 +86,7 @@ def predict_image(image_bytes: bytes, top_n: int = 5) -> dict[str, Any] | None:
 
     try:
         response = httpx.post(
-            f"{_get_api_url()}/predict",
+            f"{get_api_url()}/predict",
             files={"file": ("image.jpg", image_bytes, "image/jpeg")},
             params={"top_n": top_n},
             timeout=30,
@@ -79,7 +107,7 @@ def get_model_info() -> dict[str, Any] | None:
     import httpx
 
     try:
-        response = httpx.get(f"{_get_api_url()}/model/info", timeout=5)
+        response = httpx.get(f"{get_api_url()}/model/info", timeout=5)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
     except Exception:
@@ -96,7 +124,7 @@ def get_prometheus_metrics() -> str | None:
     import httpx
 
     try:
-        response = httpx.get(f"{_get_api_url()}/metrics", timeout=5)
+        response = httpx.get(f"{get_api_url()}/metrics", timeout=5)
         response.raise_for_status()
         return response.text
     except Exception:
@@ -117,7 +145,7 @@ def query_prometheus(query: str) -> list[dict[str, Any]]:
 
     try:
         response = httpx.get(
-            f"{DEFAULT_PROMETHEUS_URL}/api/v1/query",
+            f"{get_prometheus_url()}/api/v1/query",
             params={"query": query},
             timeout=5,
         )

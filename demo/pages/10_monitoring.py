@@ -19,7 +19,12 @@ st.set_page_config(page_title="10 - Monitoring", layout="wide")
 st.title(":bar_chart: Monitoring")
 
 try:
-    from demo.lib.api_utils import get_prometheus_metrics, query_prometheus
+    from demo.lib.api_utils import (
+        get_grafana_url,
+        get_prometheus_metrics,
+        get_prometheus_url,
+        query_prometheus,
+    )
 except Exception as e:
     st.error(f"Impossible de charger les helpers : {e}")
     st.stop()
@@ -29,15 +34,18 @@ except Exception as e:
 # =====================================================================
 st.header("Outils de monitoring")
 
+prometheus_url = get_prometheus_url()
+grafana_url = get_grafana_url()
+
 col1, col2 = st.columns(2)
-col1.markdown("""
-**Prometheus** : [http://localhost:9090](http://localhost:9090)
+col1.markdown(f"""
+**Prometheus** : [{prometheus_url}]({prometheus_url})
 - Requêtes PromQL
 - Alertes
 - Targets et scrape status
 """)
-col2.markdown("""
-**Grafana** : [http://localhost:3000](http://localhost:3000)
+col2.markdown(f"""
+**Grafana** : [{grafana_url}]({grafana_url})
 - Dashboards pré-configurés
 - Login : admin / (voir .env GRAFANA_PASSWORD)
 """)

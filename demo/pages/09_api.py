@@ -19,7 +19,12 @@ st.set_page_config(page_title="09 - API", layout="wide")
 st.title(":electric_plug: API FastAPI")
 
 try:
-    from demo.lib.api_utils import get_health, get_model_info, get_prometheus_metrics
+    from demo.lib.api_utils import (
+        get_api_url,
+        get_health,
+        get_model_info,
+        get_prometheus_metrics,
+    )
 except Exception as e:
     st.error(f"Impossible de charger les helpers API : {e}")
     st.stop()
@@ -52,7 +57,7 @@ st.divider()
 # =====================================================================
 st.header("Documentation")
 
-api_url = "http://localhost:8000"
+api_url = get_api_url()
 st.markdown(f"""
 - **Swagger UI** : [{api_url}/docs]({api_url}/docs)
 - **ReDoc** : [{api_url}/redoc]({api_url}/redoc)

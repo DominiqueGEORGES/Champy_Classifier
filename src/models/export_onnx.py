@@ -1,18 +1,21 @@
 """Export du modele PyTorch au format ONNX pour l'inference en production.
 
-Charge le meilleur checkpoint (.pt), cree le modele ResNet50 avec la meme
-architecture que le training, exporte en ONNX (opset 17), valide avec
-onnx.checker, et optionnellement compare les predictions PyTorch vs ONNX.
+Charge le meilleur checkpoint (.pt), detecte automatiquement l'architecture
+(ResNet50 ou ConvNeXt-Tiny) depuis les cles du state_dict, reconstruit le
+modele via la factory unifiee, exporte en ONNX (opset 17), valide avec
+onnx.checker, et compare les predictions PyTorch vs ONNX.
 
 Usage:
     python -m src.models.export_onnx
     python -m src.models.export_onnx --checkpoint models/best_model.pt --output models/best_model.onnx
+    python -m src.models.export_onnx --model convnext_tiny   # force l'architecture
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -22,26 +25,64 @@ import torch
 from loguru import logger
 
 from src.config import MODELS_DIR, get_training_config
-from src.models.resnet import create_resnet50
+from src.models.backbone import SUPPORTED_MODELS, create_backbone
+
+
+def _detect_architecture(state_dict: Mapping[str, torch.Tensor]) -> str:
+    """Detecte l'architecture du modele depuis les cles du state_dict.
+
+    S'appuie sur des cles caracteristiques a chaque famille :
+    - ResNet50 (torchvision) expose ``conv1.weight`` a la racine.
+    - ConvNeXt-Tiny (torchvision) expose ``features.0.0.weight``.
+
+    Args:
+        state_dict: State dict du checkpoint a analyser.
+
+    Returns:
+        Nom du modele (``'resnet50'`` ou ``'convnext_tiny'``).
+
+    Raises:
+        ValueError: Si aucune architecture connue n'est detectee.
+    """
+    keys = set(state_dict.keys())
+    if "conv1.weight" in keys:
+        return "resnet50"
+    if "features.0.0.weight" in keys:
+        return "convnext_tiny"
+    supported = ", ".join(sorted(SUPPORTED_MODELS))
+    msg = (
+        "Architecture non reconnue dans le state_dict du checkpoint. "
+        f"Architectures supportees : {supported}."
+    )
+    raise ValueError(msg)
 
 
 def load_checkpoint(
     checkpoint_path: Path,
     num_classes: int = 30,
     device: torch.device | None = None,
+    model_name: str | None = None,
 ) -> torch.nn.Module:
     """Charge un checkpoint PyTorch et reconstruit le modele.
+
+    L'architecture est detectee automatiquement depuis les cles du
+    state_dict si ``model_name`` n'est pas fourni. Cela garantit
+    l'alignement entre le checkpoint et l'architecture reconstruite.
 
     Args:
         checkpoint_path: Chemin vers le fichier .pt du checkpoint.
         num_classes: Nombre de classes (doit correspondre au training).
         device: Device cible. Si None, utilise CPU.
+        model_name: Nom du modele a reconstruire (override). Si None,
+            detection automatique depuis le state_dict.
 
     Returns:
         Modele PyTorch en mode evaluation, poids charges.
 
     Raises:
         FileNotFoundError: Si le checkpoint n'existe pas.
+        ValueError: Si l'architecture ne peut etre detectee ou n'est
+            pas supportee.
     """
     if not checkpoint_path.exists():
         msg = f"Checkpoint introuvable : {checkpoint_path}"
@@ -49,12 +90,15 @@ def load_checkpoint(
 
     device = device or torch.device("cpu")
 
-    # Recreer le modele avec la meme architecture que le training
-    model = create_resnet50(num_classes=num_classes, pretrained=False)
-
-    # Charger les poids
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    state_dict = checkpoint["model_state_dict"]
+
+    detected = model_name or _detect_architecture(state_dict)
+    if model_name is None:
+        logger.info(f"Architecture detectee automatiquement : {detected}")
+
+    model = create_backbone(detected, num_classes=num_classes, pretrained=False)
+    model.load_state_dict(state_dict)
     model.eval()
     model.to(device)
 
@@ -227,14 +271,25 @@ def main() -> None:
         help="Chemin de sortie du fichier ONNX",
     )
     parser.add_argument("--opset", type=int, default=17, help="Version opset ONNX")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        choices=list(SUPPORTED_MODELS),
+        help="Force l'architecture (sinon detection automatique depuis le state_dict)",
+    )
     args = parser.parse_args()
 
     config = get_training_config()
     checkpoint_path = Path(args.checkpoint)
     output_path = Path(args.output)
 
-    # 1. Charger le checkpoint
-    model = load_checkpoint(checkpoint_path, num_classes=config.num_classes)
+    # 1. Charger le checkpoint (detection auto de l'architecture si --model non fourni)
+    model = load_checkpoint(
+        checkpoint_path,
+        num_classes=config.num_classes,
+        model_name=args.model,
+    )
 
     # 2. Exporter en ONNX
     export_to_onnx(model, output_path, image_size=config.image_size, opset_version=args.opset)
