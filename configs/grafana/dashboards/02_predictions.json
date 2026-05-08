@@ -1,0 +1,147 @@
+{
+  "uid": "champy-predictions",
+  "title": "Champy - Predictions",
+  "description": "Distribution des especes predites, confiance moyenne, et histogramme des confidences. Utile pour detecter une derive de distribution (proxy drift) ou une chute de confiance globale.",
+  "tags": ["champy", "predictions", "drift"],
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Top-10 especes predites (cumulatif)",
+      "gridPos": {"h": 10, "w": 16, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "topk(10, sum by (species) (champy_predictions_total))",
+          "legendFormat": "{{species}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "xTickLabelRotation": 0,
+        "legend": {"showLegend": false}
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Confiance moyenne (top-1)",
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "champy_prediction_confidence_sum / champy_prediction_confidence_count",
+          "legendFormat": "avg",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.7},
+              {"color": "green", "value": 0.85}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Especes uniques observees",
+      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "count(count by (species) (champy_predictions_total))",
+          "legendFormat": "n",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Predictions par seconde (par espece, top-5)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "topk(5, sum by (species) (rate(champy_predictions_total[1m])))",
+          "legendFormat": "{{species}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "stacking": {"mode": "normal"}}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Latence par espece (p95, top 5)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(champy_prediction_latency_seconds_bucket[5m])))",
+          "legendFormat": "p95 global",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "single"}}
+    }
+  ]
+}

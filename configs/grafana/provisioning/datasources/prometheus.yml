@@ -1,0 +1,19 @@
+# Datasource Prometheus auto-provisionnee pour Grafana.
+#
+# Le UID 'prometheus' est explicite pour pouvoir etre reference par les
+# dashboards JSON sans dependre du UID auto-genere par Grafana au boot.
+# L'URL pointe sur le service 'prometheus' du network docker-compose
+# (resolution DNS interne, port 9090 du container).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST

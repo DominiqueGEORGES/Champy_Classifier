@@ -1,0 +1,166 @@
+{
+  "uid": "champy-api-performance",
+  "title": "Champy - API Performance",
+  "description": "Latence (p50/p95/p99), throughput, et erreurs HTTP de l'API d'inference. Les requetes utilisent les metriques Champy (champy_*) qui sont communes a FastAPI et BentoML pour permettre la transition sans casser les dashboards.",
+  "tags": ["champy", "api", "performance"],
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Latence d'inference (p50 / p95 / p99)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Requetes par seconde (par endpoint)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(champy_requests_total[1m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "stacking": {"mode": "none"}}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total predictions (cumulatif)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(champy_predictions_total)",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Latence moyenne (5 min)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])",
+          "legendFormat": "avg",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.1},
+              {"color": "red", "value": 0.2}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Erreurs HTTP (par status_code)",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(champy_http_errors_total[1m])) by (status_code)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 30}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Top 5 endpoints (par volume)",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "topk(5, sum by (method, endpoint) (champy_requests_total))",
+          "legendFormat": "{{method}} {{endpoint}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {"showHeader": true}
+    }
+  ]
+}

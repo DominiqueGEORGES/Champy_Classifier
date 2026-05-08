@@ -1,0 +1,173 @@
+{
+  "uid": "champy-system-health",
+  "title": "Champy - System Health",
+  "description": "Sante du processus de l'API d'inference (CPU, RAM, file descriptors, uptime, GC Python). Les metriques sont celles exposees nativement par prometheus_client (process_*, python_*). cAdvisor / node_exporter ne sont pas deployes : pour des metriques host (disque, reseau, memoire totale), les ajouter au docker-compose.",
+  "tags": ["champy", "system", "process"],
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "RAM resident du process API",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"champy-api\"}",
+          "legendFormat": "RSS",
+          "refId": "A"
+        },
+        {
+          "expr": "process_virtual_memory_bytes{job=\"champy-api\"}",
+          "legendFormat": "VMS",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CPU rate du process API",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"champy-api\"}[1m])",
+          "legendFormat": "CPU rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "red", "value": 0.85}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Uptime du process API",
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "time() - process_start_time_seconds{job=\"champy-api\"}",
+          "legendFormat": "uptime",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "File descriptors ouverts",
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "process_open_fds{job=\"champy-api\"}",
+          "legendFormat": "open",
+          "refId": "A"
+        },
+        {
+          "expr": "process_max_fds{job=\"champy-api\"}",
+          "legendFormat": "max",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}
+        },
+        "overrides": []
+      },
+      "options": {"colorMode": "background", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Garbage collection Python (taux par generation)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(python_gc_collections_total{job=\"champy-api\"}[5m])",
+          "legendFormat": "gen {{generation}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Objets Python collectes (taux)",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 13},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(python_gc_objects_collected_total{job=\"champy-api\"}[5m])",
+          "legendFormat": "gen {{generation}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+        },
+        "overrides": []
+      },
+      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+    }
+  ]
+}

@@ -276,19 +276,39 @@ invoke serve                 # inclut le container Streamlit
 **But** : Visualiser la santé du modèle en production.
 
 **A produire** :
-- [ ] Prometheus : scrape /metrics de l'API
-- [ ] Grafana : dashboard pré-configuré (latence, throughput, distribution classes)
+- [x] Prometheus : scrape /metrics de l'API
+- [x] Grafana : dashboard pré-configuré via fichiers de provisioning (latence, throughput, distribution classes, sante process)
 - [ ] Drift detection (Evidently) : rapport périodique ou on-demand
 - [ ] Alertes (optionnel) : seuils sur latence, confiance, erreurs
 
-**Pièges connus** :
--
+**Pieges connus (Grafana provisioning)** :
+- **`docker compose restart` n'applique PAS les nouveaux volumes** : il faut `docker compose up -d <service>` pour recreer le container quand on ajoute un mount au compose. Sinon le nouveau dossier `provisioning/` reste vide dans le container alors qu'il est present sur l'hote. `restart` redemarre seulement le process dans le container existant.
+- **Le volume nomme `grafana-data` persiste l'etat UI entre redemarrages** : si une datasource a ete creee a la main avant le provisioning, elle coexiste avec celle provisionnee (deux entrees de meme nom, UID different). Le provisioning ne supprime jamais. Soit `DELETE /api/datasources/uid/<old_uid>` une fois, soit `docker volume rm <project>_grafana-data` (perd l'historique UI : custom dashboards crees a la main, panels modifies, etc.).
+- **`uid` explicite obligatoire dans le datasource yaml** : sans `uid: prometheus`, Grafana auto-genere une chaine type `afhpol7cbsao0a` qui change a chaque recreate du container. Les dashboards JSON qui referencent `{"datasource": {"uid": "prometheus"}}` echouent silencieusement (panels affichent "no data" sans message d'erreur). Toujours fixer `uid` explicitement dans la YAML.
+- **`folderUid` explicite recommande dans le provider de dashboards** : sans `folderUid: champy-classifier` dans le provider yaml, Grafana cree un dossier au nom du provider mais avec un UID auto-genere. Les liens vers les dossiers dans les pages Streamlit ou la doc cassent au prochain reboot. Avec un UID explicite, les URLs `https://grafana/dashboards/f/<uid>/` restent stables.
+- **Path translation Git Bash sur Windows** : `docker exec ... ls /etc/grafana/...` est traduit en `C:/Program Files/Git/etc/grafana/...` par MSYS. Symptome : `ls: cannot access...`. Solution : prefixer la commande par `MSYS_NO_PATHCONV=1` (POSIX style) ou utiliser PowerShell directement.
+- **Schema version compte** : Grafana >=10 attend `schemaVersion >= 36` dans les dashboards JSON. Avec un schema plus ancien, les panels affichent "no data" meme si la datasource est OK. Utiliser `schemaVersion: 38` (au moment de la redaction) pour les nouveaux dashboards.
+- **Le datasource reference dans les dashboards JSON doit etre `{"type": "prometheus", "uid": "prometheus"}`** (objet), PAS la string `"Prometheus"` (qui marchait en Grafana 8 mais est silencieusement ignoree en 10+). Si on copie un dashboard exporte d'une vieille install, faire un find/replace.
+- **Cohabitation sur hote partage : audit prealable des ports** : avant `docker compose up`, lister les ports occupes :
+  ```powershell
+  Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -lt 10000} `
+    | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique
+  ```
+- **`prometheus_client` expose `process_*` et `python_*` automatiquement** : pas besoin d'ajouter cAdvisor ou node_exporter pour observer la sante du process API. RAM (`process_resident_memory_bytes`), CPU (`rate(process_cpu_seconds_total[1m])`), file descriptors, uptime (`time() - process_start_time_seconds`), GC Python (`python_gc_collections_total`). cAdvisor reste utile uniquement pour les metriques host (disque, reseau, memoire totale).
+- **Choix des metriques pour les dashboards** : si on a une couche de serving qui peut changer (FastAPI -> BentoML), referencer les metriques **applicatives custom** (`champy_*`) plutot que les metriques natives du framework (`bentoml_service_*`). Les premieres survivent au changement de framework, les secondes pas. Ajouter les metriques natives en complement, pas en source primaire.
 
 **Commandes clés** :
 ```powershell
 invoke serve   # Prometheus + Grafana inclus
-# Grafana : http://localhost:3000
+# Grafana : http://localhost:3010 (admin / GRAFANA_PASSWORD du .env)
 # Prometheus : http://localhost:9090
+
+# Generer du trafic pour alimenter les dashboards
+python scripts/seed_grafana.py --n 50 --target fastapi
+
+# Verifier le provisioning depuis l'API Grafana
+curl -u admin:$env:GRAFANA_PASSWORD http://localhost:3010/api/datasources
+curl -u admin:$env:GRAFANA_PASSWORD http://localhost:3010/api/search?type=dash-db
 ```
 
 **Durée typique** : 1-2 jours

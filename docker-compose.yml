@@ -61,6 +61,10 @@ services:
     ports:
       - "3010:3000"
     volumes:
+      # Provisioning auto : datasource Prometheus + provider de dashboards.
+      # Lu au boot par Grafana, recharge automatiquement les dashboards si
+      # les fichiers JSON sont modifies (intervalle = 30s).
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     environment:

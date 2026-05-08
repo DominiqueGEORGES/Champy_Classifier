@@ -567,6 +567,82 @@ champy_classifier:yhtfcj2kv2v... 67.58 KiB  106.30 MiB  2026-05-08 09:23:18
 
 ---
 
+## Etape 6ter - Monitoring M1 - Dashboards Grafana provisionnees
+
+**Date** : 2026-05-08
+**Objectif** : Provisionner Grafana via fichiers de config (datasource + 3 dashboards JSON) pour que la stack monitoring soit reproductible : suppression du volume `grafana-data` ou redeploiement = etat identique au boot suivant.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Mode de provisioning | Fichiers YAML (datasource + dashboard provider) + JSON dashboards | Configuration manuelle via UI | Reproductible, code dans le repo, diffable, survit a un `docker volume rm` |
+| Datasource Prometheus | URL interne `http://prometheus:9090`, UID explicite `prometheus` | URL externe `host.docker.internal:9090`, UID auto-genere | Communication via le network compose, pas de dependance host. UID explicite pour pouvoir referencer la datasource depuis les dashboards JSON sans casser au prochain reboot |
+| Source des metriques | `champy_*` (custom Prometheus) primaire, `process_*` / `python_*` secondaire | `bentoml_service_*` (natif BentoML) | Les `champy_*` sont communes a FastAPI et BentoML : permet la transition Etape 6bis sans modifier les dashboards. Les `bentoml_service_*` ne seront disponibles qu'au Bloc 5 quand BentoML rejoindra le compose |
+| Dashboard 03 sans cAdvisor | Process metrics (`process_*`, `python_*`) du client Prometheus | cAdvisor / node_exporter | Suffisant pour observer la sante du process API (RAM, CPU, FDs, GC). cAdvisor utile uniquement si on veut des metriques host (disque, reseau) - hors scope ici |
+| Folder Grafana | "Champy Classifier" (folderUid `champy-classifier`) | Root | Isolation visuelle propre dans Grafana, evite la confusion avec d'autres projets sur le NUC3 partage |
+| Schema dashboards | v38 (Grafana >= 10) | Schema legacy | Latest, supporte le datasource explicite `{type, uid}` recommande |
+
+### Architecture du provisioning
+
+```
+configs/grafana/
+├── provisioning/
+│   ├── datasources/
+│   │   └── prometheus.yml      # Datasource auto avec UID 'prometheus'
+│   └── dashboards/
+│       └── dashboards.yml      # Provider file-based, scan /var/lib/grafana/dashboards/
+└── dashboards/
+    ├── 01_api_performance.json # Latence p50/p95/p99, RPS, erreurs HTTP, top endpoints
+    ├── 02_predictions.json     # Top-10 especes, confiance, predictions/sec, especes uniques
+    └── 03_system_health.json   # RAM, CPU, FDs, uptime, GC Python du process API
+```
+
+### Modifications docker-compose.yml
+
+| Volume ajoute | Role |
+|---------------|------|
+| `./configs/grafana/provisioning:/etc/grafana/provisioning:ro` | Datasource + provider de dashboards charges au boot |
+| `./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro` (deja present) | JSON des 3 dashboards, recharges automatiquement (intervalle 30s) |
+
+### Pieges Grafana provisioning rencontres
+
+1. **`docker compose restart` n'applique PAS les nouveaux volumes** : il faut `docker compose up -d <service>` pour recreer le container. Avec un simple `restart`, les volumes du container deja existant restent inchanges. Symptome : provisioning yaml present sur l'hote mais absent dans `/etc/grafana/provisioning/` du container.
+2. **Le volume nomme `grafana-data` persiste les datasources auto-generees** : si une datasource a deja ete creee manuellement avant le provisioning, elle coexiste avec la nouvelle (deux datasources de meme nom mais UID different). Le provisioning ne supprime pas, il ajoute. Solution : `DELETE /api/datasources/uid/<old_uid>` une fois ou bien `docker volume rm champy_classifier_grafana-data` avant le up (perd l'historique des modifs UI).
+3. **Path translation Git Bash sur Windows** : `docker exec ... ls /etc/grafana/...` est traduit en `C:/Program Files/Git/etc/grafana/...` par Git Bash. Solution : prefixer la commande par `MSYS_NO_PATHCONV=1` ou utiliser PowerShell pour les commandes `docker exec`.
+4. **`uid` explicite dans le datasource yaml indispensable** : sans `uid: prometheus`, Grafana auto-genere une chaine type `afhpol7cbsao0a` qui change a chaque recreate. Les dashboards JSON qui referencent la datasource via UID echouent silencieusement (panels en "no data"). Toujours fixer `uid` dans la YAML de provisioning.
+5. **`folderUid` requis pour des dashboards non-root** : sans `folderUid` dans le provider yaml, Grafana cree un dossier au nom du provider mais avec un UID auto-genere - pas de probleme fonctionnel, mais les liens vers les dossiers dans le code Streamlit / docs cassent au prochain reboot.
+
+### Validation (2026-05-08)
+
+- 50 predictions envoyees via `scripts/seed_grafana.py` (stratification sur les especes, 26 req/s)
+- Total Prometheus apres seed : **58 predictions** (50 nouvelles + 8 anterieures)
+- Confiance moyenne : **95.69%**
+- Latence p50 / p95 (5 min) : **19 ms / 43 ms**
+- RAM process API : **238.7 MB**
+- 3 dashboards visibles dans `Champy Classifier/` :
+  - http://localhost:3010/d/champy-api-performance/ (6 panels)
+  - http://localhost:3010/d/champy-predictions/ (5 panels)
+  - http://localhost:3010/d/champy-system-health/ (6 panels)
+- Datasource `Prometheus` (uid=prometheus, isDefault=true) provisionnee correctement
+- Query proxy Grafana -> Prometheus retourne `58` pour `sum(champy_predictions_total)` : flux end-to-end OK
+
+### Artefacts produits
+
+- `configs/grafana/provisioning/datasources/prometheus.yml` - datasource Prometheus auto
+- `configs/grafana/provisioning/dashboards/dashboards.yml` - provider de dashboards file-based
+- `configs/grafana/dashboards/01_api_performance.json` - 6 panels (latence, RPS, erreurs, top endpoints)
+- `configs/grafana/dashboards/02_predictions.json` - 5 panels (top-10 especes, confiance, distribution)
+- `configs/grafana/dashboards/03_system_health.json` - 6 panels (RAM, CPU, FDs, uptime, GC Python)
+- `scripts/seed_grafana.py` - generateur de trafic synthetique stratifie sur les especes
+- `docker-compose.yml` - mount additionnel `configs/grafana/provisioning`
+
+### Restant pour cloturer M1
+
+- Aucun (M1 valide). Suite : M2 (PredictionStore SQLite + endpoint `/predictions/recent`).
+
+---
+
 ## Etape 7 - Docker et Monitoring - EN COURS
 
 **Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)

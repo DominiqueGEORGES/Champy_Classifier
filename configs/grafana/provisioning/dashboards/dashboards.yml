@@ -1,0 +1,21 @@
+# Provider de dashboards file-based.
+#
+# Tous les fichiers JSON deposes dans /var/lib/grafana/dashboards (mappe
+# sur configs/grafana/dashboards/ depuis l'hote) sont charges au boot
+# de Grafana. Le provider scanne le dossier toutes les 30s pour
+# detecter les modifications.
+apiVersion: 1
+
+providers:
+  - name: "Champy dashboards"
+    orgId: 1
+    folder: "Champy Classifier"
+    folderUid: champy-classifier
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
