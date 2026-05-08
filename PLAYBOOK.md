@@ -313,6 +313,38 @@ curl -u admin:$env:GRAFANA_PASSWORD http://localhost:3010/api/search?type=dash-d
 
 **Durée typique** : 1-2 jours
 
+### Stockage des predictions pour le monitoring (SQLite WAL)
+
+**A produire** :
+- [x] Schema minimal : id (UUID), timestamp, image_hash (SHA256), predicted_class, confidence, top5_json, latency_ms
+- [x] Driver async pour ne pas bloquer l'event loop du serving
+- [x] Fire-and-forget depuis le hot path predict
+- [x] Endpoint /predictions/recent + /predictions/distribution
+- [x] Tests de concurrence (gather de 100+ ecritures)
+
+**Pieges connus (SQLite + BentoML)** :
+- **`PRAGMA journal_mode=WAL` est obligatoire pour la concurrence** : SQLite en mode `DELETE` (defaut) verrouille le fichier entier pour chaque ecriture. WAL permet plusieurs lecteurs simultanes pendant qu'un ecriveur ecrit. Sans WAL, on voit `database is locked` au moindre appel concurrent.
+- **`PRAGMA busy_timeout=5000` est l'arme anti-`database is locked`** : sans, SQLite remonte l'erreur immediatement si un autre ecriveur tient le verrou. Avec, il attend jusqu'a 5s avant d'echouer. La latence n'augmente jamais (sauf cas pathologique) car le verrou WAL est tres court.
+- **`PRAGMA synchronous=NORMAL` est le bon compromis pour WAL** : `FULL` (defaut) fait un fsync apres chaque transaction (durable mais ~3x plus lent). `OFF` ne fsync jamais (rapide mais perd les ecritures en cas de crash). `NORMAL` fsync seulement au checkpoint WAL : durabilite suffisante pour des donnees de monitoring (perte de < 1s en cas de crash brutal).
+- **`row_factory` doit etre assigne APRES connect()** : le passer en argument du `connect()` est silencieusement ignore en aiosqlite. Faire `conn.row_factory = aiosqlite.Row` apres l'ouverture, sinon les `fetchall()` retournent des tuples au lieu de dicts.
+- **WAL cree des sidecars `.db-wal` et `.db-shm`** : a inclure dans `.gitignore` et `.dockerignore`, sinon ils remontent silencieusement dans les commits ou les images Docker. Ils sont reconstruits automatiquement au prochain open.
+- **Partager une connexion aiosqlite entre coroutines est sur** : aiosqlite execute chaque operation dans un thread interne dedie qui serialise les appels. Pas besoin d'`asyncio.Lock` autour des read/write. Inversement, partager un `sqlite3.Connection` (sync stdlib) entre threads sans `check_same_thread=False` plante.
+- **Init async + `__init__` sync** : si le framework de serving impose un constructeur synchrone (cas BentoML 1.4), on ne peut pas faire `await store.init()` dans `__init__`. Pattern : creer l'objet dans `__init__`, declencher `init()` au premier appel, proteger avec un `asyncio.Lock` pour eviter la double-init en course.
+- **Fire-and-forget avec `asyncio.create_task` exige une reference forte** : sans `self._pending.add(task) ; task.add_done_callback(self._pending.discard)`, le GC peut collecter la Task avant la fin de l'ecriture (Python <3.13). Symptome : ecritures perdues sous charge, sans erreur dans les logs. Ruff RUF006 attrape ce cas.
+- **Mount Docker : preferer un dossier a un fichier** : `./data/runtime/predictions.db:/app/data/predictions.db` echoue si le fichier n'existe pas sur l'hote (Docker cree un dossier vide a sa place). `./data/runtime:/app/data/runtime` mount le repertoire entier, supporte les sidecars WAL/SHM, et le fichier .db est cree par l'application.
+- **Hash d'image : `image.tobytes()` apres convert("RGB")** plutot que le contenu du fichier upload : permet la deduplication par contenu visuel meme si le client re-encode/recompresse. SHA256 hexdigest = 64 chars, indexable.
+- **Volumetrie SQLite acceptable jusqu'a ~1M lignes** : au-dela, envisager PostgreSQL container (pas plus complexe avec Docker Compose). SQLite WAL tient confortablement ~10k req/s en ecriture sur SSD moderne pour le schema decrit.
+
+**Commandes cles** :
+```powershell
+# Inspecter la base
+python -c "import asyncio; from src.serving_bentoml.storage import PredictionStore; from pathlib import Path; \
+  asyncio.run((lambda s: (s.init(), print('rows:', s.count()), s.close()))(PredictionStore(Path('data/runtime/predictions.db'))))"
+
+# Reset de la base (perte de l'historique)
+rm data/runtime/predictions.db data/runtime/predictions.db-wal data/runtime/predictions.db-shm
+```
+
 ---
 
 ## Etape 8 - Dockerisation

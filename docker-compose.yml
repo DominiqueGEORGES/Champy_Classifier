@@ -24,7 +24,15 @@ services:
       - "8010:8000"
     volumes:
       - ./models:/app/models:ro
+      # data/runtime/ accueille la DB SQLite des predictions (PredictionStore,
+      # Bloc M2). FastAPI n'utilise pas le store - le volume est prepare ici
+      # pour que le service BentoML qui le remplace au Bloc 5 (api-bento)
+      # trouve la base persistee. Le path SQLite est configure via
+      # CHAMPY_PREDICTIONS_DB et pointe sur /app/data/runtime/predictions.db.
+      - ./data/runtime:/app/data/runtime
     env_file: .env
+    environment:
+      - CHAMPY_PREDICTIONS_DB=/app/data/runtime/predictions.db
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

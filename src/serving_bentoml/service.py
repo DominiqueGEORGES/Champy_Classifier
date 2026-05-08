@@ -23,7 +23,11 @@ Usage :
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import os
 import time
+from pathlib import Path
 from typing import Any
 
 import bentoml
@@ -40,6 +44,18 @@ from src.serving_bentoml.schemas import (
     PredictionItem,
     PredictionResponse,
 )
+from src.serving_bentoml.storage import PredictionRecord, PredictionStore
+
+# ---------------------------------------------------------------------------
+# Stockage des predictions (SQLite WAL).
+# Le chemin est configurable via l'env var CHAMPY_PREDICTIONS_DB (utilise par
+# le compose Docker pour pointer vers le volume persistant). Defaut local :
+# data/runtime/predictions.db a la racine du repo.
+# ---------------------------------------------------------------------------
+_DEFAULT_DB_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "runtime" / "predictions.db"
+)
+PREDICTIONS_DB_PATH = Path(os.environ.get("CHAMPY_PREDICTIONS_DB", _DEFAULT_DB_PATH))
 
 # ---------------------------------------------------------------------------
 # Metriques Prometheus custom (les metriques HTTP natives BentoML sont deja
@@ -115,8 +131,11 @@ class ChampyService:
     def __init__(self) -> None:
         """Initialise le service en chargeant le modele ONNX.
 
-        Le chargement se fait via ``OnnxRunner.load()`` qui resout le
-        tag ``champy_classifier:latest`` dans le Model Store BentoML.
+        Le chargement du modele se fait via ``OnnxRunner.load()`` (sync,
+        appel direct au Model Store). Le ``PredictionStore`` SQLite est
+        cree mais pas ouvert : son ``init()`` est paresseux (premiere
+        prediction) car il est asynchrone et le constructeur BentoML ne
+        peut pas etre ``async``.
         """
         self.runner = OnnxRunner(model_tag=DEFAULT_MODEL_TAG)
         loaded = self.runner.load()
@@ -126,6 +145,29 @@ class ChampyService:
                 "Lancer 'python scripts/import_model_to_bentoml.py' pour "
                 "alimenter le Model Store."
             )
+        self.store = PredictionStore(db_path=PREDICTIONS_DB_PATH)
+        self._store_init_lock = asyncio.Lock()
+        # Reference forte vers les taches fire-and-forget de persistence.
+        # Sans ca, le GC peut collecter la Task avant son completion et
+        # interrompre l'ecriture (Python <3.13 documente ce comportement).
+        self._pending_writes: set[asyncio.Task[None]] = set()
+
+    async def _ensure_store(self) -> None:
+        """Initialise le store SQLite a la premiere prediction.
+
+        Le verrou evite que deux requetes concurrentes initialisent le
+        store en double (l'init est idempotente, mais creer deux
+        connexions WAL au meme fichier doublerait inutilement les
+        descripteurs de fichier).
+        """
+        if self.store.is_open:
+            return
+        async with self._store_init_lock:
+            if not self.store.is_open:
+                try:
+                    await self.store.init()
+                except Exception as exc:
+                    logger.error(f"Echec init PredictionStore : {exc}")
 
     # ------------------------------------------------------------------
     # Methode batchable interne : c'est ici que le pooling adaptatif a lieu.
@@ -237,10 +279,64 @@ class ChampyService:
             f"({predictions[0].confidence:.2%}) en {latency:.3f}s"
         )
 
+        # Persistence asynchrone fire-and-forget : ne bloque pas la reponse.
+        # Le store WAL serialise les ecritures en interne (busy_timeout=5000ms).
+        # On garde une reference forte sur la Task pour eviter qu'elle soit
+        # collectee par le GC avant la fin de l'ecriture (cf. RUF006).
+        await self._ensure_store()
+        if self.store.is_open:
+            image_hash = hashlib.sha256(image.tobytes()).hexdigest()
+            top5_dump = [p.model_dump() for p in predictions[:5]]
+            task = asyncio.create_task(
+                self._save_prediction_safe(
+                    image_hash=image_hash,
+                    predicted_class=predictions[0].species,
+                    confidence=predictions[0].confidence,
+                    top5=top5_dump,
+                    latency_ms=latency * 1000.0,
+                )
+            )
+            self._pending_writes.add(task)
+            task.add_done_callback(self._pending_writes.discard)
+
         return PredictionResponse(
             predictions=predictions,
             model_version=self.runner.labels.get("version", "unknown"),
         )
+
+    async def _save_prediction_safe(
+        self,
+        image_hash: str,
+        predicted_class: str,
+        confidence: float,
+        top5: list[dict[str, Any]],
+        latency_ms: float,
+    ) -> None:
+        """Wrapper qui logue les erreurs au lieu de les laisser silencieuses.
+
+        ``asyncio.create_task`` qui leve une exception sans handler
+        affiche un warning ``Task exception was never retrieved`` mais
+        ne remonte pas l'erreur. Ce wrapper garantit qu'une defaillance
+        du store (disque plein, base verrouillee > 5s, etc.) apparaisse
+        dans les logs sans casser le hot path du predict.
+
+        Args:
+            image_hash: SHA256 hex de l'image.
+            predicted_class: Espece du top-1.
+            confidence: Confiance du top-1, [0, 1].
+            top5: 5 meilleures predictions (dicts serialisables).
+            latency_ms: Latence d'inference en millisecondes.
+        """
+        try:
+            await self.store.save_prediction(
+                image_hash=image_hash,
+                predicted_class=predicted_class,
+                confidence=confidence,
+                top5=top5,
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:
+            logger.error(f"Echec persistence prediction : {exc}")
 
     @bentoml.api(route="/health")  # type: ignore[misc]
     def health(self) -> HealthResponse:
@@ -291,6 +387,27 @@ class ChampyService:
             class_names=self.runner.class_names,
             input_shape=self.runner.input_shape,
         )
+
+    @bentoml.api(route="/predictions/recent")  # type: ignore[misc]
+    async def predictions_recent(
+        self, hours: int = 24, limit: int = 1000
+    ) -> list[PredictionRecord]:
+        """Retourne les predictions des ``hours`` dernieres heures.
+
+        BentoML 1.4 ne mappe pas les query params : ``hours`` et ``limit``
+        sont passes en JSON dans le body de la requete POST.
+
+        Args:
+            hours: Fenetre temporelle en heures (defaut 24).
+            limit: Nombre maximum de lignes (defaut 1000).
+
+        Returns:
+            Liste de ``PredictionRecord`` triee par timestamp decroissant.
+        """
+        await self._ensure_store()
+        if not self.store.is_open:
+            return []
+        return await self.store.get_recent(hours=hours, limit=limit)
 
 
 # Permet d'importer ``service`` au niveau module (convention BentoML pour

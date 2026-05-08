@@ -23,6 +23,7 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "python-multipart>=0.0.9",
     "bentoml>=1.2,<2.0",
+    "aiosqlite>=0.19",
     # -- Demo --
     "streamlit>=1.35",
     "plotly>=5.20",

@@ -643,6 +643,95 @@ configs/grafana/
 
 ---
 
+## Etape 6quater - Monitoring M2 - Stockage des predictions (SQLite WAL)
+
+**Date** : 2026-05-08
+**Objectif** : Persister chaque prediction servie par le service BentoML dans une base SQLite locale pour alimenter le Quality Monitor (Bloc R) et la detection de derive (Bloc M3 - Evidently). La concurrence d'ecriture doit etre robuste : BentoML traite plusieurs requetes en parallele via l'adaptive batching et plusieurs workers async.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Backend | SQLite (fichier local) | PostgreSQL container, DuckDB, SQLAlchemy + ORM | Aucune dep externe, deploiement zero-config, suffisant pour ~10k req/s en WAL. PostgreSQL serait justifie a > 1M predictions/jour. |
+| Driver | `aiosqlite` | `sqlite3` stdlib synchrone | Operations async-natives via thread interne dedie, ne bloque pas l'event loop BentoML. Deja tire par BentoML 1.4 (dep transitive). |
+| Concurrence | WAL + busy_timeout=5000 + connexion partagee | Connexion par requete, lock asyncio explicite | WAL permet multi-readers + 1 writer concurrent. busy_timeout absorbe les pics. aiosqlite serialise les operations sur sa connexion via thread interne, donc partager une seule connexion est sur. |
+| Synchronous | `NORMAL` | `FULL` (defaut) | Compromis recommande pour WAL : durabilite suffisante + ~3x plus rapide a l'ecriture. Acceptable pour des donnees de monitoring (perte de < 1s d'ecritures recentes en cas de crash brutal). |
+| Init | Paresseux (premier predict) | Eager dans `__init__` | BentoML 1.4 ne supporte pas un `__init__` async. Pattern : creer l'objet dans `__init__`, appeler `await store.init()` au premier predict, garder un `asyncio.Lock` pour eviter la double-init en course. |
+| Persistence dans predict | Fire-and-forget via `asyncio.create_task` | `await` synchrone | Le commit SQLite ajoute ~1ms a la reponse - negligeable, mais la persistence reste isolee du hot path en cas de probleme disque (timeout, full, etc.). Reference forte sur la Task pour eviter le GC (RUF006). |
+| Hashage | SHA256 de `image.tobytes()` apres convert RGB | SHA256 du fichier upload, perceptual hash | `tobytes()` capture l'image apres decodage, deterministe pour meme contenu visuel quel que soit le format ; perceptual hash hors scope. |
+| Schema | id (UUID) + timestamp + image_hash + predicted_class + confidence + top5_json + latency_ms | Table normalisee avec table secondaire pour top5 | Stockage du top-5 en JSON evite une JOIN couteuse pour le rendu Streamlit. SQLite < 1 MB par 10k predictions. |
+| Endpoint /predictions/recent | POST avec body JSON `{hours, limit}` | GET avec query string | BentoML 1.4 ne mappe pas les query params (cf. Etape 6bis piege #8). Body JSON est l'idiome BentoML. |
+| Volume Docker | `./data/runtime:/app/data/runtime` (directory) | `./data/runtime/predictions.db:/app/data/predictions.db` (file) | Mount d'un fichier qui n'existe pas encore = Docker cree un repertoire. Mount du dossier parent = robuste, supporte les sidecars WAL/SHM. |
+| Path runtime | `/app/data/runtime/predictions.db` (env var `CHAMPY_PREDICTIONS_DB`) | Hardcode | Permet de surcharger le path en local (defaut `<repo>/data/runtime/predictions.db`) sans toucher au code. |
+
+### Architecture
+
+```
+PredictionStore (src/serving_bentoml/storage.py)
+├── init()           Cree fichier + active WAL/synchronous=NORMAL/busy_timeout=5000
+├── save_prediction() INSERT, retourne UUID
+├── get_recent()     SELECT WHERE timestamp >= cutoff ORDER BY ts DESC
+├── get_class_distribution() SELECT predicted_class, COUNT(*) GROUP BY
+├── count()          Total rows
+└── close()          Fermeture propre, idempotente
+
+ChampyService (src/serving_bentoml/service.py)
+├── __init__         Cree PredictionStore (fermee), Lock pour init paresseux,
+│                    set des Tasks de persistence (reference forte)
+├── _ensure_store()  Init paresseux thread-safe
+├── _save_prediction_safe() Wrapper qui logue les exceptions
+├── predict          Fire-and-forget vers _save_prediction_safe via create_task
+└── /predictions/recent (POST) JSON {hours, limit} -> List[PredictionRecord]
+```
+
+### Tests unitaires (tests/unit/test_prediction_store.py)
+
+9 tests, tous passent en 0.25s :
+1. init() cree le fichier + active WAL
+2. init() est idempotent
+3. save + get_recent round-trip
+4. get_recent filtre correctement par fenetre (48h vs 5min)
+5. get_class_distribution agrege par classe
+6. get_class_distribution avec `since` filtre temporellement
+7. **Concurrence : 100 ecritures via asyncio.gather sans perte ni `database is locked`**
+8. count() = 0 sur base vide, close() idempotente
+9. save_prediction sans init() leve RuntimeError explicite
+
+### Validation end-to-end (2026-05-08)
+
+- 5 predictions sur images de test variees -> 5 records en base
+- `/predictions/recent` (POST `{hours: 1, limit: 10}`) retourne les 5 records par timestamp decroissant avec hashes uniques
+- Stress concurrent : 50 requetes `/predict` en `asyncio.gather` -> 11 OK + 39 503
+  - Les 503 viennent de la couche batching BentoML (queue bornee a max_batch_size=32), PAS du store
+  - Les 11 predictions OK sont toutes persistees correctement
+  - **Aucun `database is locked` declenche** : WAL + busy_timeout absorbent la concurrence
+- Total apres stress : 16 lignes en base, distribution coherente
+
+### Pieges SQLite + BentoML rencontres
+
+1. **`asyncio.create_task` sans reference forte = RUF006** : sans `self._pending_writes.add(task)`, le GC peut collecter la Task avant completion (Python <3.13). Avec une reference forte + `task.add_done_callback(self._pending_writes.discard)`, la Task vit jusqu'a la fin.
+2. **`__init__` BentoML est sync** : impossible d'`await store.init()` dedans. Pattern d'init paresseux thread-safe avec `asyncio.Lock` pour eviter la double-init en course.
+3. **Le proxy RPC interne a son propre quota** : BentoML borne implicitement le nombre de requetes simultanees pour proteger la memoire (queue + workers). Au-dela, les requetes sont rejetees en 503 par le proxy avant meme d'arriver a `predict`. Pas un probleme du store.
+4. **Sidecars WAL et SHM** : SQLite en WAL cree `<db>.db-wal` et `<db>.db-shm` a cote du fichier principal. Les inclure dans `.gitignore` (sinon ils remontent silencieusement).
+5. **`row_factory=aiosqlite.Row` doit etre defini APRES `connect()`** : le passer en argument de `connect()` est silencieusement ignore en aiosqlite. Faire `conn.row_factory = aiosqlite.Row` apres init.
+
+### Artefacts produits
+
+- `src/serving_bentoml/storage.py` - PredictionStore (WAL, ~330 lignes)
+- `src/serving_bentoml/service.py` - hook fire-and-forget + endpoint `/predictions/recent`
+- `tests/unit/test_prediction_store.py` - 9 tests
+- `pyproject.toml` + `requirements.txt` + `bentofile.yaml` - `aiosqlite>=0.19`
+- `docker-compose.yml` - mount `./data/runtime:/app/data/runtime` + env `CHAMPY_PREDICTIONS_DB`
+- `.gitignore` - exclusion `data/runtime/*.db*`
+- `data/runtime/.gitkeep` - garde le repertoire dans git
+
+### Restant pour cloturer M2
+
+- Aucun (M2 valide). Suite : M3 (drift detection Evidently + page Streamlit 11).
+- A surveiller au Bloc 5 : verifier que le volume monte dans le container BentoML est ecrit avec les bonnes permissions (uid:gid).
+
+---
+
 ## Etape 7 - Docker et Monitoring - EN COURS
 
 **Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)

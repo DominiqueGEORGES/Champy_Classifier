@@ -4,6 +4,13 @@
 /data/raw/
 /data/processed/
 /data/split/
+# Donnees runtime (DB SQLite des predictions, generee par PredictionStore).
+# On garde le .gitkeep pour que le repertoire existe au clone, mais les
+# fichiers .db et leurs sidecars WAL/SHM ne doivent pas remonter dans git.
+/data/runtime/*.db
+/data/runtime/*.db-wal
+/data/runtime/*.db-shm
+/data/runtime/*.db-journal
 # Large source CSVs (DVC-managed), but keep pipeline artifacts
 /data/observations_mushroom.csv
 /data/dataset_30_species.csv
