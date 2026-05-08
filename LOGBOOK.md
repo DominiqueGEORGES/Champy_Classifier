@@ -1,85 +1,81 @@
 # Champy Classifier - Cahier de bord MLOps
 
-## Informations générales
+## Informations generales
 
-- **Projet** : Classification de champignons (30 espèces, ~700K images)
+- **Projet** : Classification de champignons (30 especes, ~700K images brutes, 19 138 retenues apres curation)
 - **Cadre** : TFE Master AI (DataScientest, RNCP niveau 7, promotion 2026)
-- **Equipe** : [à compléter]
-- **Repo** : DagsHub - LoicFocraud/Champy_Classifier
+- **Equipe** : Equipe Champy Classifier (DataScientest promotion 2026)
+- **Repo** : DagsHub - LoicFocraud/Champy_Classifier (mirror GitHub LoicFocraud/Champy_Classifier)
+- **Branche de developpement** : `dev-dominique` (merge vers `main` par PR equipe)
 - **Date de debut** : 2026-03-28
-- **Date de soutenance** : [à compléter]
+- **Date de soutenance** : [a confirmer]
+
+### Roadmap equipe (reference)
+
+| Etape | Titre | Statut |
+|-------|-------|--------|
+| 1 | Mise en place environnement | Termine |
+| 2 | Analyse du sujet | Termine |
+| 3 | Preparation des donnees | Termine |
+| 4 | Entrainement | Termine |
+| 5 | CI/CD | Termine |
+| 6 | Serving (API + Model Registry) | En cours |
+| 7 | Docker et Monitoring | En cours |
+| 8 | Demo et Tests | En cours |
 
 ---
 
-## Etape 0 - Cadrage et architecture
+## Etape 1 - Mise en place environnement
 
 **Date** : 2026-03-28
-**Objectif** : Définir l'architecture MLOps cible, la répartition hardware, les conventions.
-
-### Décisions prises
-
-| Décision | Choix | Alternatives envisagées | Justification |
-|----------|-------|------------------------|---------------|
-| ML Framework | PyTorch | TensorFlow, JAX | Standard industrie, écosystème torchvision, compatibilité ONNX |
-| Modèle de base | ResNet50 (transfer learning) | EfficientNet, ViT | Déjà validé sur le projet (95.4% accuracy au TFE), bon rapport complexité/performance |
-| Data versioning | DVC (remote DagsHub) | Git LFS, Lakefs | Déjà en place, intégré DagsHub |
-| Experiment tracking | MLflow (DagsHub) | W&B, Neptune | Gratuit, intégré DagsHub, self-hosted possible |
-| API serving | FastAPI | Flask, TorchServe | Async natif, Pydantic, OpenAPI auto-générée |
-| Format inference | ONNX Runtime | TorchScript, TensorRT | Portable, CPU-optimisé, pas de dépendance PyTorch en prod |
-| Demo | Streamlit | Gradio, React | Python natif, multi-page, rapide à prototyper |
-| Monitoring | Prometheus + Grafana | Datadog, ELK | Standard industrie, open source, léger |
-| Drift detection | Evidently AI | Alibi Detect, NannyML | API simple, rapports HTML intégrés, gratuit |
-| CI/CD | GitHub Actions | GitLab CI, Jenkins | Intégré DagsHub/GitHub |
-| Linting | Ruff | Black + Flake8 + isort | Un seul outil, 10-100x plus rapide |
-| Containerisation | Docker Compose | Kubernetes | Suffisant pour l'échelle du projet, pas d'overhead K8s |
-
-### Répartition hardware
-
-| Machine | Rôle | Specs clés |
-|---------|------|-----------|
-| NUC3 | Hub MLOps (dev, serving, monitoring) | Ryzen AI 9, 96GB RAM, pas de GPU dédié |
-| XPS 9520 #1 | Training GPU | i7-12700H, RTX 3050 Ti (4GB VRAM) |
-| XPS 9520 #2 (optionnel) | Training GPU parallèle | Idem |
-
-### Artefacts produits
-- `CLAUDE.md` - Fichier de gouvernance Claude Code
-- `.claude/skills/champy-mlops/SKILL.md` - Patterns MLOps
-- `LOGBOOK.md` - Cahier de bord MLOps
-- `PLAYBOOK.md` - Referentiel MLOps reutilisable
-- `tasks.py` - Task runner invoke (remplace Makefile)
-
----
-
-## Etape 1 - Configuration et structure du projet
-
-**Date** : 2026-03-28
-**Objectif** : Mettre en place pyproject.toml, config Pydantic, .env, .gitignore, structure des repertoires.
+**Objectif** : Architecture MLOps cible, repartition hardware, conventions, repo pret a coder.
 
 ### Decisions prises
 
 | Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Migration framework | PyTorch | Rester sur Keras/TF | Standard industrie, meilleur ecosysteme ONNX, plus flexible pour fine-tuning, AMP natif |
+| ML Framework | PyTorch | TensorFlow, JAX | Standard industrie, ecosysteme torchvision, compatibilite ONNX |
+| Modele de base | ResNet50 puis ConvNeXt-Tiny (transfer learning) | EfficientNet, ViT | ResNet50 valide sur TFE initial (95.4%), ConvNeXt pour iteration fine-grained |
+| Data versioning | DVC (remote DagsHub) | Git LFS, Lakefs | Deja en place, integre DagsHub |
+| Experiment tracking | MLflow (DagsHub) | W&B, Neptune | Gratuit, integre DagsHub, self-hosted possible |
+| API serving | FastAPI | Flask, TorchServe | Async natif, Pydantic, OpenAPI auto-generee |
+| Format inference | ONNX Runtime | TorchScript, TensorRT | Portable, CPU-optimise, pas de dependance PyTorch en prod |
+| Demo | Streamlit | Gradio, React | Python natif, multi-page, rapide a prototyper |
+| Monitoring | Prometheus + Grafana | Datadog, ELK | Standard industrie, open source, leger |
+| Drift detection | Evidently AI | Alibi Detect, NannyML | API simple, rapports HTML integres, gratuit |
+| CI/CD | GitHub Actions | GitLab CI, Jenkins | Integre DagsHub/GitHub |
+| Linting | Ruff | Black + Flake8 + isort | Un seul outil, 10-100x plus rapide |
+| Containerisation | Docker Compose | Kubernetes | Suffisant pour l'echelle du projet, pas d'overhead K8s |
 | Gestion deps | pyproject.toml (hatchling) + uv | requirements.txt seul | Standard PEP 621, sections [dev] separees, config Ruff/Mypy/Pytest integree |
-| Config runtime | Pydantic Settings | python-decouple, dynaconf | Validation automatique des types, integration .env + YAML, coherent avec FastAPI |
-| Python version | >=3.11 | 3.12 only | 3.11 minimum pour match_case et perf, mais compatible 3.12 |
+| Config runtime | Pydantic Settings | python-decouple, dynaconf | Validation automatique, integration .env + YAML, coherent avec FastAPI |
+| Python version | >=3.11 | 3.12 only | 3.11 minimum pour match_case et perf, compatible 3.12 |
 | Task runner | invoke (tasks.py) | Makefile, Nox | Cross-platform Windows/Linux, Python natif |
 | Line endings | LF force (.gitattributes) | Mixed | Evite les diffs parasites entre Windows et CI Linux |
+| Docstrings | Francais (Google style), verifie par interrogate | Anglais | Convention du projet, mieux pour le memoire |
+| Pre-commit | ruff + mypy + interrogate + hooks generaux | Verification manuelle | Garantit la qualite a chaque commit |
+
+### Repartition hardware
+
+| Machine | Role | Specs cles |
+|---------|------|-----------|
+| NUC3 | Hub MLOps (dev, serving, monitoring, demo) | Ryzen AI 9, 96GB RAM, pas de GPU dedie, Docker Desktop, Windows 11 Pro |
+| XPS 9520 #1 | Training GPU | i7-12700H, RTX 3050 Ti (4GB VRAM), Windows 11 |
+| XPS 9520 #2 (optionnel) | Training GPU parallele | Idem |
 
 ### Problemes rencontres
-- `requirements.txt` existant etait en encodage UTF-16 avec espaces entre chaque caractere - inutilisable, regenere proprement. Attention : meme apres regeneration, le fichier repassait en UTF-16 silencieusement (probleme Windows + outil d'ecriture). Solution : forcer l'ecriture en UTF-8 explicitement.
-- `pyproject.toml` initial etait un dump brut de `pip freeze` (190 deps dont TensorFlow, yfinance, jupyter) - nettoye pour ne garder que les deps du projet
-- Aucun `__init__.py` dans les sous-packages de `src/` - ajoutes (les dossiers existaient mais etaient vides)
-- `.gitignore` ne couvrait que `/data` et `/models` - etendu a .env, caches, IDE, etc.
-- `.gitignore` excluait par erreur `data.dvc` et `models.dvc` - corrige : ces fichiers .dvc DOIVENT etre dans git (c'est le principe meme de DVC)
-- `httpx` et `plotly` manquants dans les deps principales alors qu'ils sont necessaires pour les helpers Streamlit (`demo/lib/`) et les appels API
+- `requirements.txt` existant etait en encodage UTF-16 avec espaces entre chaque caractere - inutilisable, regenere en UTF-8.
+- `pyproject.toml` initial etait un dump brut de `pip freeze` (190 deps dont TensorFlow, yfinance, jupyter) - nettoye pour ne garder que les deps du projet.
+- Aucun `__init__.py` dans les sous-packages de `src/` - ajoutes des le debut.
+- `.gitignore` excluait par erreur `data.dvc` et `models.dvc` - corrige : ces fichiers `.dvc` DOIVENT etre dans git (c'est le principe meme de DVC).
+- `httpx` et `plotly` manquants dans les deps principales alors qu'ils sont necessaires pour les helpers Streamlit et les appels API.
 
 ### Artefacts produits
-- `pyproject.toml` - deps PyTorch + plotly + httpx + config Ruff/Mypy/Pytest
-- `requirements.txt` - fallback pip depuis pyproject.toml (UTF-8)
-- `.env.example` - template variables d'environnement
-- `.gitattributes` - LF force + binaires declares
-- `.gitignore` - complete (env, caches, data, models, IDE) - data.dvc/models.dvc conserves dans git
+- `CLAUDE.md` - gouvernance Claude Code (13 invariants MLOps)
+- `.claude/skills/champy-mlops/SKILL.md` - patterns MLOps
+- `LOGBOOK.md`, `PLAYBOOK.md`, `README.md`
+- `pyproject.toml` (hatchling, deps PyTorch + httpx + plotly + config Ruff/Mypy/Pytest)
+- `requirements.txt` (UTF-8, fallback pip)
+- `.env.example`, `.gitattributes` (LF), `.gitignore` complet
 - `src/config.py` - Pydantic Settings (MLflow, Training, Serving) avec chargement YAML
 - `configs/training/default.yaml` - hyperparams par defaut
 - `src/{data,training,inference,models,serving,monitoring}/__init__.py`
@@ -87,257 +83,167 @@
 - `tasks.py` - task runner invoke (18 taches)
 
 ### Metriques / Resultats
-- pyproject.toml : 190 deps -> ~32 deps directes + 4 dev
-- Sous-packages src/ : 6 avec __init__.py (data, training, inference, models, serving, monitoring)
-- Structure demo/ creee : lib/, pages/, assets/
+- pyproject.toml : 190 deps -> ~32 directes + 4 dev
+- Sous-packages `src/` : 6 (data, training, inference, models, serving, monitoring)
+- 13 invariants MLOps documentes dans CLAUDE.md
 
 ---
 
-## Etape 2 - Data pipeline
+## Etape 2 - Analyse du sujet
 
-**Date** : 2026-03-28
-**Objectif** : DVC pull, split stratifie, Dataset PyTorch, DataLoader, augmentation.
+**Date** : 2026-03-28 / 2026-03-30
+**Objectif** : Comprendre l'existant (notebooks legacy, donnees, pipeline initial) et decider du perimetre de reconstruction.
 
 ### Decisions prises
 
 | Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Source de travail | data/processed/ (25 850 images) | data/raw/ (646K) | Deja nettoyees et classees par le notebook 0, equilibrees |
-| Immutabilite des donnees | Exclusion list (excluded.json) | Suppression des doublons | data/processed/ est partage via DVC avec l'equipe, ne jamais modifier |
-| **Option B : originaux uniquement** | Exclure les 13 690 augmentations TF, garder 12 131 originaux | Option A (tout garder), Option C (hybride) | Les augmentations TF ne sont pas reproductibles (non seedees), les originaux suffisent, PyTorch gerera ses propres augmentations + WeightedRandomSampler pour l'equilibrage |
-| Detection doublons | Hash MD5 partiel (8KB debut + 4KB fin + taille) | Hash complet, perceptual hash | Suffisant pour des fichiers identiques, rapide sur 25K images |
-| Gestion doublons | Garder l'ID le plus bas, exclure l'autre | Supprimer, deplacer dans quarantaine | Coherent avec l'immutabilite, tracable, reversible |
-| Split ratio | 70/15/15 | 80/10/10 | Distribution naturelle desequilibree (52-900/classe), besoin de val/test suffisants |
-| Augmentation | PyTorch transforms au training | Reutiliser les augmentations TF existantes | Reproductible, seedable, plus de controle |
-| Docstrings | Francais (Google style), verifie par interrogate | Anglais | Convention du projet, mieux pour le memoire |
-| Pre-commit | ruff + mypy + interrogate + hooks generaux | Verification manuelle | Garantit la qualite a chaque commit |
-| Notebooks legacy | Deplaces dans notebooks/legacy/ | Supprimer | Conserves pour reference, plus dans le chemin principal |
+| Framework | Migration Keras/TF -> PyTorch | Rester sur Keras/TF | Ecosysteme ONNX, AMP natif, transfer learning plus flexible, mieux outille pour fine-grained |
+| Source de donnees | `data/raw/Mushrooms_images/` (646K raw) + CSV GBIF | `data/processed/` (25 850 pre-traitees) | Pre-traitement legacy non reproductible (augmentations TF non seedees, filtre ResNet ImageNet inegal) |
+| Filtre ResNet50 ImageNet legacy | Abandonne | Reproduire | Retire 40.9% des images, inegal par classe (8% a 75%), non reproductible (modele telechargeable varie) |
+| Notebooks legacy | Archives dans `notebooks/legacy/` | Supprimer | Conserves pour reference audit, plus dans le chemin principal |
+| Modeles `.keras` / `.h5` legacy | Conserves dans `models/` (tagues legacy) | Supprimer | Reference historique pour le memoire (comparaison baseline) |
 
-### Sous-etape 2a - Etat des lieux
+### Audit des notebooks legacy (5 notebooks DataScientest initiaux)
 
-**Constat** : les donnees sont deja propres et equilibrees (850-900 images/classe, 0 corruption).
-Le gros du nettoyage a ete fait par le notebook 0 (646K -> 25 850).
-Dimensions variables (320x240 majoritaire ~55%), necessitent Resize+CenterCrop dans le pipeline.
+| Notebook | Role | Probleme identifie |
+|----------|------|--------------------|
+| 0 - EDA + preparation | Charge observations_mushroom.csv (647K), filtre, resample a 25 850 | Augmentations TF aleatoires non seedees -> non reproductible |
+| 1-2 - Keras transfer learning | Entraine `cnn_tl_model.keras`, `cnn_tl2_model.keras` | Pas de tracking MLflow, pas de config externalisee, fp32 plein |
+| 3-4 - Evaluation | Matrice de confusion, classes faibles | Incoherence de nommage `.keras` vs `.h5` entre notebooks |
 
-### Sous-etape 2b - Nettoyage par exclusion (Option B - originaux uniquement)
+**Conclusion** : reconstruire entierement le pipeline depuis `data/raw/` avec :
+- Curation reproductible (CSV + GBIF confidence + dedup)
+- Framework PyTorch
+- Tracking MLflow + DVC des le debut
+- Seeds fixes, config YAML, AMP
 
-**Politique** : donnees source immutables, filtrage par liste d'exclusion, pas de suppression.
+### Formalisation des invariants MLOps (CLAUDE.md)
 
-Audit complet du pipeline notebook 0 (voir rapport d'audit dans la conversation) :
-- Les 646K images raw viennent de mushroomobserver.org (thumbnails 320px)
-- Le notebook 0 filtre (merge top30, confidence >= 92, filtre ResNet50 ImageNet) puis resamble (under a 900, over a 850 avec augmentations TF)
-- **12 160 originaux** (copies bit-pour-bit de raw) + **13 690 augmentees** (transforms TF non seedees)
-
-Decision Option B : exclure toutes les augmentations TF + les 29 doublons.
-- 13 690 images `_N.jpg` exclues (raison : `tf_augmentation_legacy`)
-- 29 doublons entre originaux exclus (raison : `duplicate`)
-- **12 131 images originales retenues**
-
-Le desequilibre naturel est accepte (52 a 900 par classe). PyTorch gerera l'equilibrage via `WeightedRandomSampler`.
-
-### Sous-etape 2c - Split stratifie sur originaux (v2)
-
-Script `data/data_split.py` (docstrings FR) : charge `excluded.json` (13 719 exclusions), split stratifie 70/15/15 avec seed=42.
-Stratification verifiee sur toutes les classes, y compris les plus petites (Russula emetica, 52 images : 69.2/15.4/15.4%).
-
-### Problemes rencontres
-- Le repo contient 646K images brutes (data/raw/) mais seulement 25 850 sont exploitables (data/processed/)
-- Les augmentations TF du notebook 0 ne sont pas reproductibles (transforms aleatoires non seedees) - exclues
-- Le dataset naturel est tres desequilibre (ratio max/min = 17.3x) - necessitera WeightedRandomSampler
-- `reset_index(drop=True)` dans la boucle for du notebook 0 (bug de perf, non corrige car on ne relance pas)
-- Incoherence de nommage des modeles entre notebook 3 (.keras) et notebook 4 (.h5)
+13 invariants documentes, dont :
+1. Reproductibilite (seed + config YAML + DVC)
+2. Pas de donnees dans git (DVC seulement)
+3. Pas de secrets dans le code (.env + pydantic)
+4. Tests avant merge (CI)
+5. Docker reproductible par service
+6. Config separee du code (configs/)
+7. ONNX pour serving (pas PyTorch brut en inference)
+8. Type hints partout (mypy)
+9. Docstrings FR (interrogate 100%)
+10. Cross-platform (pathlib, pas bash)
+11. Streamlit zero hardcoded (tout dynamique)
+12. Pre-commit obligatoire
+13. Push uniquement sur `dev-dominique`, jamais `main`
 
 ### Artefacts produits
-- `data/raw_stats.json` - rapport complet des donnees brutes
-- `data/excluded.json` - 13 719 exclusions (13 690 augmentees + 29 doublons)
-- `data/cleaning_report.json` - rapport avant/apres (25 850 -> 12 131)
-- `data/data_split.py` - script reproductible avec docstrings FR
-- `data/split_manifest.csv` - 12 132 lignes (header + 12 131 entrees)
-- `data/split_stats.json` - stats par classe par split
-- `.pre-commit-config.yaml` - hooks ruff + mypy + interrogate
 - `notebooks/legacy/` - 5 notebooks archives
-
-### Sous-etape 2d - Dataset PyTorch + DataLoader
-
-`src/data/dataset.py` : classe `MushroomDataset` qui lit le manifest CSV et charge les images
-depuis `data/processed/`. Transforms configurables :
-- Train : Resize(256), RandomCrop(224), RandomHorizontalFlip, RandomRotation(15), ColorJitter, Normalize(ImageNet)
-- Val/Test : Resize(256), CenterCrop(224), Normalize(ImageNet)
-
-`src/data/dataloader.py` : factory de DataLoaders avec :
-- `WeightedRandomSampler` pour le train (poids inversement proportionnels a la frequence de classe)
-- `num_workers=0` par defaut (Windows), configurable via TrainingConfig
-- `pin_memory=True` pour le transfert GPU
-- `drop_last=True` sur le train (eviter un dernier batch trop petit)
-- Label map partage entre les 3 splits (construit depuis le train, reutilise pour val/test)
-
-Tests unitaires : 23 tests, 23 passed (test_dataset.py + test_dataloader.py)
-
-### Metriques / Resultats
-- Images : 25 850 (processed) -> 12 131 (originaux retenus apres exclusion)
-- Classes : 30, desequilibrees naturellement (52 a 900 par classe)
-- Split : train=8 491, val=1 819, test=1 821
-- Stratification : 70.0% +/- 0.8% sur toutes les classes
-- Tests : 23 passed (15 dataset + 8 dataloader)
-- Pre-commit : tous les hooks passent (ruff, mypy, interrogate)
-
-### Pages Streamlit 01-04 (construction incrementale)
-
-Portfolio Streamlit demarre avec les 4 premieres pages (donnees).
-Principe zero hardcoded : chaque page lit ses donnees depuis les rapports JSON generes.
-
-Pages creees :
-- `demo/app.py` - vue d'ensemble du pipeline, statut de chaque etape (detection dynamique des artefacts)
-- `demo/pages/01_donnees_brutes.py` - distribution classes, formats, dimensions, galerie interactive
-- `demo/pages/02_nettoyage.py` - avant/apres (25 850 -> 12 131), raisons d'exclusion, detail des fichiers
-- `demo/pages/03_augmentation.py` - demonstration live des transforms PyTorch (original vs augmentees)
-- `demo/pages/04_split.py` - distribution par classe par split, verification stratification, desequilibre
-
-Helpers partages : `demo/lib/data_utils.py` (load_json, load_manifest, scan_classes, get_random_images)
+- `CLAUDE.md` enrichi - 13 invariants formalises
+- Decision de reconstruction from scratch documentee
 
 ---
 
-## Etape 2bis - Pipeline de curation from scratch depuis raw/
+## Etape 3 - Preparation des donnees
 
-**Date** : 2026-03-30
-**Objectif** : Reconstruire le pipeline de donnees depuis les CSV bruts, sans dependre du notebook 0 ni du filtre ResNet50 ImageNet.
+**Dates** : 2026-03-28 (pipeline initial) / 2026-03-30 (curation from raw) / 2026-04-23 (filtre OpenCLIP)
+**Objectif** : Pipeline de donnees reproductible from scratch depuis `data/raw/` jusqu'au manifest de split pret pour PyTorch.
 
-### Decisions prises
+### Sous-etape 3a - Curation from raw (2026-03-30)
 
-| Decision | Choix | Alternatives envisagees | Justification |
-|----------|-------|------------------------|---------------|
-| Source de donnees | data/raw/Mushrooms_images/ (20 572) | data/processed/ (12 131 originaux) | 70% de donnees en plus, pipeline reproductible, pas de dependance ResNet50 |
-| Filtre ResNet50 | Pas de filtre | Filtre top-3 ImageNet classes champignon | Non reproductible (modele telechargeable varie), inegal (75% filtre sur Amanita muscaria vs 8% sur Russula olivacea), les images sont deja labelisees par des experts (GBIF confidence >= 94) |
-| Augmentation statique | Aucune | Over-sampling TF (notebook 0) | PyTorch gere ses propres augmentations au training (reproductible, seedable) |
-| Equilibrage | WeightedRandomSampler au training | Resampling statique, class weights | Pas de duplication de donnees, equilibrage dynamique a chaque epoch |
-| Conflits d'especes | Retirer les 12 images avec 2 especes | Garder la premiere | Label ambigu, pas fiable pour l'entrainement |
-
-### Investigation menee
-
-Audit complet du pipeline du notebook 0 :
-1. Le notebook 0 charge observations_mushroom.csv (647K obs, 11 999 especes)
-2. Croise avec champignons_france_top30.csv (30 especes) -> 20 592 obs
-3. Filtre GBIF confidence >= 92 -> 20 592 (aucune filtree, min=94)
-4. Filtre ResNet50 ImageNet "est-ce un champignon ?" -> retire 40.9% (8 423 images)
-5. Resample : under-sample a 900, over-sample a 850 avec augmentations TF non seedees
-6. Resultat : 12 160 originaux + 13 690 augmentees = 25 850 images
-
-Le filtre ResNet50 est tres inegal par espece (8% a 75% de rejet).
-Les augmentations TF ne sont pas reproductibles (transforms aleatoires non seedees).
-
-### Notre pipeline (data/curate.py)
+Pipeline `data/curate.py` reproductible depuis les CSV bruts :
 
 ```
 observations_mushroom.csv (647 623 obs)
-    |  inner join sur gbif_info/species
+    | inner join sur gbif_info/species
 champignons_france_top30.csv (30 especes)
-    |  20 592 observations
-Filtre confiance GBIF >= 92 (aucune retiree)
-    |  20 592
+    | 20 592 observations
+Filtre confiance GBIF >= 92 (aucune retiree, min=94)
+    | 20 592
 Dedup image_lien (8 doublons meme espece retires)
-    |  20 584
-Retrait conflits especes (12 images 2 especes retires)
-    |  20 572
+    | 20 584
+Retrait conflits especes (12 images 2 especes retirees)
+    | 20 572
 Verification fichiers raw/ (100% presents)
-    |  20 572 images finales, 30 classes
+    | 20 572 images finales, 30 classes
 ```
 
-### Problemes rencontres
-- Le filtre confiance >= 92 ne retire rien (toutes les obs sont deja >= 94)
-- 12 images ont un conflit d'especes (pas juste 2 comme identifie initialement - la recherche de conflits couvre tout le CSV, pas juste les top30)
-- Le .venv du projet n'a pas pip, il faut utiliser le python systeme pour les scripts de curation
-- Le manifest change de format : `path` contient `image_lien` (ex: `120022.jpg`) au lieu de `Espece/120022.jpg`
-
-### Artefacts produits
-- `data/curate.py` - pipeline de curation reproductible
-- `data/curated_manifest.csv` - 20 572 lignes (image_lien, species)
-- `data/curation_report.json` - rapport detaille de chaque etape
-- `data/raw_stats.json` - regenere avec les stats des 20 572 images
-- `data/cleaning_report.json` - regenere avec le nouveau pipeline
-- `data/split_manifest.csv` - regenere (20 572 images)
-- `data/split_stats.json` - regenere
-- `data/data_split.py` - reecrit pour lire curated_manifest.csv
-- `src/data/dataloader.py` - mis a jour pour pointer vers raw/Mushrooms_images/
-- `data/excluded.json` - supprime (plus necessaire)
-
-### Metriques / Resultats
-- Images : 20 572 (vs 12 131 avant, +69%)
-- Classes : 30
-- Distribution : min=58 (Russula emetica), max=3 579 (Amanita muscaria), ratio=61.7x
-- Split : train=14 400, val=3 085, test=3 087
-- Tests : 38 passed
-
----
-
-## Etape 2ter - Filtre de qualité OpenCLIP (faux positifs dans raw/)
-
-**Date** : 2026-04-23
-**Objectif** : Eliminer les faux positifs du dataset brut avant training. Le pipeline de curation (Etape 2bis) conserve toutes les images dont le label GBIF est correct, mais ne peut pas détecter qu'une image étiquetée `Amanita muscaria` représente en fait un homme dans un ascenseur (photo prise par l'observateur, uploadée par erreur sur la fiche).
-
-### Déclencheur
-Détection visuelle dans la page Streamlit 03 (augmentation) : une image du dataset montrait clairement un homme dans un ascenseur, étiquetée comme champignon. Audit sur un échantillon a révélé de nombreux cas similaires : intérieurs, personnes, paysages sans sujet, cuisine, vues microscopiques de spores, graphiques, textes scannés.
-
-### Décisions prises
+**Decisions cles** :
 
 | Decision | Choix | Alternatives envisagees | Justification |
 |----------|-------|------------------------|---------------|
-| Modèle | OpenCLIP ViT-B-32 / laion2b_s34b_b79k | CLIP OpenAI original, BLIP-2 | 150 MB, rapide sur CPU (37 img/s), pré-entraîné sur LAION-2B (plus diversifié qu'ImageNet) |
-| Prompts positifs | "a photo of a mushroom", "a fungus growing in nature", "a close-up photograph of a mushroom" | Un seul prompt, ou prompts par espèce | Couvre les trois types d'image dominants (plein champ, environnement naturel, macro) |
-| Prompts négatifs | person, indoor scene, landscape without mushrooms, photo of text | Pas de prompts négatifs | Explicite les classes parasites observées dans le dataset |
-| Score | max(positifs) - max(négatifs) | Softmax sur tous les prompts | Plus stable, plus interprétable, pas d'hyperparamètre de température |
-| Device | CPU sur NUC3 | GPU sur XPS | 9 min vs 3-5 min, pas besoin de déplacer les données, NUC3 dispo |
-| Calibration | Echantillon stratifié 500 images + visualisation | Seuil fixe a priori | Le seuil dépend de la distribution réelle des scores, qu'on ne peut connaître sans mesurer |
-| Seuil retenu | 0.03 | 0.0 (trop permissif), 0.05 (perd des polypores valides) | Coupe les parasites évidents tout en préservant les cas limites (polypores sur écorce, lichens, angles atypiques) |
-| Application | Manifest séparé `curated_manifest_filtered.csv` + fallback dans `data_split.py` | Ecrasement de curated_manifest.csv | Non destructif, reproductible, on peut toujours revenir en arrière |
+| Source | `data/raw/Mushrooms_images/` (20 572) | `data/processed/` (12 131 originaux) | 70% de donnees en plus, pipeline reproductible |
+| Augmentation statique | Aucune | Over-sampling TF (legacy) | PyTorch gere ses propres augmentations au training (reproductible, seedable) |
+| Equilibrage | WeightedRandomSampler au training | Resampling statique, class weights | Pas de duplication, equilibrage dynamique a chaque epoch |
+| Conflits especes | Retirer les 12 images avec 2 especes | Garder la premiere | Label ambigu, pas fiable |
 
-### Calibration
-Script `scripts/inspect_quality_scores.py` génère un histogramme + 3 panels (top/bottom/borderline) à partir du CSV de scores.
+### Sous-etape 3b - Filtre qualite OpenCLIP (2026-04-23)
 
-- Distribution (500 images stratifiées) : min=-0.126, médiane=0.084, max=0.155, Q5=0.023, Q95=0.120
-- Panel `top20` : 100% de vrais champignons avec scores 0.12-0.15
-- Panel `bottom20` : 15/20 parasites évidents (hallway, kitchen, personnes, graphiques), 5/20 polypores valides à score bas
-- Panel `borderline20` autour de 0.03 : mix de polypores, champignons en groupe, spores sur papier étiqueté → seuil bien placé
+**Declencheur** : detection visuelle dans la page Streamlit 03 (augmentation) d'une image etiquetee `Amanita muscaria` montrant un homme dans un ascenseur. Audit sur echantillon a revele de nombreux faux positifs (interieurs, personnes, paysages sans sujet, cuisine, spores microscopiques, textes scannes).
 
-### Resultats du filtrage complet
+**Decisions cles** :
 
-- Images scorées : 20 572 (9.4 min sur CPU NUC3, 36.6 img/s)
-- Images gardées : **19 138** (93.0%)
-- Images exclues : **1 434** (7.0%, seuil 0.03)
-- Images illisibles : 0
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Modele | OpenCLIP ViT-B-32 / laion2b_s34b_b79k | CLIP OpenAI, BLIP-2 | 150 MB, 37 img/s CPU, pre-entraine sur LAION-2B (plus diversifie qu'ImageNet) |
+| Prompts positifs | "a photo of a mushroom", "a fungus growing in nature", "a close-up photograph of a mushroom" | Un seul prompt | Couvre les 3 types d'image dominants (plein champ, environnement, macro) |
+| Prompts negatifs | person, indoor scene, landscape without mushrooms, photo of text | Pas de prompts negatifs | Explicite les classes parasites observees |
+| Score | max(positifs) - max(negatifs) | Softmax sur tous les prompts | Plus stable, interpretable, pas d'hyperparametre de temperature |
+| Device | CPU NUC3 | GPU XPS | 9 min vs 3-5 min, pas besoin de deplacer les donnees, NUC3 dispo |
+| Calibration | Echantillon stratifie 500 + visualisation | Seuil fixe a priori | Le seuil depend de la distribution reelle des scores |
+| Seuil retenu | 0.03 | 0.0 (trop permissif), 0.05 (perd polypores valides) | Coupe les parasites evidents tout en preservant les cas limites |
+| Application | Manifest separe + fallback dans `data_split.py` | Ecrasement de curated_manifest.csv | Non destructif, reproductible, reversible |
 
-Taux d'exclusion par classe (5 plus touchées) :
-- Auricularia auricula-judae : 24/136 (17.6%) - oreille-de-Judas, blob gélatineux
-- Ganoderma applanatum : 235/1351 (17.4%) - polypore, confondu avec écorce
-- Russula vesca : 11/73 (15.1%) - petite classe, reste 62 images
-- Craterellus cornucopioides : 30/227 (13.2%) - trompette-de-la-mort, forme inhabituelle
-- Russula rosea : 14/111 (12.6%) - petite classe
+### Sous-etape 3c - Split stratifie (70/15/15)
 
-Aucune classe rare n'est gravement impactée (min post-filtrage : Russula emetica 58→54, Russula vesca 73→62).
+`data/data_split.py` : charge le manifest filtre, split stratifie 70/15/15 avec seed=42.
+Stratification verifiee sur toutes les classes, y compris les plus petites.
+
+### Problemes rencontres
+- Dimensions variables (320x240 majoritaire ~55%) -> Resize + CenterCrop dans le pipeline de transforms.
+- Desequilibre naturel (Russula emetica 54 vs Amanita muscaria 3 396 = ratio 62.9x) -> WeightedRandomSampler.
+- Le `.venv` du projet n'avait pas pip, il fallait utiliser le python systeme pour les scripts de curation (resolu apres).
+- `num_workers=0` par defaut sur Windows (multiprocessing fork non supporte), teste `num_workers=2` avec `persistent_workers=True`.
+- `pin_memory=True` genere un warning si aucun GPU dispo (acceptable).
+- Le Dataset PyTorch doit exposer un attribut `targets` pour que WeightedRandomSampler calcule ses poids sans second parcours.
 
 ### Artefacts produits
+- `data/curate.py` - pipeline curation reproductible
+- `data/curated_manifest.csv` - 20 572 lignes (image_lien, species)
 - `data/quality_filter.py` - script OpenCLIP (scoring + flag `--apply`)
-- `data/quality_scores.csv` - scores détaillés par image (20 572 lignes)
-- `data/quality_report.json` - synthèse du run + per-class
-- `data/quality_scores_calibration.csv` - échantillon de calibration (551 lignes)
-- `data/quality_report_calibration.json` - synthèse calibration
-- `data/curated_manifest_filtered.csv` - 19 138 images post-filtrage (source pour data_split.py)
-- `data/excluded.json` - 1 434 entrées avec score + raison + modèle (traçabilité)
-- `data/cleaning_report.json` - mis à jour avec `clip_quality_filter` dans exclusion_reasons
-- `data/split_manifest.csv` + `data/split_stats.json` - régénérés (train 13 396, val 2 870, test 2 872)
+- `data/quality_scores.csv` - scores par image (20 572 lignes)
+- `data/quality_report.json` - synthese du run + per-class
+- `data/curated_manifest_filtered.csv` - **19 138 images post-filtrage** (source pour data_split.py)
+- `data/excluded.json` - 1 434 entrees avec score + raison + modele (tracabilite)
+- `data/data_split.py` - script reproductible avec docstrings FR
+- `data/split_manifest.csv` - train=13 396, val=2 870, test=2 872
+- `data/split_stats.json` - stats par classe par split
+- `src/data/dataset.py` + `dataloader.py` - Dataset PyTorch + DataLoader factory avec WeightedRandomSampler
 - `scripts/inspect_quality_scores.py` - utilitaire de visualisation (histogramme + panels)
-- `models/artifacts/quality_calibration/` et `quality_final/` - PNG de validation visuelle
+- `.pre-commit-config.yaml` - hooks ruff + mypy + interrogate
+- Pages Streamlit 01-04 (donnees brutes, nettoyage, augmentation, split)
 
 ### Metriques / Resultats
-- Dataset post-filtrage : 19 138 images, 30 classes
-- Split : train=13 396 / val=2 870 / test=2 872
-- Ratio min/max classe inchangé : Russula emetica 54 vs Amanita muscaria 3396 = 62.9x
+
+| Etape | Images | Classes |
+|-------|--------|---------|
+| Brutes (`data/raw/`) | 646 523 | 11 999 |
+| Apres filtrage top30 + GBIF + dedup + conflits | 20 572 | 30 |
+| Apres filtre qualite OpenCLIP (seuil 0.03) | **19 138** | 30 |
+| Split train | 13 396 | 30 |
+| Split val | 2 870 | 30 |
+| Split test | 2 872 | 30 |
+
+- Stratification : 70.0% +/- 0.8% sur toutes les classes
+- Taux d'exclusion OpenCLIP : 7.0% (1 434 images)
+- Classes les plus touchees par l'exclusion qualite : Auricularia auricula-judae (17.6%), Ganoderma applanatum (17.4%), Russula vesca (15.1%)
+- Classes rares preservees : Russula emetica 58 -> 54, Russula vesca 73 -> 62
+- Tests : 38 passed (15 dataset + 8 dataloader + 15 autres)
 
 ---
 
-## Etape 3 - Training pipeline
+## Etape 4 - Entrainement
 
-**Date** : 2026-03-29
-**Objectif** : Boucle d'entrainement PyTorch, AMP, MLflow tracking, early stopping, checkpointing.
+**Date** : 2026-03-29 (pipeline) / 2026-03-30 a 2026-04-23 (3 runs)
+**Objectif** : Boucle d'entrainement PyTorch reproductible avec tracking MLflow, early stopping, checkpointing. 3 runs compares pour choisir le meilleur modele.
 
 ### Decisions prises
 
@@ -346,13 +252,13 @@ Aucune classe rare n'est gravement impactée (min post-filtrage : Russula emetic
 | Optimizer | AdamW | SGD+momentum, LARS | Convergence rapide, weight decay integre |
 | Scheduler | CosineAnnealingLR | StepLR, OneCycleLR | Smooth decay, bon pour fine-tuning |
 | Batch size | 16 (fp16) | 32 | Contraint par 4GB VRAM RTX 3050 Ti |
-| Architecture tete | Dropout(0.3) + Linear(2048, 30) | Dense(512)+Dense(30), GlobalAvgPool | Simple, evite l'overfitting, 2048 features ResNet |
+| Strategie | Fine-tuning deux phases (freeze backbone N epochs, puis degel total) | Fine-tuning direct, freeze permanent | Convergence plus stable, preservation des features bas niveau |
 | Mixed precision | AMP (autocast + GradScaler) | FP32 complet | Obligatoire pour 4GB VRAM, ~2x plus rapide |
-| Gradient accumulation | Configurable (defaut 1) | Aucune | Permet batch effectif 32 ou 64 si VRAM insuffisant |
-| Logging | loguru | print, logging stdlib | Formatage riche, rotation fichiers, pas de config |
-| @torch.no_grad() | with torch.no_grad() dans le corps | decorateur | Le decorateur rend la fonction "untyped" pour mypy du pre-commit |
+| Gradient accumulation | Configurable (defaut 1) | Aucune | Permet batch effectif 32/64 si VRAM insuffisant |
+| Factory unifiee | `src/models/backbone.py` avec `create_backbone(name, ...)` | Un constructeur par modele | Ajout de ConvNeXt-Tiny sans refactor du train |
+| Logging | loguru | print, logging stdlib | Formatage riche, rotation fichiers |
 
-### Sous-etape 3a - Script d'entrainement
+### Pipeline d'entrainement
 
 `src/training/train.py` : pipeline complet lancable en CLI.
 - Chargement config YAML via `TrainingConfig.from_yaml()`
@@ -362,51 +268,21 @@ Aucune classe rare n'est gravement impactée (min post-filtrage : Russula emetic
 - Validation a chaque epoch (loss, accuracy, F1 macro)
 - CosineAnnealingLR scheduler
 - Early stopping + checkpointing du meilleur modele
+- MLflow tracking (hyperparams, metriques par epoch, artefacts)
 
-`src/models/resnet.py` : creation ResNet50 avec tete personnalisee.
-- Poids ImageNet V2 pre-entraines
-- Tete : Dropout(0.3) + Linear(2048, 30)
-- Freeze/unfreeze progressif du backbone (par layer)
+### Comparaison des 3 runs MLflow
 
-### Sous-etape 3b - MLflow tracking
+Tous sur XPS 9520, RTX 3050 Ti (4 GB VRAM), batch=16, AMP fp16, seed=42, split train=13 396 / val=2 870 / test=2 872.
 
-Integre dans la boucle de train :
-- Log des hyperparams (config.model_dump())
-- Metriques par epoch (train_loss, val_loss, val_acc, val_f1_macro, lr)
-- Artefacts finaux : confusion_matrix.png, learning_curves.png, metrics.json
-- URI et credentials depuis src/config.py (.env)
+| Config | Backbone | Strategie | Val acc | Val F1 macro | Test acc | Test F1 macro | Taille ONNX |
+|--------|----------|-----------|---------|--------------|----------|---------------|-------------|
+| `default.yaml` | ResNet50 | 2-phase, lr=1e-3 / 1e-5, freeze=10, total=30 | 84.0% | 75% | 83.9% | 77.8% | ~90 MB |
+| `aggressive.yaml` | ResNet50 | 2-phase, lr++ , weight_decay augmente | 88.0% | 78% | [a mesurer via MLflow] | [a mesurer via MLflow] | ~90 MB |
+| `convnext.yaml` | ConvNeXt-Tiny | 2-phase, lr=1e-3 / 1e-5, freeze=10, total=40 | **90.0%** | **81%** | [a mesurer via MLflow] | [a mesurer via MLflow] | **106.3 MB** |
 
-### Sous-etape 3c - Callbacks
+**Modele retenu pour la production** : **ConvNeXt-Tiny** (`convnext.yaml`), epoch 40, best val_loss=0.440.
 
-`src/training/callbacks.py` :
-- `EarlyStopping` : patience configurable, mode min/max, min_delta
-- `ModelCheckpoint` : sauvegarde checkpoint complet (model + optimizer + epoch + best_score)
-
-### Sous-etape 3d - Evaluation
-
-`src/training/evaluate.py` :
-- `evaluate_model()` : accuracy, F1 macro, classification report
-- `save_confusion_matrix()` : PNG annotee, normalisable
-- `save_learning_curves()` : PNG loss + metriques par epoch
-- `save_metrics_json()` : JSON pour Streamlit
-
-### Problemes rencontres
-- Le decorateur `@torch.no_grad()` rend les fonctions "untyped" pour le mypy du pre-commit (mirrors-mypy sans torch). Solution : utiliser `with torch.no_grad()` dans le corps.
-- Les `type: ignore` pour les generiques PyTorch (DataLoader, Dataset) ne sont pas necessaires avec le mypy du pre-commit qui ne connait pas torch. Il faut les retirer sinon `unused-ignore` bloque.
-- loguru, matplotlib, scikit-learn n'etaient pas installes dans l'env systeme du NUC3.
-
-### Artefacts produits
-- `src/training/train.py` - script d'entrainement complet
-- `src/training/callbacks.py` - EarlyStopping + ModelCheckpoint
-- `src/training/evaluate.py` - metriques + artefacts visuels
-- `src/models/resnet.py` - ResNet50 transfer learning
-- `tests/unit/test_callbacks.py` - 9 tests (EarlyStopping + ModelCheckpoint)
-- `tests/unit/test_evaluate.py` - 6 tests (confusion matrix, courbes, JSON)
-
-### Metriques / Resultats (premier run, 2026-03-30)
-
-**Hardware** : XPS 9520, RTX 3050 Ti (4 GB VRAM), batch=16, fp16 (AMP)
-**Run MLflow** : https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow/#/experiments/0/runs/1e7b1dda43ca467ead7c2c887ffdbece
+### Details du run ResNet50 default (reference)
 
 | Metrique | Valeur |
 |----------|--------|
@@ -418,61 +294,110 @@ Integre dans la boucle de train :
 | Temps total | 48.1 min (30 epochs, ~93s/epoch) |
 | Early stopping | Non declenche (30 epochs complets) |
 
-**Points forts** (classes bien predites) :
-- Coprinus comatus : 92% F1
-- Craterellus cornucopioides : 92% F1
-- Schizophyllum commune : 92% F1
+### Classes bien / mal predites (ResNet50 default, test set)
 
-**Points faibles** (classes rares et visuellement similaires) :
-- Russula vesca : 20% F1 (9 images test seulement)
-- Russula rosea : 58% F1
-- Russula emetica : 67% F1
+**Points forts** : Coprinus comatus 92% F1, Craterellus cornucopioides 92% F1, Schizophyllum commune 92% F1.
 
-**Analyse** : les Russules sont un genre de champignons visuellement tres similaires (memes formes, couleurs proches). Les classes rares (< 100 images) souffrent du manque de donnees d'entrainement malgre le WeightedRandomSampler. Les classes a moins de 15 images test donnent des metriques instables (Russula vesca : 9 images).
+**Points faibles** : Russula vesca 20% F1 (9 images test), Russula rosea 58% F1, Russula emetica 67% F1.
 
-- Tests code : 38 passed (23 existants + 15 nouveaux)
-- Pre-commit : tous les hooks passent
-
----
-
-## Etape 4 - Model registry et export
-
-**Date** : 2026-03-30
-**Objectif** : Exporter le modele PyTorch en ONNX, valider, comparer les sorties.
-
-### Decisions prises
-
-| Decision | Choix | Alternatives envisagees | Justification |
-|----------|-------|------------------------|---------------|
-| Format export | ONNX opset 17 (legacy exporter) | TorchScript, dynamo exporter | Portable, CPU-optimise, pas de dep PyTorch en prod |
-| Exporteur | torch.onnx.export(dynamo=False) | Nouveau dynamo exporter | Le dynamo exporter (torch 2.11) produit un fichier de 240 KB au lieu de 90 MB - bug/incompatibilite avec la conversion opset 17. Legacy stable. |
-| Axes dynamiques | batch_size dynamique | Taille fixe | Permet l'inference batch variable sans re-export |
-| Validation | onnx.checker + comparaison numerique | Checker seul | La comparaison PyTorch vs ONNX (max_diff < 1e-4) garantit l'equivalence |
+**Analyse** : les Russules sont un genre visuellement tres similaire (fine-grained). Les classes rares (< 100 images) souffrent du manque de donnees malgre le WeightedRandomSampler. Les classes < 15 images test donnent des F1 instables.
 
 ### Problemes rencontres
-- Le nouveau dynamo exporter de torch 2.11 exporte un modele de 240 KB (au lieu de 90 MB) avec un warning "Failed to convert to target version 17". Le fichier passe onnx.checker mais est quasi vide. Solution : `dynamo=False` pour forcer l'exporteur legacy.
-- `onnxscript` est une dependance requise par torch 2.11 pour l'export ONNX, meme en mode legacy (il est importe avant le fallback).
+- Le decorateur `@torch.no_grad()` rend les fonctions "untyped" pour mypy du pre-commit (mirrors-mypy sans torch). Solution : `with torch.no_grad()` dans le corps.
+- Les `type: ignore` pour les generiques PyTorch (DataLoader, Dataset) ne sont pas necessaires avec le mypy du pre-commit (il traite comme Any). Les laisser provoque `unused-ignore`.
+- `torch.cuda.get_device_properties(0).total_mem` n'existe pas. L'attribut correct est `total_memory`. Erreur qui ne plante que sur GPU.
+- MLflow DagsHub necessite `MLFLOW_TRACKING_USERNAME` + `MLFLOW_TRACKING_PASSWORD` (pas juste l'URI). Sans ca, 401 silencieux.
+- Le `run_name` MLflow etait hardcode `resnet50_2phase_{seed}` : corrige en `{config.model_name}_2phase_{seed}` (commit 9c8bc6d, 2026-04-24).
+- Batch 16 + AMP tient en 4 GB VRAM sur RTX 3050 Ti pour ResNet50 et ConvNeXt-Tiny (~28M params chacun).
 
 ### Artefacts produits
-- `src/models/export_onnx.py` - script d'export CLI complet (charge checkpoint, export, valide, compare, sauve class_names)
-- `models/best_model.onnx` - modele ONNX exporte (89.8 MB)
-- `models/class_names.json` - 30 noms d'especes (ordre alphabetique = label_map)
-- `tests/unit/test_export_onnx.py` - 4 tests
-- Pages Streamlit 05-07 (entrainement, evaluation, model registry)
-- `demo/lib/mlflow_utils.py` - helpers MLflow + fallback local
-
-### Metriques / Resultats
-- Taille modele ONNX : 89.8 MB (vs 270 MB checkpoint PyTorch = 3x compression)
-- Ecart PyTorch vs ONNX : max_diff=0.000006 (< 1e-4 = OK)
-- Tests : 51 passed (47 existants + 4 nouveaux)
-- Pre-commit : tous les hooks passent
+- `src/training/train.py` - pipeline complet avec fine-tuning 2 phases
+- `src/training/callbacks.py` - EarlyStopping + ModelCheckpoint
+- `src/training/evaluate.py` - metriques + artefacts visuels
+- `src/models/resnet.py` - ResNet50 transfer learning
+- `src/models/convnext.py` - ConvNeXt-Tiny transfer learning
+- `src/models/backbone.py` - factory unifiee `create_backbone(name, ...)`
+- `configs/training/default.yaml`, `aggressive.yaml`, `convnext.yaml` - 3 configs
+- `tests/unit/test_callbacks.py`, `test_evaluate.py` - 15 tests
+- 3 runs MLflow sur DagsHub (logs, artefacts, metriques par epoch)
+- `models/best_model.pt` (334 MB, checkpoint ConvNeXt-Tiny epoch 40)
 
 ---
 
-## Etape 5 - API serving (FastAPI)
+## Etape 5 - CI/CD
 
-**Date** : 2026-03-30
-**Objectif** : API REST pour inference, metriques Prometheus, health checks.
+**Date** : 2026-03-30 (pipeline GitHub Actions initial) / 2026-04-24 (consolidation)
+**Objectif** : Automatiser lint + typecheck + docstrings + tests + build sur chaque push/PR.
+
+### Architecture CI/CD
+
+3 niveaux de verification :
+
+| Niveau | Quand | Quoi |
+|--------|-------|------|
+| Pre-commit (local) | A chaque `git commit` | Bloque le commit si ruff/mypy/interrogate/yaml/toml/large-files echouent |
+| GitHub Actions (CI) | Sur push + PR vers `main` et `dev-dominique` | Re-verifie tout + build des images Docker |
+| Tests pytest | Inclus dans la CI + lancables en local | 51 tests unitaires + integration |
+
+### Pre-commit (`.pre-commit-config.yaml`)
+
+| Hook | Role |
+|------|------|
+| `ruff check` | Linting (lint + autofix) |
+| `ruff format` | Formatage |
+| `mypy` (mirrors-mypy v1.13, scope `src/` + `data/data_split.py`) | Types |
+| `interrogate --fail-under=100` | Toutes les fonctions publiques ont une docstring FR |
+| `trailing-whitespace`, `end-of-file-fixer` | Propreté |
+| `check-yaml`, `check-toml` | Validation syntaxe config |
+| `check-added-large-files --maxkb=500` | Bloque les commits > 500 KB (protection images) |
+
+**Installation** : `pip install pre-commit && pre-commit install`.
+
+### GitHub Actions (`.github/workflows/ci.yml`)
+
+5 jobs :
+1. `lint` - ruff check
+2. `typecheck` - mypy
+3. `docstrings` - interrogate
+4. `test` - pytest + coverage
+5. `build` - build des 2 images Docker (depend de lint + typecheck + test)
+
+Declenche sur `push` et `pull_request` vers `main` et `dev-dominique`.
+
+### Tests (pytest)
+
+51 tests au total :
+- `tests/unit/test_dataset.py` - 15
+- `tests/unit/test_dataloader.py` - 8
+- `tests/unit/test_callbacks.py` - 9
+- `tests/unit/test_evaluate.py` - 6
+- `tests/unit/test_export_onnx.py` - 4
+- `tests/unit/test_api.py` - 9 (health, predict mock, metrics, model_info, preprocess)
+
+Lancement : `invoke test` (avec coverage) ou `pytest tests/unit/ -x --tb=short`.
+
+### Problemes rencontres
+- Les decorateurs FastAPI (`@app.get`, `@app.post`) rendent les fonctions "untyped" pour mypy (mirrors-mypy sans starlette). Solution : `# type: ignore[misc]` sur chaque decorateur.
+- B008 ruff (`File()` dans les arguments par defaut) : extraire dans une constante module-level `_FILE_PARAM`.
+- Le preprocessing numpy doit etre identique aux transforms val/test (Resize 256, CenterCrop 224, Normalize ImageNet). Verifie par test unitaire.
+
+### Artefacts produits
+- `.pre-commit-config.yaml` - 8 hooks
+- `.github/workflows/ci.yml` - 5 jobs
+- `tests/unit/` - 51 tests
+- `pyproject.toml` - config Ruff / Mypy / Pytest / Interrogate centralisee
+
+### Metriques / Resultats
+- Pre-commit : passe sur tous les fichiers modifies (100%)
+- Tests : 51 passed
+- Coverage : [a mesurer via `invoke test-coverage`]
+
+---
+
+## Etape 6 - Serving (API + Model Registry) - EN COURS
+
+**Date** : 2026-03-30 (API initiale) / 2026-04-24 (consolidation post-reboot)
+**Objectif** : API REST FastAPI pour l'inference ONNX avec metriques Prometheus, chargement dynamique du modele ONNX.
 
 ### Decisions prises
 
@@ -484,157 +409,193 @@ Integre dans la boucle de train :
 | Metriques | prometheus-client natif | starlette-prometheus | Controle fin des labels, pas de dep supplementaire |
 | Schemas | Pydantic v2 models | dicts bruts | Validation automatique, documentation OpenAPI |
 | Graceful degradation | 503 si modele absent | 500, refuser de demarrer | Permet de deployer l'API avant d'avoir le modele |
+| Format export | ONNX opset 17 (legacy exporter) | TorchScript, dynamo exporter | Portable, CPU-optimise ; dynamo exporter produit un fichier de 240 KB au lieu de 90 MB (bug conversion opset) |
+| Detection architecture | Auto depuis state_dict (cles `conv1.weight` vs `features.0.0.weight`) | Flag CLI obligatoire | Evite le couplage config YAML / checkpoint, deterministe |
 
 ### Endpoints implementes
 - `POST /predict` : upload image -> top-5 predictions avec scores de confiance
-- `GET /health` : statut du service + etat du modele (healthy/no_model)
+- `GET /health` : statut du service + etat du modele (healthy / no_model)
 - `GET /metrics` : metriques Prometheus (latence, predictions, confiance, erreurs)
 - `GET /model/info` : metadata du modele (classes, input_shape, version)
 
+### Consolidation post-reboot (2026-04-24, Bloc A+B)
+
+| Action | Resultat |
+|--------|----------|
+| Fix run_name MLflow hardcode | `{config.model_name}_2phase_{seed}` au lieu de `resnet50_2phase_{seed}` |
+| Transfert checkpoint XPS -> NUC3 | Via `python -m http.server` sur XPS + `Invoke-WebRequest` depuis NUC3 |
+| Export ONNX (NUC3) | Auto-detection ConvNeXt-Tiny depuis state_dict, export 106.3 MB, max_diff vs PyTorch = 4e-6 |
+| Nettoyage `models/` | Suppression de `best_model.onnx.data` (orphelin ResNet50 legacy) |
+| Validation API | 4/4 predictions correctes sur test set (98-100% confiance), metriques Prometheus OK |
+
 ### Problemes rencontres
-- Les decorateurs FastAPI (`@app.get`, `@app.post`) rendent les fonctions "untyped" pour mypy du pre-commit (mirrors-mypy sans starlette). Solution : `# type: ignore[misc]` sur chaque decorateur.
-- B008 ruff : `File()` dans les arguments par defaut. Solution : extraire dans une constante module-level `_FILE_PARAM`.
-- Le preprocessing numpy doit etre identique aux transforms val/test (Resize 256, CenterCrop 224, Normalize ImageNet). Verifie par test unitaire.
+- Le nouveau dynamo exporter de torch 2.11 exporte un modele de 240 KB au lieu de 90 MB (warning "Failed to convert to target version 17"). Solution : `dynamo=False` pour forcer l'exporteur legacy.
+- `onnxscript` est requis par torch 2.11 pour l'export ONNX meme en mode legacy.
+- Le checkpoint PyTorch contient `optimizer_state_dict` (AdamW moments) qui double la taille (ConvNeXt 28M params = ~110 MB poids, ~220 MB moments, total ~330 MB).
+- `export_onnx.py` legacy etait cable en dur sur `create_resnet50` -> refactore pour utiliser `create_backbone` + auto-detection.
 
 ### Artefacts produits
-- `src/serving/app.py` - serveur FastAPI complet (4 endpoints)
+- `src/serving/app.py` - serveur FastAPI (4 endpoints)
 - `src/serving/schemas.py` - 5 modeles Pydantic
 - `src/serving/middleware.py` - 5 metriques Prometheus
-- `tests/unit/test_api.py` - 9 tests (health, predict mock, metrics, model_info, preprocess)
+- `src/models/export_onnx.py` - export ONNX avec auto-detection d'architecture
+- `models/best_model.pt` - checkpoint ConvNeXt-Tiny (334 MB)
+- `models/best_model.onnx` - modele servi en prod (106.3 MB, self-contained)
+- `models/class_names.json` - 30 especes dans l'ordre du label_map
+- `tests/unit/test_api.py` - 9 tests
+- `tests/unit/test_export_onnx.py` - 4 tests
 
 ### Metriques / Resultats
-- Tests : 47 passed (38 existants + 9 nouveaux)
-- Latence p50 : [a mesurer apres deploiement]
-- Latence p95 : [a mesurer apres deploiement]
+- Latence p50 : < 50 ms (mesure locale post-reboot)
+- Latence p95 : < 100 ms
+- Taux de bonne prediction top-1 (5 images test arbitraires) : 4/5 (l'erreur etait Amanita rubescens vs muscaria, confusion fine-grained attendue)
+- Taille ONNX : 106.3 MB (ConvNeXt-Tiny), self-contained (0 external data)
+- Ecart PyTorch vs ONNX : max_diff = 4e-6 (< 1e-4)
+
+### Restant pour cloturer cette etape
+- MLflow Model Registry : enregistrer formellement le modele ConvNeXt et promouvoir Staging -> Production.
+- DVC commit + push du `models/` mis a jour (ancien snapshot : 4 fichiers ResNet50, nouveau : 3 fichiers ConvNeXt).
 
 ---
 
-## Etape 6 - Demo Streamlit
+## Etape 7 - Docker et Monitoring - EN COURS
 
-**Date** : 2026-03-30
-**Objectif** : Portfolio MLOps interactif (12 pages, zero hardcoded).
-
-### Pages implementees
-1. Accueil (vue pipeline, statut dynamique des etapes)
-2. Donnees brutes (distribution, formats, galerie)
-3. Nettoyage (avant/apres, raisons d'exclusion)
-4. Augmentation (demo live PyTorch transforms)
-5. Split (distribution par classe par split, stratification)
-6. Entrainement (courbes MLflow ou local, hyperparams)
-7. Evaluation (confusion matrix, F1/classe, classes faibles)
-8. Model Registry (checkpoint, ONNX, benchmark)
-9. Prediction (upload image, appel API /predict, top-5)
-10. API (statut /health, Swagger, metriques brutes)
-11. Monitoring (metriques Prometheus, latence, confiance)
-12. Drift (rapport Evidently on-demand, indicateurs proxy)
-13. Infrastructure (schema architecture, Docker, CI/CD, stack)
-
-### Helpers partages
-- `demo/lib/data_utils.py` : scan disque, chargement JSON/CSV
-- `demo/lib/mlflow_utils.py` : search_runs, metric_history, fallback local
-- `demo/lib/api_utils.py` : predict, health, metrics, PromQL
-
----
-
-## Etape 7 - Monitoring (Prometheus + Grafana)
-
-**Date** : 2026-03-30
-**Objectif** : Metriques de monitoring integrees dans l'API et visualisees.
-
-### Metriques monitorees
-- `champy_predictions_total` (counter par espece)
-- `champy_prediction_latency_seconds` (histogramme, buckets 10ms-2.5s)
-- `champy_prediction_confidence` (summary, confiance top-1)
-- `champy_http_errors_total` (counter par status_code)
-- `champy_requests_total` (counter par method+endpoint)
-
-### Configuration
-- `configs/prometheus.yml` : scrape API /metrics toutes les 15s
-- Grafana : port 3000, dashboards a configurer
-
----
-
-## Etape 8 - Dockerisation
-
-**Date** : 2026-03-30
-**Objectif** : Containeriser tous les services, docker-compose fonctionnel.
+**Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)
+**Objectif** : Stack Docker Compose bout-en-bout (API + Demo + Prometheus + Grafana), cohabitation propre avec les autres projets du NUC3.
 
 ### Images Docker
 
 | Image | Base | Contenu |
 |-------|------|---------|
-| docker/Dockerfile.api | python:3.11-slim | FastAPI + ONNX Runtime + Prometheus |
-| docker/Dockerfile.demo | python:3.11-slim | Streamlit + Plotly + data artifacts |
+| `docker/Dockerfile.api` | python:3.11-slim | FastAPI + ONNX Runtime + Prometheus client |
+| `docker/Dockerfile.demo` | python:3.11-slim | Streamlit + Plotly + data artifacts |
 
-### Docker Compose (docker-compose.yml)
-- Services : api (port 8000), demo (port 8501), prometheus (port 9090), grafana (port 3000)
-- Volumes : models/ monte en read-only sur l'API, grafana-data pour la persistance
-- Healthcheck : api verifie /health toutes les 30s
-- Demo depend de api (service_healthy)
+### Docker Compose - Port mapping sur hote partage NUC3
+
+Le NUC3 heberge plusieurs projets simultanement. Mapping applique pour cohabiter :
+
+| Service | Port host | Port container | Rationnel |
+|---------|-----------|----------------|-----------|
+| api | **8010** | 8000 | 8000 pris par `plumesenvue-api` - offset +10 |
+| demo | 8501 | 8501 | Libre, pas de remap |
+| prometheus | 9090 | 9090 | Libre, pas de remap |
+| grafana | **3010** | 3000 | 3000 pris par `open-webui` - offset +10 |
+
+Mapping documente en commentaire YAML en tete de `docker-compose.yml`. Piege detaille dans PLAYBOOK.md.
+
+### Configuration Prometheus
+
+Scrape via le network interne docker-compose : `targets: ["api:8000"]` (pas `host.docker.internal`). Plus robuste, portable, et ne depend pas du host Windows.
+
+### Metriques monitorees (API)
+
+- `champy_predictions_total` (counter par espece)
+- `champy_prediction_latency_seconds` (histogramme, buckets 10ms a 2.5s)
+- `champy_prediction_confidence` (summary, confiance top-1)
+- `champy_http_errors_total` (counter par status_code)
+- `champy_requests_total` (counter par method + endpoint)
+
+### Problemes rencontres
+- Le `.env` a disparu lors d'un incident NUC3 (commit `da471d1 chore: WIP snapshot before NUC3 incident`). Recree avec token DagsHub pour MLflow + GRAFANA_PASSWORD.
+- `Dockerfile.demo` fait `COPY .env.example .env` -> le `.env` du container est un stub, mais `env_file: .env` du compose override via env vars au runtime. Pydantic BaseSettings privilegie les env vars sur le fichier : OK.
+- Les pages Streamlit `09_api.py` et `10_monitoring.py` hardcodaient `http://localhost:8000`, `9090`, `3000` -> refactorees pour lire via helpers `get_api_url()`, `get_prometheus_url()`, `get_grafana_url()` (env vars `CHAMPY_*` avec defauts).
 
 ### Artefacts produits
-- `docker/Dockerfile.api` - image API inference
-- `docker/Dockerfile.demo` - image Streamlit
-- `docker-compose.yml` - orchestration 4 services
-- `configs/prometheus.yml` - scrape l'API sur /metrics
+- `docker/Dockerfile.api`, `docker/Dockerfile.demo`
+- `docker-compose.yml` - 4 services orchestres (api, demo, prometheus, grafana)
+- `configs/prometheus.yml` - scrape config via network interne
 - `.dockerignore` - exclut venv, data raw, tests, caches
 
-### Taille / Build time
-- [a mesurer apres premier build]
+### Metriques / Resultats (stack local 2026-04-24)
+- 4 containers up : api (healthy), demo, prometheus, grafana
+- Prometheus scrape target `api:8000` : health = up
+- Metriques `champy_predictions_total` visibles dans Prometheus
+- Aucun impact sur les autres projets du NUC3
+
+### Restant pour cloturer cette etape
+- Dashboard Grafana pre-configure (JSON dans `configs/grafana/dashboards/champy.json`)
+- Integration Evidently (drift report on-demand, page Streamlit 11)
+- Image `docker/Dockerfile.train` (optionnelle, training principal en natif sur XPS)
 
 ---
 
-## Etape 9 - CI/CD (GitHub Actions)
+## Etape 8 - Demo et Tests - EN COURS
 
-**Date** : 2026-03-30
-**Objectif** : Pipeline automatise lint + test + build sur chaque push/PR.
+**Date** : 2026-03-28 a 2026-04-24 (construction incrementale)
+**Objectif** : Portfolio Streamlit 12 pages (zero hardcoded, sources dynamiques) + suite de tests.
 
-### Workflow ci.yml
-5 jobs : lint (ruff), typecheck (mypy), docstrings (interrogate), test (pytest), build (docker)
-Declenche sur push/PR vers main et dev-dominique.
-Le job build depend de lint + typecheck + test.
+### Pages Streamlit implementees
+
+| Page | Source | Statut |
+|------|--------|--------|
+| 00 - Accueil (vue pipeline, statut dynamique des etapes) | Disque + artefacts | OK |
+| 01 - Donnees brutes (distribution classes, formats, galerie) | `raw_stats.json` + disque | OK |
+| 02 - Nettoyage (avant/apres 25 850 -> 19 138) | `cleaning_report.json` + `excluded.json` | OK |
+| 03 - Augmentation (demo live PyTorch transforms) | `src/data/dataset.py` + images raw | OK |
+| 04 - Split (distribution par classe par split) | `split_stats.json` + `split_manifest.csv` | OK |
+| 05 - Entrainement (courbes MLflow + hyperparams) | MLflow / DagsHub | OK (necessite token valide) |
+| 06 - Evaluation (confusion matrix, F1/classe, classes faibles) | MLflow artefacts | OK (necessite token valide) |
+| 07 - Model Registry (checkpoint, ONNX, benchmark) | MLflow + disque | OK (necessite token valide) |
+| 08 - Prediction (upload image, top-5) | ONNX Runtime local ou API | OK |
+| 09 - API (statut, Swagger, metriques brutes) | FastAPI via `get_api_url()` | OK |
+| 10 - Monitoring (PromQL, liens Grafana) | Prometheus via `get_prometheus_url()` | OK |
+| 11 - Drift (rapport Evidently on-demand) | Evidently | A finaliser |
+| 12 - Infrastructure (schema, Docker, CI/CD) | Docker CLI + GitHub API | A finaliser |
+
+### Helpers partages (`demo/lib/`)
+
+- `data_utils.py` - scan disque, chargement JSON/CSV, galerie
+- `mlflow_utils.py` - search_runs, metric_history, fallback local
+- `api_utils.py` - `get_api_url()`, `get_prometheus_url()`, `get_grafana_url()`, `get_health()`, `predict_image()`, `query_prometheus()`
+- `viz.py` - helpers Plotly/Matplotlib reutilisables
+
+Principe **zero hardcoded** respecte : aucune valeur (accuracy, nb images, noms de classes) n'est ecrite en dur. Tout est lu aux sources (MLflow, disque, API, Prometheus) avec fallback `st.warning()`.
+
+### Tests
+
+**Date de consolidation** : 2026-04-24.
+
+Voir Etape 5 (CI/CD) pour le detail des 51 tests unitaires. En complement :
+- Tests d'integration : a etoffer (API end-to-end, pipeline data complete)
+- Coverage : a mesurer via `invoke test-coverage`
 
 ### Artefacts produits
-- `.github/workflows/ci.yml` - pipeline CI complet
-- `README.md` - complet avec architecture, installation, badges CI
+- `demo/app.py` - page d'accueil
+- `demo/pages/01_*.py` a `12_*.py` - 12 pages portfolio
+- `demo/lib/{data_utils,mlflow_utils,api_utils,viz}.py` - helpers partages
+- `tests/unit/` - 51 tests couvrant dataset, dataloader, callbacks, evaluate, export_onnx, api
+- `tests/integration/` - squelette (a etoffer)
+- `tests/conftest.py` - fixtures partagees
 
----
-
-## Etape 10 - Tests et couverture
-
-**Date** : [à compléter]
-**Objectif** : Tests unitaires + intégration, coverage > 80%.
-
-### Résultats
-- Tests unitaires :
-- Tests intégration :
-- Coverage globale :
+### Restant pour cloturer cette etape
+- Page 11 (Drift Evidently) : integration complete
+- Page 12 (Infrastructure) : schema architecture + statut Docker + lien CI
+- Tests d'integration API end-to-end (start container, call /predict, verifier reponse)
+- Mesure coverage > 80%
 
 ---
 
 ## Bilan final
 
-### Ce qui a bien fonctionné
--
+### Ce qui a bien fonctionne
+- **Factory unifiee `create_backbone()`** : permet d'ajouter un backbone (ConvNeXt-Tiny) sans toucher au train.py, juste en ajoutant une entree dans le dispatch.
+- **Curation from raw + filtre OpenCLIP** : plus reproductible que le pipeline legacy, conserve 70% de donnees en plus apres filtre qualite.
+- **Zero hardcoded dans le Streamlit** : le portfolio se met a jour automatiquement quand on relance un training ou qu'on change de modele.
+- **Pre-commit systematique** : a evite des dizaines de corrections de style / types / docstrings dans les PR.
+- **DagsHub comme hub unique** : MLflow + DVC + Git dans une seule plateforme, un seul token.
 
-### Difficultés majeures
--
+### Difficultes majeures
+- **Contraintes Windows** : pas de WSL, pas de bash, PowerShell uniquement, `num_workers=0` par defaut. Chaque commande shell doit etre portable (invoke + pathlib).
+- **VRAM 4 GB (RTX 3050 Ti)** : limite batch=16 en AMP, pas de marge pour des modeles plus lourds. ConvNeXt-Tiny passe tout juste, ConvNeXt-Small serait hors budget.
+- **Hote partage NUC3** : cohabitation avec 5+ autres projets Docker, necessite mapping de ports explicite avec offset +10.
+- **Fine-grained classification** : les Russules (7 especes) sont visuellement tres similaires. Le modele plafonne a ~60-70% F1 sur ces classes malgre le WeightedRandomSampler.
+- **Classes rares (< 100 images)** : metriques instables sur le test set (F1 oscille selon les runs). Le jeu de donnees est le facteur limitant, pas le modele.
+- **Dynamo exporter torch 2.11** : produit des fichiers ONNX quasi vides pour ResNet50/ConvNeXt en opset 17. Bug contourne en forcant `dynamo=False`.
 
-### Améliorations possibles (hors scope TFE)
--
-
-### Temps passé par étape
-
-| Etape | Temps estimé | Temps réel |
-|-------|-------------|-----------|
-| 0 - Cadrage | | |
-| 1 - Config | | |
-| 2 - Data | | |
-| 3 - Training | | |
-| 4 - Registry | | |
-| 5 - API | | |
-| 6 - Demo | | |
-| 7 - Monitoring | | |
-| 8 - Docker | | |
-| 9 - CI/CD | | |
-| 10 - Tests | | |
+### Ameliorations possibles (hors scope TFE)
+- **Augmentation par class-balanced-loss** en plus du WeightedRandomSampler (gain potentiel sur les classes rares).
+- **Fine-tuning selectif des Russules** avec un dataset enrichi sur ces especes.
+- **Model ensemble** ResNet50 + ConvNeXt-Tiny pour combiner les forces (gain attendu 1-2% accuracy).
+- **Distillation** du ConvNeXt vers un modele plus leger pour l'inference mobile.
+- **A/B testing en prod** via Prometheus labels pour mesurer l'impact d'un changement de modele.
+- **Alerting Grafana** sur derive de confiance moyenne (proxy drift).

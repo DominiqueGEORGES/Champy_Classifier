@@ -53,6 +53,8 @@
 - Penser a `httpx` et `plotly` des le depart si le projet inclut un Streamlit qui appelle une API et affiche des graphiques : ce sont des deps de premiere classe, pas des extras
 - Installer `pre-commit` + `interrogate` des l'etape 1, pas en rattrapage. Chaque fichier cree sans docstring devra etre repris plus tard. Le cout de la retro-documentation est 3x plus eleve que de documenter au fil de l'eau.
 - Archiver les notebooks legacy dans un sous-dossier (`notebooks/legacy/`) plutot que les supprimer : ils contiennent les decisions implicites du projet initial et sont utiles pour l'audit.
+- **Sur DagsHub, un seul token sert pour tout** (MLflow + DVC + Git auth + API). Ne pas chercher a separer les credentials par service : copier le meme token dans `MLFLOW_TRACKING_PASSWORD`, `DAGSHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY` (pour DVC S3-compatible). Eviter les noms d'env vars tentants comme `AWS_ACCESS_KEY_ID` qui font croire qu'il faut un compte AWS reel : c'est juste le token DagsHub reutilise. Documenter ce fait en tete du `.env.example` pour eviter qu'un coequipier pense a tort qu'il manque un acces AWS.
+- **Un `.env` est fragile sur Windows** : en cas de reboot force, crash Docker Desktop, ou copie de repo, le `.env` peut disparaitre silencieusement alors qu'il est exclu de git. Considerer le `.env` comme **reconstructible a partir d'une source sure** (gestionnaire de mots de passe personnel ou notes internes de l'equipe), pas comme un artefact stable. Garder `.env.example` a jour pour que la reconstruction soit immediate.
 
 **Commandes cles** :
 ```powershell
@@ -95,6 +97,11 @@ invoke setup               # ou pip install -r requirements.txt && dvc pull
 - Toujours construire le label_map depuis le split train et le partager avec val/test. Si chaque split construit le sien, les indices peuvent ne pas correspondre.
 - Sur Windows, `num_workers=0` par defaut dans le DataLoader (multiprocessing fork non supporte). Tester `num_workers=2` avec `persistent_workers=True` si le chargement est un goulot.
 - `pin_memory=True` ameliore le transfert CPU->GPU, mais genere un warning si aucun GPU n'est disponible. Acceptable (pas bloquant).
+- **Conflits `git stash` apres `git pull`** : les fichiers generes localement (manifests CSV, reports JSON, dumps de stats) qui ne sont pas dans `.gitignore` et qui ont ete regeneres entre-temps par un coequipier creent des conflits a chaque pull. Deux regles pour eviter ca :
+  1. **Ne jamais commiter les artefacts generes** (`data/*.csv`, `data/*.json`, `models/*.pt`, `models/*.onnx`). Soit ils sont dans `.gitignore`, soit ils sont versionnes par DVC (`.dvc` pointeurs dans git).
+  2. **Si tu dois commiter un CSV generé ponctuellement** (ex: un rapport d'audit), le placer dans `reports/` avec un timestamp (`audit_YYYY-MM-DD.csv`) pour qu'il ne soit plus jamais regenere et que les pulls ne creent pas de conflit.
+  Quand le conflit arrive quand meme : `git stash` les modifs locales, `git pull --rebase`, regenerer les artefacts, et `git stash drop` (ne jamais `git stash pop` si les artefacts seront regeneres de toute facon).
+- **Les fichiers `.dvc` suivent git mais les donnees qu'ils pointent sont ailleurs** : si tu changes un fichier dans `data/` ou `models/`, le `.dvc` associe n'est pas mis a jour automatiquement. Il faut faire `dvc commit data.dvc` (ou equivalent) pour enregistrer le nouveau hash, puis `git commit` du `.dvc` pour que le pointeur soit versionnne. Piege inverse : un `git pull` ramene le nouveau `.dvc`, mais les donnees locales restent celles d'avant tant que `dvc pull` n'est pas lance. Adopter la regle `git pull && dvc pull` comme sequence atomique.
 
 **Commandes cles** :
 ```powershell
@@ -130,6 +137,11 @@ invoke split-data
 - Batch 16 + AMP tient en 4 GB VRAM sur RTX 3050 Ti pour ResNet50 (~93s/epoch sur 20K images). Pas besoin de gradient accumulation pour ce modele.
 - Les classes a moins de ~15 images dans le split test donnent des metriques F1 instables. Interpreter avec prudence (Russula vesca : 9 images test -> F1 oscille entre 0% et 40% selon le run).
 - Les especes visuellement similaires du meme genre (ex: 7 Russules) sont les plus dures a separer. C'est un probleme de fine-grained classification, pas de pipeline.
+- **MLflow 403 / 401 si les env vars ne sont pas exportees dans le shell courant** : meme si le `.env` contient les bonnes valeurs, lancer un script Python qui ne charge pas explicitement `.env` (via `python-dotenv` ou `pydantic-settings`) partira avec des credentials vides. Sous PowerShell, `$env:MLFLOW_TRACKING_PASSWORD` ne se propage QUE dans la session courante ; un nouveau terminal repart blanc. Deux patterns qui marchent :
+  1. **Dans le code** (recommande) : `from dotenv import load_dotenv; load_dotenv(".env")` en tout debut de script, AVANT `import mlflow`. Pydantic Settings fait ca automatiquement si `env_file=".env"` est declare.
+  2. **Dans le shell** (debug rapide) : `Get-Content .env | ForEach-Object { if ($_ -match '^([^#=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') } }` avant de lancer le script.
+  Si `mlflow.search_runs()` retourne silencieusement une erreur "To use authentication, you must first: Get your default access token..." c'est le symptome typique : le token est pas lu. Verifier avec `echo $env:MLFLOW_TRACKING_PASSWORD` dans la meme session que le lancement.
+- **Token DagsHub perissable** : le token peut etre revoque, regenere, ou lie a un compte qui n'a plus les droits sur le repo. En cas de 401 persistent meme avec env vars correctement lues, aller sur `https://dagshub.com/user/settings/tokens` et regenerer. Le .env doit etre mis a jour partout (XPS + NUC3 + CI secrets).
 
 **Commandes cles** :
 ```powershell
@@ -158,11 +170,25 @@ invoke train --config configs/training/default.yaml
 - Toujours comparer les sorties numeriques (pas juste onnx.checker) : generer N inputs aleatoires, comparer les logits PyTorch vs ONNX, max_diff < 1e-4.
 - Sauvegarder class_names.json a cote du modele ONNX : l'API en a besoin pour mapper les indices de sortie vers les noms d'especes.
 - Les axes dynamiques (batch_size) evitent de devoir re-exporter si on change la taille du batch d'inference.
+- **Le script d'export ONNX doit etre agnostique de l'architecture** : ne pas cabler `create_resnet50` en dur, sinon changer de backbone casse l'export. Deux approches qui marchent :
+  1. **Flag CLI `--model <name>`** avec defaut sur `config.model_name` (necessite de maintenir la coherence entre le YAML et le checkpoint).
+  2. **Auto-detection depuis les cles du state_dict** (recommande pour de l'automation) : ResNet50 expose `conv1.weight`, ConvNeXt-Tiny expose `features.0.0.weight`, etc. Lever `ValueError` si aucune cle caracteristique n'est trouvee.
+  Utiliser une factory unifiee `create_backbone(model_name, ...)` pour que l'export, le train et les tests utilisent le meme code.
+- **Fichier `.onnx.data` orphelin quand on change de modele** : pour les modeles > 2 GB, ONNX genere un fichier externe de poids `model.onnx.data` a cote du `.onnx` (protobuf limit). Pour des modeles < 2 GB (cas de ResNet50 et ConvNeXt-Tiny, ~90-110 MB), le `.onnx` est self-contained et le `.data` ne devrait pas exister. Si un `.onnx.data` trainait d'un export precedent, le supprimer explicitement avant de re-exporter, ou mieux, nettoyer le dossier `models/` avant chaque export. Verification : `onnx.load(path, load_external_data=False)` puis compter les `initializer.external_data` refs (doit etre 0 pour un self-contained).
+- **Transferer un checkpoint entre machines locales** (ex: XPS training -> NUC3 serving) : la methode la plus simple est `python -m http.server 8888` dans `models/` sur la source, puis `Invoke-WebRequest "http://<hostname>:8888/best_model.pt" -OutFile "best_model.pt"` sur la destination. Pas de setup SSH, pas de cloud, pas de quota DVC. Une fois le transfert fait, Ctrl+C sur le serveur. Alternative plus propre pour un transfert recurrent : DVC push sur la source + DVC pull sur la destination (utilise le remote DagsHub comme proxy), mais beaucoup plus lent pour un fichier de 300 MB.
+- **Taille du checkpoint .pt != taille du modele deploye** : un checkpoint PyTorch contient typiquement `model_state_dict` + `optimizer_state_dict` + `scheduler_state_dict` + `scaler_state_dict` + metadonnees. L'optimiseur AdamW stocke 2 moments par parametre, donc le checkpoint pese ~3x la taille des poids seuls. Exemple ConvNeXt-Tiny : 28M params = ~110 MB de poids, mais 334 MB de checkpoint. L'ONNX exporte ne garde que les poids (~110 MB). Ne pas s'alarmer si le `.pt` semble gros : c'est normal.
 
 **Commandes cles** :
 ```powershell
 python -m src.models.export_onnx
 python -m src.models.export_onnx --checkpoint models/best_model.pt --output models/best_model.onnx
+python -m src.models.export_onnx --model convnext_tiny   # force l'architecture si besoin
+
+# Transfert checkpoint XPS -> NUC3
+# Sur le XPS (source) :
+cd D:\<repo>\models; python -m http.server 8888
+# Sur le NUC3 (destination) :
+cd D:\<repo>\models; Invoke-WebRequest "http://<xps-hostname>:8888/best_model.pt" -OutFile "best_model.pt"
 ```
 
 **Duree typique** : 0.5 jour (script + validation + debug dynamo)
