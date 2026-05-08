@@ -1,1 +1,0 @@
-# Script python à faire à martir du notebook

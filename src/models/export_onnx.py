@@ -104,9 +104,7 @@ def load_checkpoint(
 
     epoch = checkpoint.get("epoch", "?")
     best_score = checkpoint.get("best_score", "?")
-    logger.info(
-        f"Checkpoint charge : {checkpoint_path} " f"(epoch={epoch}, best_score={best_score})"
-    )
+    logger.info(f"Checkpoint charge : {checkpoint_path} (epoch={epoch}, best_score={best_score})")
     return model
 
 

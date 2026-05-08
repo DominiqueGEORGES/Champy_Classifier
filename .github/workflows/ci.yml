@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, dev-dominique]
 
+# Annule un run en cours sur la meme branche pour eviter les courses
+# (push successifs rapides) qui empilent les jobs sur les runners gratuits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint & Format
@@ -15,12 +21,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
       - name: Install ruff
-        run: pip install ruff
+        run: pip install "ruff>=0.4"
       - name: Ruff check
-        run: ruff check src/ data/data_split.py data/curate.py demo/lib/
+        run: ruff check src/ data/data_split.py data/curate.py demo/lib/ scripts/ tests/
       - name: Ruff format check
-        run: ruff format --check src/ data/data_split.py data/curate.py demo/lib/
+        run: ruff format --check src/ data/data_split.py data/curate.py demo/lib/ scripts/ tests/
 
   typecheck:
     name: Type Check (mypy)
@@ -30,9 +37,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
       - name: Install dependencies
+        # Mypy 1.13 pour matcher le pre-commit (mirrors-mypy:v1.13.0). Sans
+        # ce pin, le mypy latest active des codes d'erreur supplementaires
+        # (untyped-decorator notamment) que la config locale ne couvre pas.
         run: |
-          pip install mypy pydantic pydantic-settings types-PyYAML
+          pip install --upgrade pip
+          pip install "mypy==1.13.*" pydantic pydantic-settings types-PyYAML
       - name: Mypy
         run: mypy src/ data/data_split.py --ignore-missing-imports
 
@@ -44,12 +56,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
       - name: Install interrogate
-        run: pip install interrogate
+        run: pip install "interrogate>=1.7"
       - name: Check docstrings
         run: |
           interrogate src/ -c pyproject.toml -v
           interrogate data/data_split.py data/curate.py -c pyproject.toml -v
+          interrogate scripts/ -c pyproject.toml -v
 
   test:
     name: Tests (pytest)
@@ -59,14 +73,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
       - name: Install dependencies
+        # Strategie : torch CPU d'abord (eviter le pull CUDA inutile sur
+        # les runners GitHub) puis tout le reste depuis requirements.txt.
+        # Le requirements.txt est la source de verite des deps : il est
+        # tenu a jour avec pyproject.toml et ajoute aiosqlite, bentoml,
+        # mlflow, etc. sans avoir a maintenir une seconde liste dans le CI.
         run: |
+          pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install onnx onnxruntime onnxscript
-          pip install pytest pytest-cov scikit-learn pillow numpy pandas
-          pip install pydantic pydantic-settings pyyaml python-dotenv loguru
-          pip install fastapi httpx python-multipart uvicorn prometheus-client
-          pip install matplotlib
+          pip install -r requirements.txt
       - name: Run tests
         run: pytest tests/unit/ -v --tb=short
 
@@ -76,7 +93,31 @@ jobs:
     needs: [lint, typecheck, test]
     steps:
       - uses: actions/checkout@v4
+      - name: Detect Docker-relevant changes
+        id: changes
+        # Le build Docker est cher (~2-3 minutes) et il est inutile quand
+        # une PR ne touche que le LOGBOOK ou des dashboards. On lance
+        # docker build seulement si un fichier qui impacte les images a
+        # change. Pour les push sur main/dev-dominique, on force le build
+        # systematiquement (cf. base: ${{ github.ref }}) pour attraper
+        # les regressions de packaging avant un deploy.
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docker:
+              - 'docker/**'
+              - 'docker-compose*.yml'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+              - 'src/**'
+              - 'configs/**'
+              - 'demo/**'
       - name: Build API image
+        if: steps.changes.outputs.docker == 'true'
         run: docker build -f docker/Dockerfile.api -t champy-api .
       - name: Build Demo image
+        if: steps.changes.outputs.docker == 'true'
         run: docker build -f docker/Dockerfile.demo -t champy-demo .
+      - name: Skip note
+        if: steps.changes.outputs.docker != 'true'
+        run: echo "No Docker-relevant changes (Dockerfile/compose/requirements/src/configs/demo) - skipping build."

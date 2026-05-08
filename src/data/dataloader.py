@@ -161,7 +161,7 @@ def create_all_loaders(
     images_dir = data_dir or DEFAULT_IMAGES_DIR
 
     # Construire le label_map depuis le train pour le partager
-    train_paths, train_labels = load_manifest(manifest, "train")
+    _train_paths, train_labels = load_manifest(manifest, "train")
     label_map = build_label_map(train_labels)
 
     train_loader = create_train_loader(config, manifest, images_dir, label_map=label_map)

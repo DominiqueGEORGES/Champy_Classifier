@@ -149,7 +149,7 @@ class PredictionStore:
         conn.row_factory = aiosqlite.Row
         self._conn = conn
         self._initialized = True
-        logger.info(f"PredictionStore initialise : {self.db_path} " f"(WAL, busy_timeout=5000ms)")
+        logger.info(f"PredictionStore initialise : {self.db_path} (WAL, busy_timeout=5000ms)")
 
     @property
     def is_open(self) -> bool:

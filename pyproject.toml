@@ -106,6 +106,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
+# Mypy >= 1.16 separe ``untyped-decorator`` de ``misc``. Notre code utilise
+# ``# type: ignore[misc]`` pour les decorateurs FastAPI / BentoML sans
+# stubs - on neutralise la nouvelle erreur pour preserver la compat avec
+# le mypy v1.13 du pre-commit (mirrors-mypy).
+disable_error_code = ["untyped-decorator"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -117,6 +122,8 @@ module = [
     "torchvision.*",
     "cv2.*",
     "bentoml.*",
+    "aiosqlite.*",
+    "prefect.*",
 ]
 ignore_missing_imports = true
 

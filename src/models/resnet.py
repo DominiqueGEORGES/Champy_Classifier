@@ -95,6 +95,5 @@ def unfreeze_backbone_layers(
 
     num_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(
-        f"Backbone degle a partir de layer {unfreeze_from} "
-        f"({num_trainable:,} params entrainables)"
+        f"Backbone degle a partir de layer {unfreeze_from} ({num_trainable:,} params entrainables)"
     )
