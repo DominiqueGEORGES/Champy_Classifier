@@ -1,0 +1,282 @@
+{
+  "metadata": {
+    "model_path": "D:\\DataScientest\\Champy_Classifier\\models\\best_model.onnx",
+    "class_names_path": "D:\\DataScientest\\Champy_Classifier\\models\\class_names.json",
+    "manifest": "D:\\DataScientest\\Champy_Classifier\\data\\split_manifest.csv",
+    "split": "test",
+    "n_images": 2872,
+    "n_skipped": 0,
+    "duration_seconds": 79.04,
+    "generated_at": "2026-05-08T08:48:04.838973+00:00"
+  },
+  "global": {
+    "top1_accuracy": 0.899025069637883,
+    "confidence_mean": 0.9517752472051837,
+    "confidence_p10": 0.8114446103572845,
+    "confidence_p50": 0.999885618686676,
+    "confidence_p95": 1.0
+  },
+  "per_class": {
+    "Amanita muscaria": {
+      "count": 506,
+      "share": 0.17618384401114207,
+      "confidence_mean": 0.9698228784818423,
+      "confidence_min": 0.40677618980407715,
+      "confidence_max": 1.0
+    },
+    "Boletus edulis": {
+      "count": 289,
+      "share": 0.1006267409470752,
+      "confidence_mean": 0.9554454713131729,
+      "confidence_min": 0.3303830623626709,
+      "confidence_max": 1.0
+    },
+    "Pleurotus ostreatus": {
+      "count": 243,
+      "share": 0.0846100278551532,
+      "confidence_mean": 0.9656695507681419,
+      "confidence_min": 0.3150254487991333,
+      "confidence_max": 1.0
+    },
+    "Trametes versicolor": {
+      "count": 227,
+      "share": 0.07903899721448468,
+      "confidence_mean": 0.9776068952115097,
+      "confidence_min": 0.5614663362503052,
+      "confidence_max": 1.0
+    },
+    "Ganoderma applanatum": {
+      "count": 193,
+      "share": 0.06720055710306407,
+      "confidence_mean": 0.9492206505543209,
+      "confidence_min": 0.41678091883659363,
+      "confidence_max": 1.0
+    },
+    "Amanita phalloides": {
+      "count": 155,
+      "share": 0.05396935933147632,
+      "confidence_mean": 0.9375866622694077,
+      "confidence_min": 0.30691957473754883,
+      "confidence_max": 1.0
+    },
+    "Coprinus comatus": {
+      "count": 147,
+      "share": 0.05118384401114206,
+      "confidence_mean": 0.970131087668088,
+      "confidence_min": 0.3780045211315155,
+      "confidence_max": 1.0
+    },
+    "Schizophyllum commune": {
+      "count": 131,
+      "share": 0.045612813370473536,
+      "confidence_mean": 0.9737089456037711,
+      "confidence_min": 0.2973984181880951,
+      "confidence_max": 1.0
+    },
+    "Amanita rubescens": {
+      "count": 117,
+      "share": 0.04073816155988858,
+      "confidence_mean": 0.8670444801831857,
+      "confidence_min": 0.4155122935771942,
+      "confidence_max": 0.9999958276748657
+    },
+    "Armillaria mellea": {
+      "count": 113,
+      "share": 0.03934540389972145,
+      "confidence_mean": 0.9512464182566752,
+      "confidence_min": 0.3869829475879669,
+      "confidence_max": 1.0
+    },
+    "Agaricus campestris": {
+      "count": 91,
+      "share": 0.03168523676880223,
+      "confidence_mean": 0.9389011280222254,
+      "confidence_min": 0.43387869000434875,
+      "confidence_max": 1.0
+    },
+    "Hydnum repandum": {
+      "count": 74,
+      "share": 0.02576601671309192,
+      "confidence_mean": 0.9215219524261113,
+      "confidence_min": 0.39819520711898804,
+      "confidence_max": 1.0
+    },
+    "Lactarius deliciosus": {
+      "count": 69,
+      "share": 0.02402506963788301,
+      "confidence_mean": 0.9480377409769141,
+      "confidence_min": 0.512450635433197,
+      "confidence_max": 1.0
+    },
+    "Craterellus lutescens": {
+      "count": 66,
+      "share": 0.02298050139275766,
+      "confidence_mean": 0.9876340130964915,
+      "confidence_min": 0.7824315428733826,
+      "confidence_max": 1.0
+    },
+    "Marasmius oreades": {
+      "count": 66,
+      "share": 0.02298050139275766,
+      "confidence_mean": 0.9609778234452913,
+      "confidence_min": 0.6360822916030884,
+      "confidence_max": 1.0
+    },
+    "Scleroderma citrinum": {
+      "count": 61,
+      "share": 0.021239554317548745,
+      "confidence_mean": 0.969702697191082,
+      "confidence_min": 0.4611351490020752,
+      "confidence_max": 1.0
+    },
+    "Clitocybe nebularis": {
+      "count": 48,
+      "share": 0.016713091922005572,
+      "confidence_mean": 0.9100758781035742,
+      "confidence_min": 0.3554317057132721,
+      "confidence_max": 0.9999996423721313
+    },
+    "Macrolepiota procera": {
+      "count": 36,
+      "share": 0.012534818941504178,
+      "confidence_mean": 0.9332840616504351,
+      "confidence_min": 0.3800562024116516,
+      "confidence_max": 1.0
+    },
+    "Russula sanguinea": {
+      "count": 36,
+      "share": 0.012534818941504178,
+      "confidence_mean": 0.9455929646889368,
+      "confidence_min": 0.5620947480201721,
+      "confidence_max": 1.0
+    },
+    "Cantharellus cibarius": {
+      "count": 36,
+      "share": 0.012534818941504178,
+      "confidence_mean": 0.948241146074401,
+      "confidence_min": 0.45655375719070435,
+      "confidence_max": 0.9999996423721313
+    },
+    "Russula cyanoxantha": {
+      "count": 34,
+      "share": 0.011838440111420613,
+      "confidence_mean": 0.8844873633454827,
+      "confidence_min": 0.49739256501197815,
+      "confidence_max": 0.9999971389770508
+    },
+    "Craterellus cornucopioides": {
+      "count": 30,
+      "share": 0.010445682451253482,
+      "confidence_mean": 0.9531053553024927,
+      "confidence_min": 0.48201432824134827,
+      "confidence_max": 1.0
+    },
+    "Phallus impudicus": {
+      "count": 22,
+      "share": 0.00766016713091922,
+      "confidence_mean": 0.9548115811564706,
+      "confidence_min": 0.5778325796127319,
+      "confidence_max": 0.9999997615814209
+    },
+    "Russula virescens": {
+      "count": 17,
+      "share": 0.005919220055710306,
+      "confidence_mean": 0.9333594651783214,
+      "confidence_min": 0.5167986750602722,
+      "confidence_max": 0.9999996423721313
+    },
+    "Russula olivacea": {
+      "count": 16,
+      "share": 0.005571030640668524,
+      "confidence_mean": 0.8445361722260714,
+      "confidence_min": 0.43417462706565857,
+      "confidence_max": 0.9999681711196899
+    },
+    "Auricularia auricula-judae": {
+      "count": 13,
+      "share": 0.004526462395543176,
+      "confidence_mean": 0.8225885652578794,
+      "confidence_min": 0.4454531967639923,
+      "confidence_max": 1.0
+    },
+    "Russula rosea": {
+      "count": 13,
+      "share": 0.004526462395543176,
+      "confidence_mean": 0.9733390028660114,
+      "confidence_min": 0.8049256205558777,
+      "confidence_max": 0.999998927116394
+    },
+    "Agaricus bisporus": {
+      "count": 10,
+      "share": 0.003481894150417827,
+      "confidence_mean": 0.70360446870327,
+      "confidence_min": 0.37255343794822693,
+      "confidence_max": 0.9999996423721313
+    },
+    "Russula emetica": {
+      "count": 9,
+      "share": 0.0031337047353760445,
+      "confidence_mean": 0.8264807926283942,
+      "confidence_min": 0.49830108880996704,
+      "confidence_max": 0.9999830722808838
+    },
+    "Russula vesca": {
+      "count": 4,
+      "share": 0.001392757660167131,
+      "confidence_mean": 0.8260344415903091,
+      "confidence_min": 0.6968256831169128,
+      "confidence_max": 0.9845351576805115
+    }
+  },
+  "confidence_histogram": [
+    {
+      "bucket": "[0.00, 0.50)",
+      "low": 0.0,
+      "high": 0.5,
+      "count": 52,
+      "share": 0.018105849582172703
+    },
+    {
+      "bucket": "[0.50, 0.70)",
+      "low": 0.5,
+      "high": 0.7,
+      "count": 151,
+      "share": 0.05257660167130919
+    },
+    {
+      "bucket": "[0.70, 0.80)",
+      "low": 0.7,
+      "high": 0.8,
+      "count": 72,
+      "share": 0.025069637883008356
+    },
+    {
+      "bucket": "[0.80, 0.90)",
+      "low": 0.8,
+      "high": 0.9,
+      "count": 118,
+      "share": 0.04108635097493036
+    },
+    {
+      "bucket": "[0.90, 0.95)",
+      "low": 0.9,
+      "high": 0.95,
+      "count": 93,
+      "share": 0.03238161559888579
+    },
+    {
+      "bucket": "[0.95, 0.99)",
+      "low": 0.95,
+      "high": 0.99,
+      "count": 236,
+      "share": 0.08217270194986072
+    },
+    {
+      "bucket": "[0.99, 1.00)",
+      "low": 0.99,
+      "high": 1.0,
+      "count": 2150,
+      "share": 0.7486072423398329
+    }
+  ]
+}

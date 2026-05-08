@@ -25,9 +25,9 @@ jobs:
       - name: Install ruff
         run: pip install "ruff>=0.4"
       - name: Ruff check
-        run: ruff check src/ data/data_split.py data/curate.py demo/lib/ scripts/ tests/
+        run: ruff check src/ data/data_split.py data/curate.py demo/lib/ monitoring/ scripts/ tests/
       - name: Ruff format check
-        run: ruff format --check src/ data/data_split.py data/curate.py demo/lib/ scripts/ tests/
+        run: ruff format --check src/ data/data_split.py data/curate.py demo/lib/ monitoring/ scripts/ tests/
 
   typecheck:
     name: Type Check (mypy)
@@ -46,7 +46,7 @@ jobs:
           pip install --upgrade pip
           pip install "mypy==1.13.*" pydantic pydantic-settings types-PyYAML
       - name: Mypy
-        run: mypy src/ data/data_split.py --ignore-missing-imports
+        run: mypy src/ monitoring/ data/data_split.py --ignore-missing-imports
 
   docstrings:
     name: Docstrings (interrogate)
@@ -63,6 +63,7 @@ jobs:
         run: |
           interrogate src/ -c pyproject.toml -v
           interrogate data/data_split.py data/curate.py -c pyproject.toml -v
+          interrogate monitoring/ -c pyproject.toml -v
           interrogate scripts/ -c pyproject.toml -v
 
   test:

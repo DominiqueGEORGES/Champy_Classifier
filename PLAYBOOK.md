@@ -281,6 +281,33 @@ invoke serve                 # inclut le container Streamlit
 - [ ] Drift detection (Evidently) : rapport périodique ou on-demand
 - [ ] Alertes (optionnel) : seuils sur latence, confiance, erreurs
 
+**Pieges connus (Evidently 0.7+ pour drift detection)** :
+- **L'API a casse entre 0.4 et 0.7** : la majorite des tutoriels web utilisent l'API legacy (`from evidently.report import Report; Report(metrics=[DataDriftMetric()])`). En 0.7+, c'est `from evidently import Report, Dataset, DataDefinition` et `Report(metrics=[DataDriftPreset()])`. Toujours verifier la version (`evidently.__version__`) avant de copier un exemple.
+- **`Dataset.from_pandas(df, data_definition=...)` necessite la `DataDefinition` en kwarg** : sans, Evidently auto-detecte les types et confond souvent les float arrondis avec des categories. Symptome : test stat qui plante ou drift faux positif.
+- **`save_html` est une methode du `Snapshot` (retour de `.run()`)**, pas du `Report` : `report.run(reference, current).save_html(path)`. `Report.save_html` n'existe pas.
+- **HTML self-contained = 3-4 MB par rapport** : Evidently inline les fonts Material Icons + Vega-Lite JS + ses libs. Bonne nouvelle : aucune dependance externe au serve. Mauvaise : gitignore les rapports si on en genere des dizaines, ou archiver selectivement (S3, MLflow). Stocker les rapports dans un dossier `reports/` avec timestamp dans le nom + un `.gitkeep` pour preserver l'arborescence.
+- **DataDriftPreset par defaut applique chi-2 (categoriel) + KS (numerique)** : c'est rarement le bon choix sur des distributions tres desequilibrees ou bimodales. Si on a des colonnes specifiques avec une distribution connue (ex: confidence en U inverse), specifier `num_method="psi"` (Population Stability Index) ou `num_method="wasserstein"` via le parametre `per_column_method`.
+- **Materialiser une baseline a partir d'aggregats perd la variance** : si la baseline JSON ne contient que `confidence_mean` par classe, le DataFrame reconstruit aura toutes les valeurs egales par groupe. Drift est detecte sur la moyenne globale + la distribution des classes, pas sur la dispersion intra-classe. Pour une analyse fine, il faut stocker les confidences individuelles (multiplie la taille par ~1000 sur 2872 images).
+- **Indexer les images avant le calcul de baseline** : `Path.rglob(name)` est O(M) ou M = nb fichiers totaux. Sur un dataset scrape (`data/raw/Mushrooms_images/` contient 647k fichiers), faire un rglob par image cherchee = O(N x M) = 30 minutes. Faire un seul scan O(M) qui construit `dict[name -> path]` puis lookup O(1) = 80s pour 2872 images.
+- **Trigger Streamlit -> subprocess.run avec `sys.executable`** : `subprocess.run(["python", ...])` peut pointer vers un Python different du venv (Windows). `sys.executable` garantit le bon interpreteur. `capture_output=True` + `text=True` pour recuperer logs.
+- **`st.components.v1.html(html, height=H, scrolling=True)` pour embed** : le `height` est obligatoire (sinon iframe a 0 px). Compter generously (900-1200) pour les rapports Evidently qui sont longs. `scrolling=True` essentiel.
+- **Rapports drift = donnees structurees, pas des modeles** : ne pas les versionner avec DVC. Les regenerer a la demande depuis la baseline + le store de predictions est plus propre, plus rapide, et evite l'inflation du stockage DVC.
+
+**Commandes cles (drift detection)** :
+```powershell
+# Calcul de la baseline (une fois, ~1m20 sur le test set complet 2872 images)
+python monitoring/baseline_snapshot.py
+
+# Generation d'un rapport drift sur les 24 dernieres heures
+python monitoring/run_drift_report.py --hours 24
+
+# Sur une fenetre custom + chemin de baseline alternatif
+python monitoring/run_drift_report.py --hours 6 --baseline monitoring/baseline_v1.json
+
+# Ouvrir le dernier rapport
+explorer.exe monitoring\reports\drift_*.html  # Windows
+```
+
 **Pieges connus (Grafana provisioning)** :
 - **`docker compose restart` n'applique PAS les nouveaux volumes** : il faut `docker compose up -d <service>` pour recreer le container quand on ajoute un mount au compose. Sinon le nouveau dossier `provisioning/` reste vide dans le container alors qu'il est present sur l'hote. `restart` redemarre seulement le process dans le container existant.
 - **Le volume nomme `grafana-data` persiste l'etat UI entre redemarrages** : si une datasource a ete creee a la main avant le provisioning, elle coexiste avec celle provisionnee (deux entrees de meme nom, UID different). Le provisioning ne supprime jamais. Soit `DELETE /api/datasources/uid/<old_uid>` une fois, soit `docker volume rm <project>_grafana-data` (perd l'historique UI : custom dashboards crees a la main, panels modifies, etc.).

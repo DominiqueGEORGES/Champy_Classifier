@@ -1,12 +1,22 @@
-"""Page Streamlit : détection de drift avec Evidently.
+"""Page Streamlit : detection de drift avec Evidently.
 
-Permet de générer un rapport Evidently on-demand en comparant
-la distribution des prédictions récentes avec une référence.
+Permet de generer un rapport Evidently on-demand en comparant
+la distribution des predictions recentes (PredictionStore SQLite,
+Bloc M2) avec la baseline calculee sur le test set
+(``monitoring/baseline_reference.json``, Bloc M3 baseline_snapshot.py).
+
+Source de verite : aucune valeur n'est ecrite en dur. La baseline est
+lue dynamiquement, les rapports passes sont scannes au runtime, et la
+generation d'un nouveau rapport invoque ``monitoring/run_drift_report.py``
+via subprocess.
 """
 
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -16,95 +26,139 @@ if str(_PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 st.set_page_config(page_title="11 - Drift", layout="wide")
-st.title(":warning: Détection de drift")
+st.title(":warning: Detection de drift")
 
-st.markdown("""
-La détection de drift surveille si la distribution des données
-en production s'écarte de la distribution d'entraînement.
+# --- Chemins (configurables via env si on change le layout du repo)
+BASELINE_PATH = _PROJECT_ROOT / "monitoring" / "baseline_reference.json"
+REPORTS_DIR = _PROJECT_ROOT / "monitoring" / "reports"
+RUN_DRIFT_SCRIPT = _PROJECT_ROOT / "monitoring" / "run_drift_report.py"
 
-**Types de drift monitorés** :
-- **Data drift** : les images soumises changent de distribution
-- **Prédiction drift** : la répartition des classes prédites change
-- **Confiance drift** : le score de confiance moyen évolue
+st.markdown(
+    """
+La detection de drift surveille si la distribution des predictions
+en production s'ecarte de la baseline (calculee sur le test set).
+Le rapport HTML est genere par
+[Evidently AI](https://github.com/evidentlyai/evidently) et combine :
 
-**Implémentation** : Evidently AI génère des rapports HTML
-comparant les données actuelles à une référence.
-""")
-
-st.divider()
-
-# =====================================================================
-# Section 1 : Statut Evidently
-# =====================================================================
-st.header("Rapport Evidently")
-
-st.info(
-    "La génération de rapports Evidently sera disponible une fois que "
-    "l'API aura accumulé suffisamment de prédictions en production. "
-    "Le rapport compare la distribution des prédictions récentes avec "
-    "la distribution du split test (référence)."
+- **Drift de classes** : la distribution des especes predites diverge-t-elle de la baseline ?
+- **Drift de confiance** : les scores de confiance moyenne / P10 / P95 derivent-ils ?
+"""
 )
+st.divider()
 
-# Vérifier si un rapport existe déjà
-REPORTS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "artifacts"
-report_path = REPORTS_DIR / "drift_report.html"
+# =====================================================================
+# Section 1 : Etat de la baseline
+# =====================================================================
+st.header("1. Baseline de reference")
 
-if report_path.exists():
-    st.success("Un rapport de drift existe.")
-    with open(report_path, encoding="utf-8") as f:
-        html_content = f.read()
-    st.components.v1.html(html_content, height=800, scrolling=True)
+if not BASELINE_PATH.exists():
+    st.error(
+        f"Baseline manquante : `{BASELINE_PATH.relative_to(_PROJECT_ROOT)}`.\n\n"
+        "La baseline est calculee une fois en faisant tourner l'inference sur le "
+        "test set. Lancer :\n\n"
+        "```powershell\npython monitoring/baseline_snapshot.py\n```"
+    )
 else:
-    st.info("Aucun rapport de drift généré pour l'instant.")
+    with open(BASELINE_PATH, encoding="utf-8") as f:
+        baseline = json.load(f)
+    meta = baseline.get("metadata", {})
+    glob = baseline.get("global", {})
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Images de reference", meta.get("n_images", 0))
+    col2.metric("Top-1 accuracy", f"{glob.get('top1_accuracy', 0.0):.1%}")
+    col3.metric("Confiance moyenne", f"{glob.get('confidence_mean', 0.0):.3f}")
+    col4.metric(
+        "Confiance P10 / P95",
+        f"{glob.get('confidence_p10', 0.0):.2f} / {glob.get('confidence_p95', 0.0):.2f}",
+    )
+    st.caption(
+        f"Baseline generee le {meta.get('generated_at', '?')[:19]} "
+        f"sur le split `{meta.get('split', '?')}` du modele "
+        f"`{Path(meta.get('model_path', '?')).name}`."
+    )
 
 st.divider()
 
 # =====================================================================
-# Section 2 : Indicateurs proxy
+# Section 2 : Generation d'un nouveau rapport
 # =====================================================================
-st.header("Indicateurs proxy (depuis Prometheus)")
+st.header("2. Generer un nouveau rapport")
 
-try:
-    from demo.lib.api_utils import query_prometheus
-
-    # Distribution des classes prédites
-    predictions = query_prometheus("champy_predictions_total")
-    if predictions:
-        import pandas as pd
-
-        rows = []
-        total = 0.0
-        for result in predictions:
-            species = result.get("metric", {}).get("species", "?")
-            value = float(result.get("value", [0, 0])[1])
-            rows.append({"Espèce": species, "Prédictions": int(value)})
-            total += value
-
-        if rows and total > 0:
-            df = pd.DataFrame(rows)
-            df["Proportion"] = df["Prédictions"] / total
-            st.dataframe(
-                df.sort_values("Prédictions", ascending=False),
-                use_container_width=True,
-                hide_index=True,
-            )
-            st.caption(
-                "Si une classe domine anormalement les prédictions, "
-                "cela peut indiquer un drift dans les données soumises."
-            )
+col_h, col_btn = st.columns([2, 1])
+hours = col_h.slider(
+    "Fenetre temporelle (heures)",
+    min_value=1,
+    max_value=168,
+    value=24,
+    help="Predictions stockees dans le SQLite sur cette fenetre glissante.",
+)
+generate = col_btn.button(
+    "Generer un rapport",
+    disabled=not BASELINE_PATH.exists(),
+    type="primary",
+)
+if generate:
+    with st.spinner(f"Generation du rapport sur les {hours} dernieres heures..."):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(RUN_DRIFT_SCRIPT),
+                "--hours",
+                str(hours),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    if result.returncode == 0:
+        st.success("Rapport genere avec succes.")
+        with st.expander("Logs de generation"):
+            st.code(result.stderr or result.stdout, language="text")
     else:
-        st.info("Aucune donnée de prédiction (Prometheus hors ligne ou aucune requête).")
+        st.error("Echec de la generation. Voir les logs ci-dessous.")
+        st.code(result.stderr or result.stdout, language="text")
 
-    # Confiance moyenne
-    confidence = query_prometheus(
-        "champy_prediction_confidence_sum / champy_prediction_confidence_count"
+st.divider()
+
+# =====================================================================
+# Section 3 : Liste des rapports passes + selecteur
+# =====================================================================
+st.header("3. Rapports archives")
+
+reports = sorted(REPORTS_DIR.glob("drift_*.html"), reverse=True) if REPORTS_DIR.exists() else []
+if not reports:
+    st.info(
+        "Aucun rapport pour le moment. Lance la generation ci-dessus apres avoir "
+        "envoye quelques predictions au service BentoML (le store SQLite alimente "
+        "le rapport)."
     )
-    if confidence:
-        for result in confidence:
-            value = float(result.get("value", [0, 0])[1])
-            st.metric("Confiance moyenne globale", f"{value:.1%}")
-            if value < 0.5:
-                st.warning("Confiance moyenne basse - vérifier la qualité des images soumises.")
+else:
 
-except Exception as e:
-    st.warning(f"Métriques Prometheus non disponibles : {e}")
+    def _format_report(p: Path) -> str:
+        """Formate un nom de rapport en libelle lisible.
+
+        Args:
+            p: Chemin du fichier HTML.
+
+        Returns:
+            Libelle ``YYYY-MM-DD HH:MM (drift_*.html)`` pour le selecteur.
+        """
+        try:
+            ts = datetime.strptime(p.stem.replace("drift_", ""), "%Y%m%d_%H%M")
+            return f"{ts:%Y-%m-%d %H:%M}  ({p.name})"
+        except ValueError:
+            return p.name
+
+    options = {p: _format_report(p) for p in reports}
+    chosen = st.selectbox(
+        "Selectionner un rapport",
+        options=list(options.keys()),
+        index=0,
+        format_func=lambda p: options[p],
+    )
+    st.caption(f"{len(reports)} rapport(s) disponibles dans `monitoring/reports/`")
+
+    if chosen is not None:
+        with open(chosen, encoding="utf-8") as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=900, scrolling=True)

@@ -732,6 +732,117 @@ ChampyService (src/serving_bentoml/service.py)
 
 ---
 
+## Etape 6quinquies - Monitoring M3 - Drift detection (Evidently)
+
+**Date** : 2026-05-08
+**Objectif** : Detecter automatiquement quand la distribution des predictions de production diverge de la baseline (test set). Rapports HTML auto-suffisants generes a la demande, archives dans `monitoring/reports/`, et embarques dans la page Streamlit `11_drift.py`.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Outil | Evidently 0.7.21 | NannyML, Alibi Detect, custom | API mature, presets HTML auto-suffisants, integration Streamlit immediate via `st.components.v1.html` |
+| API Evidently | `Dataset.from_pandas(df, DataDefinition)` + `Report([DataDriftPreset(), DataSummaryPreset()])` | API legacy `metrics.DataDriftTable` | API moderne 0.7+ ; les presets gerent automatiquement le test du chi-2 (categoriel) et KS (numerique) sans configuration |
+| Baseline | Top-1 prediction du modele courant sur le test set (2872 images) | Distribution des labels d'origine, distribution train | La baseline doit etre comparable aux predictions de prod : on compare ce que le modele predit ICI sur le test (referentiel stable) avec ce qu'il predit en prod (qui peut deriver) |
+| Stockage baseline | JSON 8 KB co-localise avec les scripts (`monitoring/baseline_reference.json`) | DVC, MLflow artifact | Le JSON est petit, structurel, doit etre dispo immediatement (pas besoin d'un `dvc pull`). Versionne avec git, regenerable a la demande. |
+| Stockage rapports | HTML self-contained dans `monitoring/reports/` (gitignore) | Versionner les rapports, S3, MLflow | 3.8 MB par rapport (fonts + libs JS inline). Generes a la demande : pas de valeur archivistique a 6 mois. Le fichier reste local pour la demo. |
+| Comparaison | 2 colonnes : `predicted_class` (categoriel) + `confidence` (numerique) | Image embeddings drift | Suffisant pour un POC TFE. Embeddings drift necessite extraction de features et est ~10x plus lourd. |
+| Source predictions courantes | PredictionStore SQLite (Bloc M2) sur fenetre glissante | Re-scan en temps reel | Le store est deja le golden source des predictions servies. Lookup O(1) sur l'index timestamp. |
+| Trigger | Manuel (bouton Streamlit + CLI) | Cron / webhook | POC TFE : pas de cron jusqu'a la prod. La regeneration prend ~1s sur 100 predictions. |
+
+### Architecture
+
+```
+monitoring/
+├── __init__.py               # docstring de package
+├── baseline_snapshot.py      # CLI : test set -> baseline_reference.json
+├── run_drift_report.py       # CLI : baseline + SQLite -> rapport HTML
+├── baseline_reference.json   # 8 KB, commit (regenerable mais reproductible)
+└── reports/
+    ├── .gitkeep              # garde le dossier
+    └── drift_YYYYMMDD_HHMM.html  # gitignore (3-4 MB chacun)
+```
+
+### baseline_snapshot.py - calcul de la baseline
+
+Pipeline :
+1. Charge `models/best_model.onnx` (ou path passe en --model)
+2. Construit un index `nom_fichier -> path` une fois sur `data/raw/Mushrooms_images/` (~647k fichiers, 22s ; un seul scan au lieu de 2872 rglob qui prendrait ~30 min)
+3. Pour chaque image du split test : preprocess (Resize 256 / CenterCrop 224 / Normalize ImageNet, identique au serving) + softmax + top-1
+4. Agrege par classe : count, share, confidence_mean / min / max
+5. Histogramme global (7 buckets : `[0, 0.5)`, `[0.5, 0.7)`, ..., `[0.99, 1.0]`)
+6. Statistiques globales : top-1 accuracy, confidence P10 / P50 / P95
+7. Sauvegarde JSON (8 KB)
+
+### run_drift_report.py - rapport Evidently
+
+Pipeline :
+1. Charge la baseline JSON et materialise un DataFrame de reference (`count` lignes par classe avec `confidence_mean` comme valeur)
+2. Lit les predictions des `--hours` dernieres heures depuis le PredictionStore SQLite
+3. Build deux `Dataset` Evidently avec la meme `DataDefinition` (categorical_columns=`predicted_class`, numerical_columns=`confidence`)
+4. `Report([DataDriftPreset(), DataSummaryPreset()]).run(reference, current)` -> `Snapshot`
+5. `snapshot.save_html(path)` -> rapport autoporteur
+
+### Page Streamlit 11_drift.py
+
+Trois sections :
+- **Section 1** : etat de la baseline (4 metrics depuis le JSON : nb images, accuracy, confiance moyenne, P10/P95). Si pas de baseline, message d'erreur explicite avec la commande a lancer.
+- **Section 2** : slider sur la fenetre temporelle + bouton de generation. Le bouton lance `subprocess.run([sys.executable, monitoring/run_drift_report.py, --hours, N])`. Spinner + expander pour les logs.
+- **Section 3** : selecteur sur la liste des rapports archives (parsing de `drift_YYYYMMDD_HHMM.html` -> label `YYYY-MM-DD HH:MM`). Affichage du HTML choisi via `st.components.v1.html(content, height=900, scrolling=True)`.
+
+Aucune valeur en dur : la baseline, les metrics, la liste des rapports sont toutes lues au runtime.
+
+### Pieges Evidently rencontres
+
+1. **API 0.7+ a casse l'API legacy de 0.4** : les exemples web qu'on trouve majoritairement sont en 0.4 (`from evidently.report import Report; Report(metrics=[DataDriftMetric()])`). En 0.7, c'est `from evidently import Report, Dataset, DataDefinition; Report(metrics=[DataDriftPreset()])`. Verifier la version installee avant de copier-coller.
+2. **`DataDefinition` obligatoire pour les colonnes mixtes** : sans `categorical_columns=...` + `numerical_columns=...`, Evidently auto-detecte mal le type de `confidence` (parfois float arrondis traites comme cat) et fait crasher le test stat.
+3. **`Dataset.from_pandas` ne prend pas le DataFrame nu** : il faut `data_definition=` en kwarg, sinon erreur silencieuse de typage colonne.
+4. **`save_html` est une methode de `Snapshot` (le retour de `.run()`), pas de `Report`** : `Report.save_html` n'existe pas en 0.7. C'est `report.run(...).save_html(path)`.
+5. **HTML genere = 3-4 MB self-contained** : Evidently inline les fonts Material Icons + Vega-Lite + ses propres libs JS dans chaque rapport. Pas de dependance externe au serve, mais beaucoup d'octets. Gitignore les rapports, archive selectivement si besoin.
+6. **`baseline_to_dataframe` materialise count lignes par classe** : on perd l'info de variance intra-classe en n'utilisant que `confidence_mean`. Pour un drift sur la confiance, c'est suffisant (Evidently compare les distributions globales). Pour une analyse fine, il faudrait stocker les confidences individuelles dans la baseline (multiplie sa taille par 1000).
+7. **`subprocess.run([sys.executable, script, ...])` plutot que `python ...`** : sur Windows, `python` peut pointer vers une install differente du venv courant. Utiliser `sys.executable` garantit qu'on lance le bon Python.
+8. **Le bouton Streamlit ne reload pas la page apres generation** : il faut interagir avec le selecteur (ou rafraichir manuellement) pour voir le nouveau rapport. Ameliorable via `st.rerun()` apres generation, hors scope ici.
+9. **L'indexation rglob prealable est cruciale** : 1.6 img/s avec rglob par image (647k fichiers a chaque appel) -> 40 img/s avec un index pre-construit (un seul scan). Pour 2872 images : 30 min avant -> 1m20 apres.
+10. **mypy 1.13 ne reconnait pas certains codes d'erreur de mypy 1.16+** : l'option `disable_error_code = ["untyped-decorator"]` ajoutee au CI fix etait un faux positif et faisait crasher le pre-commit. Retiree puisque mypy 1.13 partout (CI + pre-commit) ne genere pas le code en question.
+
+### Validation end-to-end (2026-05-08)
+
+- **Baseline** : `monitoring/baseline_snapshot.py` sur le test set (2872 images, 79s, 40 img/s)
+  - Top-1 accuracy : **89.90%**
+  - Confiance moyenne : **0.9518**, P10 / P95 : **0.78 / 1.00**
+  - 30 classes vues
+- **100 predictions BentoML** envoyees via `scripts/seed_grafana.py --target bentoml`
+  - 100/100 OK, 18 req/s
+  - Store SQLite contient 116 lignes (100 nouvelles + 16 anterieures)
+- **Premier rapport drift** : `monitoring/reports/drift_20260508_1049.html`
+  - Reference 2872 lignes, current 116 predictions, 30 classes
+  - HTML self-contained 3.8 MB
+- **Page Streamlit 11** : ouverte sur port 8502 (natif), HTTP 200, pas d'erreur dans les logs
+  - Baseline metrics affichees correctement
+  - Selecteur liste le rapport genere
+  - HTML embarqué via `st.components.v1.html`
+
+### Artefacts produits
+
+- `monitoring/__init__.py` - docstring de package
+- `monitoring/baseline_snapshot.py` - CLI baseline (333 lignes)
+- `monitoring/run_drift_report.py` - CLI drift report (220 lignes)
+- `monitoring/baseline_reference.json` - 8 KB, commit
+- `monitoring/reports/.gitkeep` - garde le dossier
+- `monitoring/reports/drift_YYYYMMDD_HHMM.html` - 3.8 MB, gitignore
+- `demo/pages/11_drift.py` - 3 sections (baseline / generation / archives)
+- `.pre-commit-config.yaml` - extension `^monitoring/` au scope mypy + interrogate
+- `.github/workflows/ci.yml` - extension `monitoring/` au lint + mypy + interrogate
+- `pyproject.toml` - retrait `disable_error_code` (mypy 1.13 ne le supporte pas)
+
+### Restant pour cloturer M3
+
+- Aucun (M3 valide). Suite : M4 (page Streamlit monitoring complete avec iframe Grafana + alerting visuel).
+- Plus tard : ajouter un `st.rerun()` apres generation de rapport pour rafraichir le selecteur automatiquement (UX).
+- Plus tard : declencher un job cron / GitHub Actions pour generer un rapport quotidien et remonter les drifts critiques par mail.
+
+---
+
 ## Etape 7 - Docker et Monitoring - EN COURS
 
 **Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)

@@ -28,7 +28,7 @@ repos:
           - pydantic-settings
           - types-PyYAML
         args: [--ignore-missing-imports]
-        files: ^(src/|data/data_split\.py)
+        files: ^(src/|monitoring/|data/data_split\.py)
 
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0
@@ -41,4 +41,4 @@ repos:
           - --ignore-magic
           - --ignore-module
           - -v
-        files: ^src/|^data/|^demo/
+        files: ^src/|^data/|^demo/|^monitoring/
