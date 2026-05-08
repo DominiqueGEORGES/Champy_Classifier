@@ -843,6 +843,114 @@ Aucune valeur en dur : la baseline, les metrics, la liste des rapports sont tout
 
 ---
 
+## Etape 6sexies - Monitoring M4 - Page Streamlit complete
+
+**Date** : 2026-05-08
+**Objectif** : Refondre la page `10_monitoring.py` pour offrir une vue ops bout-en-bout : metriques live, dashboards Grafana embarques, top-10 especes, et alerting visuel a partir d'un fichier de seuils. Page resiliente quand Prometheus, Grafana ou le store SQLite sont down.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Seuils alerting | YAML externe `configs/monitoring/thresholds.yml` | Hardcoded, env vars | Editable sans redeploiement, supporte la convention warning/critical par direction (lower_is_worse / higher_is_worse), coherent avec la regle invariante "zero hardcoded" |
+| Auto-refresh | Cache TTL=15-30s + bouton "Rafraichir maintenant" | `st.autorefresh` (dep tierce), `time.sleep + st.rerun` (bloque worker) | Pattern Streamlit natif, ne tire pas de dep, fonctionne sans bloquer la session ; le user peut declencher un refresh explicite quand il veut |
+| Iframe Grafana | Tabs Streamlit + `st.components.v1.iframe` avec URL `?orgId=1&kiosk&theme=light&refresh=30s` | API Grafana JSON pour reconstruire les graphes, screenshot render API | Reuse direct des dashboards provisionnes au Bloc M1, refresh integre, kiosk mode masque la nav Grafana, fallback automatique sur liens si Grafana down |
+| Auth Grafana embedding | `GF_AUTH_ANONYMOUS_ENABLED=true` + `GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer` + `GF_SECURITY_ALLOW_EMBEDDING=true` dans le compose | Reverse proxy avec auth deleguee | Acceptable pour la demo locale et le NUC3 LAN ; en prod il faudrait un proxy avec OIDC |
+| URL Grafana cote browser | Heuristique : si `hostname in {grafana, host.docker.internal}`, force `http://localhost:<port>` | Demander l'URL au user | Le helper `get_grafana_url()` retourne le DNS interne du compose (`http://grafana:3000`) qui ne resout PAS cote browser. Fix automatique via `urlparse` + override env `CHAMPY_GRAFANA_URL_EXTERNAL` |
+| Top-10 especes | 2 colonnes : Plotly bar Prometheus (cumul global) + Plotly line SQLite (tendance horaire 24h) | Une seule source | Le cumul Prometheus montre la distribution stable, la tendance SQLite montre les variations recentes (utile pour reperer des pics ou des chutes par espece). Si le SQLite n'existe pas, on degrade silencieusement |
+| Alerting visuel | 3 cartes vert/jaune/rouge avec contour color, label, valeur, message | st.metric standard, plotly gauges | Permet de voir d'un coup d'oeil l'etat global ; plus visuel que des metriques empilees, plus simple que des gauges |
+| Resilience | Try / except defensifs partout, message st.warning explicite avec action a faire | Page plante avec stack trace | UX ops : un dashboard down ne casse pas la page, l'utilisateur sait quoi faire (verifier docker compose ps, ALLOW_EMBEDDING, etc.) |
+
+### Architecture
+
+```
+demo/lib/monitoring_utils.py     # Helpers : load_thresholds, fetch_live_metrics, evaluate_alerts
+configs/monitoring/thresholds.yml # Seuils par direction warning/critical
+demo/pages/10_monitoring.py      # 4 sections (live / Grafana / top-10 / alerting)
+```
+
+### Section 1 - Metriques live (Prometheus)
+
+7 requetes PromQL :
+- `sum(rate(champy_requests_total[5m]))` -> RPS
+- `histogram_quantile({0.5, 0.95, 0.99}, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))` -> p50/p95/p99
+- `(sum(rate(champy_http_errors_total[5m])) or on() vector(0)) / clamp_min(sum(rate(champy_requests_total[5m])), 0.001)` -> taux d'erreur (gere le cas "pas d'erreurs jamais")
+- `sum(champy_predictions_total)` -> total cumule
+- `champy_prediction_confidence_sum / clamp_min(champy_prediction_confidence_count, 1)` -> confiance moyenne
+
+Affichage en 5 colonnes + 2 colonnes (erreur, confiance). Si Prometheus down, message d'erreur explicite, pas de plantage.
+
+### Section 2 - Dashboards Grafana embarques
+
+Pattern :
+1. Health check `httpx.get(f'{url}/api/health', timeout=3)` cache TTL=15s
+2. Si OK : tabs Streamlit pour 3 dashboards + `st.components.v1.iframe(url, height=720)`
+3. Si KO : fallback liens markdown vers les dashboards (a ouvrir dans un nouvel onglet)
+
+URL generee : `{base}/d/{uid}?orgId=1&kiosk&theme=light&refresh=30s`. Le mode `kiosk` masque la nav Grafana pour un rendu plus propre dans Streamlit.
+
+### Section 3 - Top-10 especes predites
+
+Deux sources cote a cote :
+- **Prometheus** (col gauche) : `topk(10, sum by (species) (champy_predictions_total))` -> Plotly horizontal bar avec gradient bleu, ordonne par count croissant pour que le top-1 soit en haut.
+- **SQLite** (col droite) : `PredictionStore.get_recent(hours=24)` -> aggregation horaire (df.groupby(['hour', 'species']).size()) -> Plotly line avec markers, top-5 especes seulement pour ne pas surcharger la legende.
+
+Si le SQLite n'existe pas (compose actuel sert FastAPI qui n'ecrit pas), message info, pas de plantage.
+
+### Section 4 - Alerting visuel
+
+3 cartes HTML rendues via `st.markdown(unsafe_allow_html=True)` avec :
+- Bordure couleur (vert / jaune / rouge / gris selon le niveau)
+- Label (OK / WARNING / CRITICAL / INDISPONIBLE)
+- Nom de la metrique
+- Valeur courante formatee
+- Message court explicitant le niveau (`X.X%` >= seuil critical Y.Y%)
+
+Logique :
+- `lower_is_worse` (confidence) : warning si <= 0.7, critical si <= 0.5
+- `higher_is_worse` (latence p95, error rate) : warning si >= seuil, critical si >= seuil critique
+
+Si `thresholds.yml` est absent ou Prometheus down, message warning a la place des cartes.
+
+Expander avec le contenu du YAML pour la transparence (le user voit les seuils sans aller fouiller dans configs/).
+
+### Pieges Streamlit + Grafana iframe rencontres
+
+1. **Grafana refuse l'embed par defaut** : sans `GF_SECURITY_ALLOW_EMBEDDING=true`, Grafana met un header `X-Frame-Options: deny` qui bloque l'iframe. Symptome : iframe vide cote Streamlit. Verifier avec `curl -I http://grafana:3000/d/<uid>` que le header n'est plus present.
+2. **Auth bloque l'iframe meme avec ALLOW_EMBEDDING** : si Grafana exige une connexion, l'iframe affiche le login form. Activer `GF_AUTH_ANONYMOUS_ENABLED=true` + `GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer` permet aux iframes de charger sans auth (pour des dashboards en lecture seule).
+3. **`docker compose restart` n'applique PAS les nouvelles env vars** : il faut `docker compose up -d grafana` (recreate). Identique au piege Bloc M1 sur les volumes.
+4. **DNS interne du compose != cote browser** : le helper `get_grafana_url()` peut retourner `http://grafana:3000` (utile pour les containers entre eux), mais cette URL ne resout PAS dans un iframe cote navigateur. Fix : detecter via `urlparse(url).hostname in {grafana, host.docker.internal}` et forcer `http://localhost:<port>`. Override possible via env `CHAMPY_GRAFANA_URL_EXTERNAL`.
+5. **`histogram_quantile` retourne NaN sans donnees recentes** : pas de prediction sur la fenetre 5min -> p50/p95/p99 = NaN. Si on les passe a `f"{value:.0f} ms"`, on obtient `NaN ms` (laid). Fix : convertir NaN en None dans le helper, afficher `-` cote UI.
+6. **Metric inexistante = empty array** : `champy_http_errors_total` n'existe que si au moins une erreur HTTP a ete loggee. Sans ca, la query retourne `[]` et le ratio plante. Fix PromQL : `(sum(...) or on() vector(0))` injecte un 0 quand le numerateur est vide.
+7. **Cache `st.cache_data` sur `httpx.get`** : sans cache, chaque rendu Streamlit retape Prometheus / Grafana 5+ fois (sections successives). Avec `ttl=15-30s`, les metriques sont fraiches sans surcharger les services.
+8. **`unsafe_allow_html=True` requis pour les cartes colorees** : st.markdown ne supporte pas le CSS inline par defaut. C'est OK quand on controle le HTML genere (pas d'input user dans le template).
+9. **`st.components.v1.iframe` vs `st.components.v1.html`** : iframe attend une URL, html attend du HTML brut. Pour les dashboards Grafana on veut iframe (charge l'URL en lazy).
+
+### Validation end-to-end (2026-05-08)
+
+- Page rendue en natif (port 8502) : aucune erreur dans les logs Streamlit
+- Sections testees :
+  - Section 1 : 5 metriques affichees (RPS 0.14, p50 21ms, p95 46ms, p99 49ms, total 88, conf 95.1%, error 0%)
+  - Section 2 : 3 tabs Grafana avec iframes vers http://localhost:3010 (OK avec auth anonymous + ALLOW_EMBEDDING)
+  - Section 3 : Plotly bar Prometheus (10 especes), Plotly line SQLite (info "Pas de SQLite" car BentoML pas dans le compose)
+  - Section 4 : 3 cartes vertes (Confiance 95.1% OK, Latence p95 46ms OK, Erreur 0% OK)
+- **Resilience** : `docker stop champy_classifier-grafana-1` -> page rend sans erreur, fallback liens visible
+
+### Artefacts produits
+
+- `configs/monitoring/thresholds.yml` - 3 sections (confidence / latency_p95_seconds / error_rate)
+- `demo/lib/monitoring_utils.py` - helpers (load_thresholds, fetch_live_metrics, evaluate_alerts, MetricStatus, _first_value avec NaN-safe)
+- `demo/pages/10_monitoring.py` - refonte complete (4 sections)
+- `docker-compose.yml` - 4 env vars Grafana (auth anonyme + embedding)
+
+### Restant pour cloturer M4
+
+- Aucun (M4 valide). Suite : Bloc 4 (tests preprocessing + integration) ou Bloc R1 (Quality Monitor) selon prochaine priorite.
+- Plus tard : ajouter `streamlit-autorefresh` ou un meta refresh HTML pour un refresh visuel toutes les 30s sans intervention user.
+- Plus tard : exposer un `/metrics` cote Streamlit lui-meme pour boucler le monitoring (latence des pages, requetes par page).
+
+---
+
 ## Etape 7 - Docker et Monitoring - EN COURS
 
 **Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)

@@ -77,6 +77,13 @@ services:
       - grafana-data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-changeme}
+      # Auth anonyme + embedding pour les iframes Streamlit (page 10).
+      # Acceptable en demo locale ; en prod il faudrait un reverse proxy
+      # avec auth deleguee. Voir PLAYBOOK.md (piege "Grafana iframe").
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
     depends_on:
       - prometheus
     restart: unless-stopped

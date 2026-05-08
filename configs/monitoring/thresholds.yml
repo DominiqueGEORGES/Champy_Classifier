@@ -1,0 +1,39 @@
+# Seuils d'alerting visuel pour la page Streamlit "10 - Monitoring".
+#
+# La page lit ce fichier au runtime et affiche un indicateur vert / jaune /
+# rouge pour chaque metrique selon les bornes ci-dessous. Aucun seuil
+# n'est ecrit en dur dans le code Streamlit : modifier les valeurs ici
+# se reflete au prochain refresh.
+#
+# Convention :
+#   - "warning" : la valeur courante depasse le seuil mais n'est pas
+#     critique. La page passe au jaune.
+#   - "critical" : seuil critique, page rouge.
+#   - Si la metrique va dans le bon sens (ex: confiance haute = OK), les
+#     seuils sont des bornes BASSES (warning si on tombe sous le seuil).
+#   - Si la metrique va dans le mauvais sens (latence haute = mauvais,
+#     erreurs hautes = mauvais), les seuils sont des bornes HAUTES
+#     (warning si on depasse).
+
+confidence:
+  # Confiance moyenne du top-1 sur la fenetre courante.
+  # Une chute de confiance peut indiquer une derive de distribution des
+  # images en entree (clients qui envoient des images hors-domaine).
+  direction: lower_is_worse
+  warning_below: 0.7
+  critical_below: 0.5
+
+latency_p95_seconds:
+  # Latence p95 d'inference (secondes). Le SLA cible est < 200 ms p95
+  # pour un ResNet50 / ConvNeXt-Tiny en ONNX CPU.
+  direction: higher_is_worse
+  warning_above: 0.2
+  critical_above: 0.5
+
+error_rate:
+  # Taux d'erreur HTTP sur la fenetre. Calcule comme
+  # sum(rate(champy_http_errors_total[5m])) / sum(rate(champy_requests_total[5m])).
+  # Un taux > 5% indique probablement un probleme de modele ou d'infra.
+  direction: higher_is_worse
+  warning_above: 0.05
+  critical_above: 0.10
