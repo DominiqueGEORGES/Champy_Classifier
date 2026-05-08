@@ -245,8 +245,7 @@ def fetch_live_metrics() -> dict[str, float | None]:
     total = _first_value(query_prometheus("sum(champy_predictions_total)"))
     confidence_avg = _first_value(
         query_prometheus(
-            "champy_prediction_confidence_sum / "
-            "clamp_min(champy_prediction_confidence_count, 1)"
+            "champy_prediction_confidence_sum / clamp_min(champy_prediction_confidence_count, 1)"
         )
     )
     return {

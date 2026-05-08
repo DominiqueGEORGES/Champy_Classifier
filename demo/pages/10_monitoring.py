@@ -279,7 +279,7 @@ with col_sql:
                 )
                 fig.update_layout(height=420, legend_title_text="")
                 st.plotly_chart(fig, use_container_width=True)
-                st.caption(f"{len(records)} predictions sur 24h, " f"top-5 especes affichees.")
+                st.caption(f"{len(records)} predictions sur 24h, top-5 especes affichees.")
         except Exception as e:
             st.warning(f"Lecture SQLite impossible : {e}")
 
