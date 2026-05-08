@@ -1,0 +1,58 @@
+service: "src.serving_bentoml.service:ChampyService"
+
+description: |
+  Champy Classifier - 30 especes de champignons francais, ConvNeXt-Tiny 90% accuracy.
+  API d'inference servie par BentoML, modele ONNX self-contained (~106 MB),
+  preprocessing identique au pipeline d'entrainement (Resize 256 / CenterCrop 224
+  / Normalize ImageNet), batching adaptatif (max_batch_size=32, max_latency_ms=100).
+
+labels:
+  owner: dominique-georges
+  project: champy
+  stage: development
+  framework: bentoml
+  backbone: convnext_tiny
+
+# Modeles a embarquer dans le bento depuis le Model Store. Le runner les
+# resout dynamiquement via ``bentoml.onnx.get`` au demarrage, mais cette
+# resolution se fait au runtime : pour que le bento packagee soit
+# self-contained (exigible pour ``bentoml serve <bento_tag>`` et
+# ``bentoml containerize``), on declare le tag explicitement ici.
+models:
+  - "champy_classifier:latest"
+
+# Fichiers a inclure dans le bento. Le code source de la couche de serving
+# est packagee, ainsi que la liste des classes (fallback si le Model Store
+# ne contient pas les ``custom_objects``). Le modele ONNX lui-meme est
+# resolu depuis le Model Store BentoML au moment du serve, pas embarque
+# en dur ici.
+include:
+  - "src/serving_bentoml/**/*.py"
+  - "src/__init__.py"
+  - "models/class_names.json"
+
+exclude:
+  - "**/__pycache__"
+  - "**/*.pyc"
+  - "**/.pytest_cache"
+
+# Dependances Python du bento. On filtre volontairement les deps lourdes
+# inutiles en serving (torch, torchvision, mlflow, dvc, evidently, streamlit,
+# scikit-learn, pandas) pour reduire la taille de l'image Docker. Le serving
+# n'a besoin que d'ONNX Runtime, Pillow, numpy, Pydantic, prometheus-client
+# et loguru. BentoML tire automatiquement FastAPI, uvicorn, etc.
+python:
+  packages:
+    - "bentoml>=1.2,<2.0"
+    - "onnx>=1.16"
+    - "onnxruntime>=1.17"
+    - "pillow>=10.0"
+    - "numpy>=1.26"
+    - "pydantic>=2.7"
+    - "prometheus-client>=0.20"
+    - "loguru>=0.7"
+
+docker:
+  python_version: "3.11"
+  distro: debian
+  system_packages: []

@@ -458,6 +458,115 @@ Lancement : `invoke test` (avec coverage) ou `pytest tests/unit/ -x --tb=short`.
 
 ---
 
+## Etape 6bis - Migration FastAPI -> BentoML - EN COURS
+
+**Date** : 2026-05-07 / 2026-05-08
+**Objectif** : Remplacer la couche de serving FastAPI (`src/serving/`) par un service BentoML (`src/serving_bentoml/`) pour s'aligner sur la roadmap equipe (etape 6 - Deploiement) et le cours Datascientest. Le modele ONNX ConvNeXt-Tiny (90% accuracy) reste strictement le meme.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Version BentoML | `>=1.2,<2.0` (installe : 1.4.39) | `<1.4` pour eviter le warning de deprecation | Suivre la version courante, accepter le warning, documenter le plan de migration |
+| API d'enregistrement | `bentoml.onnx.save_model(...)` | `bentoml.models.create()` + serialisation manuelle | API documentee depuis 1.2, signature compatible avec le cahier des charges (`labels`, `signatures`, `custom_objects`) ; deprecated en 1.4 mais fonctionnel |
+| Tag du modele | `champy_classifier:latest` (alias auto) | Tag versionne explicite | BentoML cree un tag horodatee a chaque `save_model` ; `latest` pointe automatiquement vers la derniere version |
+| Pattern d'inference | `predict` mono-image (public) -> `infer_batch` batchable (interne) | Endpoint unique batchable | Conserve l'ergonomie HTTP de FastAPI ; le pooling adaptatif s'applique quand plusieurs `predict` arrivent concurrents |
+| Adaptive batching | `max_batch_size=32`, `max_latency_ms=100`, `batch_dim=0` | Defauts BentoML (batch=100, latency=60s) | Cahier des charges + match des contraintes CPU NUC3 |
+| Methodes batchable | `async def` obligatoire | `def` synchrone | BentoML 1.4 route les appels intra-service via un proxy RPC qui retourne des coroutines |
+| Cast dtype | Explicite `np.float32` dans `infer_batch` | Confiance dans le type inferme | Le proxy RPC interne promeut les `np.ndarray` en float64 lors du transit HTTP ; ONNX Runtime exige float32 |
+| Metriques | Natives BentoML + 3 custom (`champy_predictions_total`, `champy_prediction_latency_seconds`, `champy_prediction_confidence`) | Reproduire toutes les metriques FastAPI | BentoML expose nativement requests_total, request_duration_seconds, etc. ; on n'ajoute que les metriques metier |
+| Health endpoint | Custom `/health` (POST) en plus des `/healthz` et `/readyz` natifs | Se contenter du natif | Le custom inclut version + architecture + classes (utile Streamlit / Grafana annotations) |
+| HTTP method | POST partout (BentoML force POST sur `@bentoml.api`) | Mount FastAPI ASGI pour avoir des GET | Over-engineered ici ; les clients (tests, Streamlit) gerent POST sans probleme |
+| `class_names` | Embarques dans `custom_objects` du Model Store | Lecture du `models/class_names.json` exclusive | Self-contained : le bento packagee ne depend plus du repo source |
+
+### Endpoints implementes (port 8020)
+
+| Endpoint | Methode | Statut | Note |
+|----------|---------|--------|------|
+| `/healthz` | GET | natif | 200 vide |
+| `/readyz` | GET | natif | 200 vide |
+| `/health` | POST | custom | `{status, model_loaded, model_version}` |
+| `/model/info` | POST | custom | `tag, version, architecture, num_classes, class_names, input_shape` |
+| `/predict` | POST (multipart) | custom | top-N especes + scores |
+| `/infer_batch` | POST | batchable interne | `max_batch_size=32`, `max_latency_ms=100` |
+| `/metrics` | GET | natif + custom | `bentoml_service_*` + `champy_*` |
+
+### Validation parite FastAPI vs BentoML (Bloc 2 + add-on)
+
+Script reproductible : [`scripts/compare_fastapi_bentoml.py`](scripts/compare_fastapi_bentoml.py).
+Fait tourner les 4 memes images de test sur les deux APIs et compare top-1 + score.
+
+| Image | Espece reelle | FastAPI top-1 | Conf. FastAPI | BentoML top-1 | Conf. BentoML | Delta |
+|-------|---------------|---------------|---------------|---------------|---------------|-------|
+| 100016.jpg | Amanita rubescens | Amanita rubescens | 0.999907 | Amanita rubescens | 0.999907 | 5.68e-08 |
+| 101905.jpg | Boletus edulis | Boletus edulis | 0.999999 | Boletus edulis | 0.999999 | 6.95e-08 |
+| 157467.jpg | Cantharellus cibarius | Cantharellus cibarius | 0.997703 | Cantharellus cibarius | 0.997702 | 1.21e-07 |
+| 110460.jpg | Coprinus comatus | Coprinus comatus | 1.000000 | Coprinus comatus | 1.000000 | 3.94e-09 |
+
+**Resultat : 4/4 OK, delta max 1.21e-07 (< epsilon 1e-6)**. Les deux couches de serving produisent des predictions strictement identiques (au bruit flottant pres). La difference vient uniquement du chemin de serialisation HTTP / softmax, pas du modele.
+
+### Pieges BentoML 1.4 rencontres
+
+1. `bentoml.onnx` est deprecated depuis 1.4 (warning a chaque appel). Plan de migration : `bentoml.models.create()` + chargement ONNX manuel via onnxruntime. Hors scope TFE.
+2. `@bentoml.api` force POST. Pas de parametre `method=`. Tous les endpoints sont en POST y compris `/health` et `/model/info`.
+3. Appel intra-service async-only : `predict` -> `infer_batch` passe par un proxy RPC qui retourne une coroutine. La methode appelee DOIT etre `async def` et l'appel `await self.infer_batch(...)`.
+4. Sérialisation float64 silencieuse via le proxy : les `np.ndarray` float32 sont promus en float64 lors du transit HTTP entre endpoints. Cast explicite requis : `np.ascontiguousarray(batch, dtype=np.float32)`.
+5. `PIL.Image.Image` doit rester un import runtime (BentoML introspecte les annotations via `typing.get_type_hints()` au demarrage du worker pour brancher le decodeur HTTP). `noqa: TC002` requis sur cet import.
+6. `ModelOptions` n'est pas un dict : `bento_model.info.options.get(...)` plante. Pour retrouver le fichier ONNX dans le Model Store : glob `saved_model.onnx` (nom standard de `bentoml.onnx.save_model`) avec fallback `*.onnx`.
+7. Conflit de version `anyio` lors de l'install : BentoML tire `httpx-ws==0.9.0` qui exige `anyio>=4.7` (`AsyncContextManagerMixin`). Pin manuel : `anyio>=4.7,<5`.
+8. Query params non mappes automatiquement : `?top_n=3` ignore. Les params optionnels passent via le body JSON. (A approfondir si besoin.)
+
+### Artefacts produits
+
+- `src/serving_bentoml/__init__.py` - documentation des 6 pieges
+- `src/serving_bentoml/schemas.py` - schemas Pydantic (avec champ `architecture` en plus de FastAPI)
+- `src/serving_bentoml/preprocessing.py` - Resize 256 / CenterCrop 224 / Normalize ImageNet (numpy pur)
+- `src/serving_bentoml/runner.py` - `OnnxRunner` (chargement Model Store + onnxruntime, lecture `custom_objects`)
+- `src/serving_bentoml/service.py` - `ChampyService` (5 endpoints + batching adaptatif + 3 metriques custom)
+- `scripts/import_model_to_bentoml.py` - import ONNX -> Model Store BentoML (CLI avec `--version`, `--architecture`)
+- `scripts/compare_fastapi_bentoml.py` - script de parity-check reproductible
+- `bentofile.yaml` - configuration de packaging du bento (Bloc 3)
+
+### Bloc 3 - Bentofile et build du bento packagee (2026-05-08)
+
+#### Mode dev vs mode production de `bentoml serve`
+
+| Commande | Quand l'utiliser | Comportement |
+|----------|------------------|--------------|
+| `bentoml serve src.serving_bentoml.service:ChampyService --port 8020` | Developpement | Charge le code en direct depuis l'arborescence repo. Hot-reload manuel par redemarrage. Utile pour iterer rapidement. Le modele ONNX est resolu via le Model Store local au demarrage du worker. |
+| `bentoml serve champy_classifier:latest --port 8020` | Production / staging | Charge le bento packagee depuis `~/bentoml/bentos/`. Code immuable, dependances fixees au moment du `build`, modele resolu depuis le Model Store local. Pas de dependance au repo source. C'est ce qu'utilisera l'image Docker au Bloc 5. |
+
+#### bentofile.yaml
+
+Configuration retenue (`bentofile.yaml` a la racine du repo) :
+- `service: src.serving_bentoml.service:ChampyService`
+- `models: [champy_classifier:latest]` - sinon le modele n'est pas embarque (le runner le resout au runtime, pas au build)
+- `include` : code de la couche serving + `models/class_names.json` (fallback)
+- `python.packages` : dependances filtrees (no torch / mlflow / dvc / streamlit / pandas / sklearn / evidently). Reste : `bentoml`, `onnx`, `onnxruntime`, `pillow`, `numpy`, `pydantic`, `prometheus-client`, `loguru`. BentoML tire automatiquement FastAPI/uvicorn.
+- `docker.python_version: "3.11"`, `docker.distro: debian`
+- `labels` : owner, project, stage, framework, backbone
+
+#### Pieges Bloc 3
+
+1. **Schema `python.version` n'existe pas en BentoML 1.4** : la version Python se declare via `docker.python_version`, pas `python.version`. Erreur cryptique `PythonOptions.__init__() got an unexpected keyword argument 'version'`.
+2. **Le modele n'est PAS detecte automatiquement** : le runner appelle `bentoml.onnx.get(tag)` au runtime (dans `__init__`), donc l'introspecteur de build ne le voit pas. Sans `models:` dans bentofile, le bento se construit a 67 KB (code only, "Model Size = 0"). Avec `models:`, BentoML cree un lien vers le Model Store et la "Model Size" devient 106.30 MiB.
+3. **Le bento sur disque reste petit** : meme avec `models:`, le bento sur disque ne contient PAS le fichier ONNX (juste un lien vers le Model Store). Total = 67 KB de code + 106 MB de modele linke = ~106 MB. C'est `bentoml containerize` qui inlinera le modele dans l'image Docker.
+
+#### Validation
+
+```
+$ bentoml list
+Tag                              Size       Model Size  Creation Time
+champy_classifier:yhtfcj2kv2v... 67.58 KiB  106.30 MiB  2026-05-08 09:23:18
+```
+
+- `bentoml serve champy_classifier:latest --port 8020` demarre OK
+- `/health` retourne `{"status":"healthy","model_loaded":true,"model_version":"1.0.0"}`
+- `/predict` sur Amanita rubescens retourne `0.999907317550425` (16 chiffres) - bit-identique au mode dev
+- Parity-check FastAPI vs bento packagee : **4/4 OK, delta max 1.21e-07**
+
+---
+
 ## Etape 7 - Docker et Monitoring - EN COURS
 
 **Date** : 2026-03-30 (initial) / 2026-04-24 (port mapping hote partage)

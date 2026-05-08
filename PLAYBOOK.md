@@ -200,24 +200,46 @@ cd D:\<repo>\models; Invoke-WebRequest "http://<xps-hostname>:8888/best_model.pt
 **But** : API REST prête pour l'inference, avec métriques et health checks.
 
 **A produire** :
-- [ ] FastAPI avec endpoint /predict (top-N + scores)
+- [ ] Service de serving (FastAPI ou BentoML) avec endpoint /predict (top-N + scores)
 - [ ] /health, /metrics (Prometheus), /model/info
 - [ ] Pydantic schemas (request/response)
 - [ ] Chargement ONNX Runtime (CPU)
 - [ ] Préprocessing identique au training (transforms)
 - [ ] Tests unitaires de l'API
+- [ ] (BentoML) bentofile.yaml + bento packagee testee via `bentoml serve <tag>`
 
-**Pièges connus** :
--
+**Pieges connus (BentoML 1.4)** :
+- `bentoml.onnx` est deprecated depuis 1.4 (warning a chaque appel) mais fonctionnel. `bentoml.onnx.save_model(name, onnx_model, signatures, labels, metadata, custom_objects)` reste l'API la plus simple. Plan de migration cible : `bentoml.models.create()` + chargement ONNX manuel via onnxruntime. Hors scope si on cible 1.2-1.3.
+- **`@bentoml.api` force POST** : il n'y a pas de parametre `method=` dans 1.4. Tous les endpoints (`/predict`, `/health`, `/model/info`, ...) sont en POST, style RPC. Pour des GET, monter une ASGI app via `@bentoml.asgi_app`. Ne pas attendre du REST classique : adapter le client (Streamlit, tests).
+- **Appel intra-service async-only** : un endpoint qui en appelle un autre (par exemple `predict` -> `infer_batch` pour beneficier du batching adaptatif) passe par un proxy RPC interne qui retourne une coroutine. La methode appelee DOIT etre `async def` et l'appel DOIT etre `await self.infer_batch(...)`. Un appel synchrone fait planter avec `anyio.NoEventLoopError: Not running inside an AnyIO worker thread`.
+- **Sérialisation float64 silencieuse via le proxy interne** : les `np.ndarray` float32 sont promus en float64 lors du transit HTTP entre endpoints intra-service. ONNX Runtime exige float32 ; sinon `InvalidArgument: Unexpected input data type. Actual: (tensor(double)), expected: (tensor(float))`. Cast explicite : `np.ascontiguousarray(batch, dtype=np.float32)` dans la methode batchable avant l'inference.
+- **`PIL.Image.Image` doit rester un import runtime** : BentoML introspecte les annotations via `typing.get_type_hints()` au demarrage du worker pour brancher le decodeur d'image HTTP. Donc PAS de `TYPE_CHECKING` block sur cet import. Utiliser `from PIL.Image import Image as PILImage  # noqa: TC002` pour faire taire ruff.
+- **`ModelOptions` n'est pas un dict** : `bento_model.info.options.get(...)` plante (`AttributeError: 'ModelOptions' object has no attribute 'get'`). Pour retrouver le fichier ONNX dans le Model Store : glob `saved_model.onnx` (nom standard de `bentoml.onnx.save_model`) avec fallback sur `*.onnx`. Pour les `class_names` packagees via `custom_objects`, lire `bento_model.custom_objects['class_names']`.
+- **Schema bentofile.yaml en 1.4** : il n'existe PAS de cle `python.version`. La version Python se declare via `docker.python_version`. Sinon `TypeError: PythonOptions.__init__() got an unexpected keyword argument 'version'`.
+- **Le modele n'est PAS detecte automatiquement au build** : si le runner appelle `bentoml.onnx.get(tag)` au runtime (dans `__init__`), l'introspecteur de build ne le voit pas. Sans cle `models: [tag]` dans bentofile, le bento se construit sans modele (Model Size = 0). Avec, le bento reste petit sur disque (lien vers le Model Store) mais expose 100+ MB de "Model Size" dans `bentoml list`. Au containerize, le modele est inline dans l'image Docker.
+- **Conflit `anyio` / `httpx-ws` au moment de l'install** : BentoML 1.4 tire `httpx-ws==0.9.0` qui exige `anyio>=4.7` (`AsyncContextManagerMixin`). Si `anyio` est deja installe en version <4.7 dans le venv (ex: par `httpx`), `import bentoml` echoue avec `AttributeError: module 'anyio' has no attribute 'AsyncContextManagerMixin'`. Pin manuel : `anyio>=4.7,<5`.
+- **Query params HTTP non mappes automatiquement** : `?top_n=3` est ignore par `@bentoml.api` en 1.4. Les params optionnels d'une methode passent via le body JSON, pas la query string. Si on veut absolument query string, il faut wrapper dans une ASGI app.
+- **`bentoml serve <module>` (dev) vs `bentoml serve <bento_tag>` (prod)** : le premier charge le code en direct depuis l'arborescence repo (utile pour iterer rapidement, redemarrer manuellement pour appliquer un changement). Le second charge le bento packagee depuis `~/bentoml/bentos/`, code immuable, dependances fixees au `build`. C'est la version `<tag>` qui sera utilisee dans l'image Docker (Etape 8).
 
-**Commandes clés** :
+**Commandes clés (BentoML)** :
 ```powershell
-invoke serve
-# Test rapide :
-# Invoke-RestMethod -Uri http://localhost:8000/health
+# Importer le modele ONNX dans le Model Store
+python scripts/import_model_to_bentoml.py
+bentoml models list
+
+# Mode dev (hot reload manuel)
+bentoml serve src.serving_bentoml.service:ChampyService --port 8020
+
+# Build + serve du bento packagee
+bentoml build
+bentoml list
+bentoml serve champy_classifier:latest --port 8020
+
+# Containerize (Etape 8)
+bentoml containerize champy_classifier:latest
 ```
 
-**Durée typique** : 1-2 jours
+**Durée typique** : 1-2 jours (FastAPI seul) / 2-3 jours (FastAPI + migration BentoML)
 
 ---
 
