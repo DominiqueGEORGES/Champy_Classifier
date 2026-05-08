@@ -14,12 +14,16 @@ qui retire ou renomme une espece).
 
 Usage typique
 -------------
+
+Les flags ``--version``, ``--architecture`` et ``--accuracy`` sont
+**obligatoires** : un re-run distrait ne doit pas pouvoir ecraser
+``latest`` avec une identite vide ou un mauvais backbone. Le piege a
+ete documente dans REGENERATE_HISTORY.md (regeneration des 3 modeles
+ce week-end).
+
 ::
 
-    # Modele courant (defauts : ``models/best_model.onnx`` + ``class_names.json``)
-    python scripts/import_model_to_bentoml.py
-
-    # ConvNeXt v2.0.0 explicite (Bloc R0)
+    # ConvNeXt v2.0.0 (Bloc R0)
     python scripts/import_model_to_bentoml.py \
         --onnx-path models/convnext_tiny_v2.0.0.onnx \
         --version v2.0.0 \
@@ -58,9 +62,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ONNX_PATH = REPO_ROOT / "models" / "best_model.onnx"
 DEFAULT_CLASS_NAMES_PATH = REPO_ROOT / "models" / "class_names.json"
 DEFAULT_MODEL_NAME = "champy_classifier"
-DEFAULT_VERSION = "v2.0.0"
-DEFAULT_ARCHITECTURE = "convnext_tiny"
-DEFAULT_ACCURACY = 0.90
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,24 +106,27 @@ def parse_args() -> argparse.Namespace:
         help="Nom du modele dans le Model Store BentoML.",
     )
     # Identite logique du modele : ces 3 champs partent en labels du
-    # Model Store et sont visibles dans `bentoml models list`.
+    # Model Store et sont visibles dans `bentoml models list`. Ils sont
+    # OBLIGATOIRES pour eviter qu'un re-run distrait ecrase ``latest``
+    # avec une version vide ou un mauvais backbone (cf. piege Bloc R0
+    # documente dans REGENERATE_HISTORY.md).
     parser.add_argument(
         "--version",
         type=str,
-        default=DEFAULT_VERSION,
+        required=True,
         help="Version logique du modele (ex: v1.0.0, v1.1.0, v2.0.0).",
     )
     parser.add_argument(
         "--architecture",
         type=str,
-        default=DEFAULT_ARCHITECTURE,
+        required=True,
         help="Backbone du modele (resnet50, convnext_tiny, ...).",
     )
     parser.add_argument(
         "--accuracy",
         type=float,
-        default=DEFAULT_ACCURACY,
-        help="Accuracy test set (label informationnel, ex: 0.84, 0.88, 0.90).",
+        required=True,
+        help="Accuracy test set, [0.0, 1.0] (ex: 0.84, 0.88, 0.90).",
     )
     parser.add_argument(
         "--mlflow-run-id",
