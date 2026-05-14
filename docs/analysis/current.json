@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "generator_version": "1.0.0",
+  "generated_at": "2026-05-14T08:13:29.831627+00:00",
+  "git_commit": "f2e0ae1",
+  "git_branch": "dev-dominique",
+  "mlflow": {
+    "tracking_uri": "https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow",
+    "experiment_name": "Default",
+    "experiment_id": "0"
+  },
+  "runs": {
+    "resnet50_default": {
+      "run_id": "63981a296e804f419a8947e074030af1",
+      "run_name": "resnet50_2phase_42",
+      "status": "FINISHED",
+      "start_time_iso": "2026-05-12T19:45:45.021000+00:00",
+      "end_time_iso": "2026-05-12T21:45:32.974000+00:00",
+      "duration_seconds": 7187.953,
+      "params": {
+        "model_name": "resnet50",
+        "num_classes": "30",
+        "pretrained": "True",
+        "freeze_backbone_epochs": "10",
+        "total_epochs": "30",
+        "lr_phase1": "0.001",
+        "lr_phase2": "1e-05",
+        "batch_size": "16",
+        "seed": "42",
+        "optimizer": "adamw",
+        "weight_decay": "0.0001",
+        "scheduler": "cosine",
+        "early_stopping_patience": "5",
+        "early_stopping_metric": "val_loss",
+        "mixed_precision": "True",
+        "gradient_accumulation_steps": "1",
+        "num_workers": "0",
+        "image_size": "224",
+        "augmentation": "True"
+      },
+      "metrics": {
+        "test_accuracy": 0.8384401114206128,
+        "test_f1_macro": 0.7496817210392114,
+        "train_loss": 0.3558225216101432,
+        "val_loss": 0.5547013917420474,
+        "val_acc": 0.8432055749128919,
+        "val_f1_macro": 0.7290457859477699,
+        "lr": 0.0,
+        "phase": 2.0
+      },
+      "mlflow_url": "https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow/#/experiments/0/runs/63981a296e804f419a8947e074030af1"
+    },
+    "resnet50_aggressive": {
+      "run_id": "6f35264133524eb5bd037840ba10661f",
+      "run_name": "resnet50_2phase_2026",
+      "status": "FINISHED",
+      "start_time_iso": "2026-05-13T00:06:54.305000+00:00",
+      "end_time_iso": "2026-05-13T01:50:04.725000+00:00",
+      "duration_seconds": 6190.42,
+      "params": {
+        "model_name": "resnet50",
+        "num_classes": "30",
+        "pretrained": "True",
+        "freeze_backbone_epochs": "10",
+        "total_epochs": "40",
+        "lr_phase1": "0.001",
+        "lr_phase2": "3e-05",
+        "batch_size": "24",
+        "seed": "2026",
+        "optimizer": "adamw",
+        "weight_decay": "0.0001",
+        "scheduler": "cosine",
+        "early_stopping_patience": "7",
+        "early_stopping_metric": "val_loss",
+        "mixed_precision": "True",
+        "gradient_accumulation_steps": "1",
+        "num_workers": "0",
+        "image_size": "224",
+        "augmentation": "True"
+      },
+      "metrics": {
+        "train_loss": 0.10394145276269785,
+        "val_loss": 0.4808814802827934,
+        "val_acc": 0.8742160278745644,
+        "val_f1_macro": 0.7800184143757226,
+        "lr": 8.898950353862998e-06,
+        "phase": 2.0,
+        "test_accuracy": 0.8711699164345403,
+        "test_f1_macro": 0.7876825505453763
+      },
+      "mlflow_url": "https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow/#/experiments/0/runs/6f35264133524eb5bd037840ba10661f"
+    },
+    "convnext_tiny": {
+      "run_id": "8822ea7e46b843dd8c682e91f3dcb89d",
+      "run_name": "convnext_tiny_2phase_2026",
+      "status": "FINISHED",
+      "start_time_iso": "2026-05-13T19:58:33.760000+00:00",
+      "end_time_iso": "2026-05-13T22:49:38.965000+00:00",
+      "duration_seconds": 10265.205,
+      "params": {
+        "model_name": "convnext_tiny",
+        "num_classes": "30",
+        "pretrained": "True",
+        "freeze_backbone_epochs": "10",
+        "total_epochs": "40",
+        "lr_phase1": "0.001",
+        "lr_phase2": "3e-05",
+        "batch_size": "16",
+        "seed": "2026",
+        "optimizer": "adamw",
+        "weight_decay": "0.0001",
+        "scheduler": "cosine",
+        "early_stopping_patience": "7",
+        "early_stopping_metric": "val_loss",
+        "mixed_precision": "True",
+        "gradient_accumulation_steps": "1",
+        "num_workers": "0",
+        "image_size": "224",
+        "augmentation": "True"
+      },
+      "metrics": {
+        "lr": 0.0,
+        "phase": 2.0,
+        "train_loss": 0.020767845774209627,
+        "val_acc": 0.9090592334494774,
+        "val_f1_macro": 0.8240207851406548,
+        "val_loss": 0.4461439112012158,
+        "test_accuracy": 0.9014623955431755,
+        "test_f1_macro": 0.819970464076915
+      },
+      "mlflow_url": "https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow/#/experiments/0/runs/8822ea7e46b843dd8c682e91f3dcb89d"
+    }
+  },
+  "comparison": {
+    "accuracy_by_run": {
+      "resnet50_default": 0.8384401114206128,
+      "resnet50_aggressive": 0.8711699164345403,
+      "convnext_tiny": 0.9014623955431755
+    },
+    "f1_macro_by_run": {
+      "resnet50_default": 0.7496817210392114,
+      "resnet50_aggressive": 0.7876825505453763,
+      "convnext_tiny": 0.819970464076915
+    },
+    "best_model": "convnext_tiny",
+    "best_accuracy": 0.9014623955431755,
+    "best_f1_macro": 0.819970464076915,
+    "gap_accuracy_default_to_best": 0.06302228412256272,
+    "gap_f1_default_to_best": 0.0702887430377036
+  },
+  "narratives": {
+    "why_convnext": "ConvNeXt-Tiny obtient 90.1 % d'accuracy et 82.0 % de F1 macro sur le test set, soit une amélioration par rapport au ResNet50 aggressive (87.1 % d'accuracy, 78.8 % de F1 macro). L'écart accuracy / F1 réduit à 8.1 % montre que ConvNeXt généralise mieux sur les classes minoritaires, ce qui est crucial dans le contexte d'un dataset déséquilibré (ratio 1 à 62 entre classe majoritaire et minoritaire). Cette amélioration justifie le choix de l'architecture moderne ConvNeXt pour la mise en production.",
+    "two_phase_strategy": "Mon training se déroule en deux temps. D'abord pendant 10 epochs, je gèle 99 % du modèle et je ne lui apprends que les noms des 30 espèces, avec une vitesse d'apprentissage élevée (1e-3). Puis je le dégèle entièrement et je continue à un rythme 30 fois plus lent (3e-5) pour qu'il affine sa vision sans casser ce qu'il sait déjà. Le bond visible sur la courbe d'accuracy à l'epoch 10 prouve que cette deuxième phase apporte vraiment quelque chose.",
+    "accuracy_vs_f1": "L'accuracy mesure le pourcentage global de bonnes prédictions, tandis que le F1 macro calcule la moyenne des scores F1 par classe en donnant le même poids à chaque classe, indépendamment de leur effectif. L'écart entre les deux indique que le modèle est moins performant sur les classes minoritaires, ce qui est cohérent avec le ratio de déséquilibre de 1 à 62 dans notre dataset. J'ai partiellement compensé ce déséquilibre par un WeightedRandomSampler durant l'entraînement.",
+    "limitations": "Trois limites principales. Premièrement, le déséquilibre du dataset reste un facteur limitant : même avec WeightedRandomSampler, les classes minoritaires n'ont qu'environ 40 images chacune, ce qui plafonne leur apprentissage. Deuxièmement, le pipeline d'augmentation est uniforme sur toutes les classes ; une augmentation différentielle ou l'introduction de techniques comme MixUp et CutMix bénéficierait particulièrement aux classes minoritaires. Troisièmement, je n'ai pas effectué d'audit qualité des annotations, ce qui est pourtant essentiel sur un domaine où certaines espèces sont très proches visuellement, notamment dans les genres Cortinarius et Russula.",
+    "perspectives": "J'investirais en priorité sur les données plutôt que sur le modèle, en suivant l'approche data-centric AI promue par Andrew Ng. Concrètement, je commencerais par compléter les classes minoritaires via iNaturalist et MushroomObserver pour ramener le ratio de déséquilibre de 1 à 62 à 1 à 5. Ensuite je mettrais en place MixUp et CutMix dans le DataLoader, puis je ferais auditer un échantillon des annotations par un mycologue. Ces actions sur les données apportent typiquement 3 à 5 points de F1 macro supplémentaires.",
+    "reproducibility": "Les trois runs ont été lancés avec des seeds fixées (42 pour le default, 2026 pour aggressive et ConvNeXt-Tiny) sur le même poste, avec les mêmes splits de données et la même architecture de pipeline. Toutes les métriques sont tracées dans MLflow sur DagsHub, avec les fichiers de configuration YAML versionnés dans le dépôt git. Cela permet une reproductibilité complète : n'importe qui peut relancer un training à partir du commit correspondant et obtenir les mêmes métriques aux fluctuations aléatoires près."
+  }
+}
