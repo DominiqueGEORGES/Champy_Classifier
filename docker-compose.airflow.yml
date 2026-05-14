@@ -1,0 +1,129 @@
+# Docker Compose dédié à Airflow pour Champy Classifier.
+#
+# Cohabite avec docker-compose.yml (stack Champy : api, demo, grafana,
+# prometheus) sans conflit de ports ni de réseau.
+#
+# Architecture :
+#   - airflow-standalone : conteneur tout-en-un (scheduler + webserver + DAG processor)
+#   - postgres-airflow   : metadata store dédié (séparé de tout autre Postgres)
+#
+# Lancement ::
+#
+#     docker compose -f docker-compose.airflow.yml up -d
+#
+# Arrêt ::
+#
+#     docker compose -f docker-compose.airflow.yml down
+#
+# Logs en suivi ::
+#
+#     docker compose -f docker-compose.airflow.yml logs -f airflow
+#
+# UI Airflow ::  http://localhost:8081  (admin / cf .env.airflow)
+#
+# Configuration : voir airflow/.env.airflow (à créer depuis .env.airflow.template)
+
+name: champy_airflow
+
+services:
+
+  postgres-airflow:
+    image: postgres:16-alpine
+    container_name: champy_airflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER:-airflow} -d ${AIRFLOW_DB_NAME:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - airflow_net
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: champy_airflow:latest
+    container_name: champy_airflow
+    restart: unless-stopped
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+    environment:
+      # Core Airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
+      AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+
+      # Webserver
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET}
+      AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8081
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+
+      # Base de données
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres-airflow:5432/${AIRFLOW_DB_NAME:-airflow}
+
+      # Initialisation au premier démarrage
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
+
+      # Variables d'environnement transmises aux DAGs et tasks
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI}
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_TRACKING_USERNAME}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_TRACKING_PASSWORD}
+      DAGSHUB_USER: ${DAGSHUB_USER}
+      DAGSHUB_TOKEN: ${DAGSHUB_TOKEN}
+
+      # Python path pour permettre 'python -m scripts.generate_analysis'
+      PYTHONPATH: /opt/champy:/opt/airflow
+
+    ports:
+      - "8081:8080"
+
+    volumes:
+      # DAGs, logs, plugins Airflow (montés en read-write)
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+
+      # Code et données du projet Champy, montés en read-only sauf
+      # docs/analysis qui doit pouvoir être écrit par les DAGs
+      - ./scripts:/opt/champy/scripts:ro
+      - ./configs:/opt/champy/configs:ro
+      - ./docs:/opt/champy/docs
+      - ./.env:/opt/champy/.env:ro
+
+    command: standalone
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    networks:
+      - airflow_net
+
+volumes:
+  postgres_airflow_data:
+    name: champy_airflow_postgres_data
+
+networks:
+  airflow_net:
+    name: champy_airflow_net
+    driver: bridge

@@ -92,7 +92,7 @@ def get_git_commit() -> str | None:
             stderr=subprocess.DEVNULL,
         )
         return out.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, PermissionError, OSError):
         return None
 
 
@@ -106,7 +106,7 @@ def get_git_branch() -> str | None:
             stderr=subprocess.DEVNULL,
         )
         return out.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, PermissionError, OSError):
         return None
 
 
