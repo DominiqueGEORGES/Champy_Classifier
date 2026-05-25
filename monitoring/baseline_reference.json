@@ -6,8 +6,8 @@
     "split": "test",
     "n_images": 2872,
     "n_skipped": 0,
-    "duration_seconds": 79.04,
-    "generated_at": "2026-05-08T08:48:04.838973+00:00"
+    "duration_seconds": 78.14,
+    "generated_at": "2026-05-19T08:08:21.794475+00:00"
   },
   "global": {
     "top1_accuracy": 0.899025069637883,

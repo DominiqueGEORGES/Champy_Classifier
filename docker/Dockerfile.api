@@ -2,24 +2,47 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependances systeme pour Pillow
+# Dependances systeme pour Pillow + libgomp pour ONNX Runtime
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libjpeg62-turbo-dev && \
+    apt-get install -y --no-install-recommends \
+        libjpeg62-turbo-dev \
+        libgl1 libglib2.0-0 libxcb1 libsm6 libxext6 libxrender1 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copier les requirements et installer
+# Copier les requirements (gardes pour reference, on installe une liste
+# minimale plus bas pour limiter la taille de l'image).
 COPY requirements.txt .
-RUN pip install --no-cache-dir \
-    fastapi uvicorn[standard] python-multipart \
-    onnxruntime pillow numpy \
-    prometheus-client pydantic pydantic-settings \
-    loguru pyyaml python-dotenv
 
-# Copier le code source
+# Liste minimale pour le runtime API : pas torch, pas streamlit, pas mlflow.
+# Inclut bentoml en plus de fastapi pour pouvoir basculer entre les deux
+# runtimes via la `command:` de docker-compose.yml. onnx (en plus de
+# onnxruntime) est requis par bentoml.onnx pour charger les modeles ONNX
+# depuis le Model Store BentoML.
+RUN pip install --no-cache-dir \
+    fastapi "uvicorn[standard]" python-multipart \
+    onnxruntime onnx pillow numpy \
+    prometheus-client pydantic pydantic-settings \
+    loguru pyyaml python-dotenv \
+    aiosqlite \
+    "bentoml>=1.2,<2.0"
+# Dependances additionnelles pour l'endpoint /explain (Grad-CAM).
+# Torch CPU-only via index-url dedie pour limiter le poids (~700 MB vs +2 GB
+# avec CUDA). grad-cam est installe separement car son pyproject pointe sur
+# PyPI standard, pas sur l'index pytorch.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch torchvision && \
+    pip install --no-cache-dir grad-cam
+
+# Copier le code source + scripts (le script d'import BentoML est dans scripts/)
 COPY src/ src/
 COPY configs/ configs/
+COPY scripts/ scripts/
 COPY .env.example .env
 
 EXPOSE 8000
 
+# CMD par defaut = FastAPI (rester sur la solution actuelle).
+# Pour basculer vers BentoML, surcharger via la `command:` du docker-compose.yml :
+#   command: ["bentoml", "serve", "src.serving_bentoml.service:ChampyService",
+#             "--host", "0.0.0.0", "--port", "8000"]
 CMD ["uvicorn", "src.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]

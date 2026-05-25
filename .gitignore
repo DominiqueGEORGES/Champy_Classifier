@@ -77,3 +77,7 @@ desktop.ini
 *.tmp
 *.bak
 uv.lock
+
+# Airflow
+airflow/logs/
+airflow/.env.airflow

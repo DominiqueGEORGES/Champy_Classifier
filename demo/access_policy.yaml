@@ -1,0 +1,93 @@
+# =====================================================================
+# Champy Classifier - Politique d'accès aux pages (RBAC déclaratif)
+#
+# Single source of truth pour la matrice rôles/pages. Modifier ce fichier
+# pour ajouter une page, changer un rôle minimum, ou introduire un nouveau
+# niveau intermédiaire.
+#
+# Hiérarchie des rôles : un rôle de niveau N satisfait toutes les exigences
+# de niveau <= N. Exemple : admin (niveau 3) accède aux pages min_role user
+# (niveau 2) et guest (niveau 1).
+#
+# Pour ajouter un rôle intermédiaire (par exemple 'viewer' entre guest et
+# user), il suffit de :
+#   1. Ajouter 'viewer' dans la section `roles` avec son niveau
+#   2. Reaffecter le min_role des pages concernées
+#   3. Mettre a jour users.yaml pour creer des comptes de ce role
+#
+# La fonction auth.setup_page() consulte ce fichier automatiquement,
+# aucune modification de code Python n'est requise pour modifier la policy.
+# =====================================================================
+
+# Hierarchie des roles. Le niveau plus eleve inclut tous les droits
+# des niveaux inferieurs.
+roles:
+  guest: 0      # Visiteur non identifie, acces limite
+  user: 1       # Equipe, lecture seule sur tout le portfolio
+  admin: 2      # Toi + Loic, lecture + actions
+
+# Role par defaut applique aux pages non listees ci-dessous.
+# Securite par defaut : si on oublie de declarer une page, elle est
+# automatiquement restreinte au niveau le plus eleve.
+default_min_role: admin
+
+# Matrice des pages. Le nom de la cle correspond au nom de fichier
+# (sans le chemin), tel que retourne par Path(__file__).name.
+pages:
+  # ----- Pages publiques (acces invite) -----
+  app.py:
+    min_role: guest
+    description: Landing page avec video de presentation et statut du pipeline.
+
+  "08_prédiction.py":
+    min_role: guest
+    description: Demonstration interactive de prediction (upload d'image).
+
+  # ----- Pages reservees aux utilisateurs identifies (lecture seule) -----
+  "01_donnees_brutes.py":
+    min_role: user
+    description: Exploration et statistiques sur les 647K images brutes.
+
+  "02_nettoyage.py":
+    min_role: user
+    description: Rapport de deduplication et filtrage OpenCLIP.
+
+  "03_augmentation.py":
+    min_role: user
+    description: Transforms PyTorch et previsualisation des augmentations.
+
+  "04_split.py":
+    min_role: user
+    description: Strategie de split stratifie 70/15/15.
+
+  "05_entrainement.py":
+    min_role: user
+    description: Metriques et historique de l'entrainement ConvNeXt-Tiny.
+
+  "06_évaluation.py":
+    min_role: user
+    description: Confusion matrix, F1 par classe, Grad-CAM.
+
+  "07_model_registry.py":
+    min_role: user
+    description: Versions du modele dans MLflow Model Registry.
+
+  "09_api.py":
+    min_role: user
+    description: Endpoints REST de l'API FastAPI.
+
+  "10_monitoring.py":
+    min_role: user
+    description: Tableau de bord Prometheus + Grafana, latences et alertes.
+
+  "11_drift.py":
+    min_role: user
+    description: Detection de drift via Evidently AI (classes + confiance).
+
+  "12_infrastructure.py":
+    min_role: user
+    description: Architecture Docker, CI/CD GitHub Actions.
+
+  "13_analyse_modèles.py":
+    min_role: user
+    description: Comparaison des architectures testees (ResNet, EfficientNet, ConvNeXt).

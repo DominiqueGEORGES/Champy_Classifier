@@ -1,0 +1,22 @@
+# Seuils des alertes Champy.
+# Ne pas editer a la main si la page Streamlit Alertes est utilisee.
+# Genere automatiquement via monitoring.alert_generator.save_thresholds().
+
+api_down:
+  for: 1m
+  severity: critical
+high_latency_p95:
+  threshold_seconds: 0.55
+  for: 30s
+  severity: warning
+high_latency_mean:
+  threshold_seconds: 0.2
+  for: 5m
+  severity: warning
+low_mean_confidence:
+  threshold: 0.5
+  for: 10m
+  severity: warning
+no_recent_predictions:
+  for: 10m
+  severity: warning

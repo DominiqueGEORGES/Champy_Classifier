@@ -1,0 +1,53 @@
+# Regles d'alerte Prometheus pour Champy Classifier.
+# GENERATED FILE - ne pas editer a la main.
+# Source : monitoring/alert_generator.py + configs/alerts/thresholds.yml
+
+groups:
+- name: champy_api
+  interval: 30s
+  rules:
+  - alert: APIDown
+    expr: up{job="champy-api"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      project: champy
+    annotations:
+      summary: API Champy hors ligne
+      description: 'L''endpoint /metrics de l''API n''est plus scrape par Prometheus depuis plus de 1m. Verifier sur le NUC3 : ''docker compose ps api''.'
+  - alert: HighLatencyP95
+    expr: histogram_quantile(0.95, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le)) > 0.55
+    for: 30s
+    labels:
+      severity: warning
+      project: champy
+    annotations:
+      summary: Latence p95 elevee sur les predictions
+      description: La latence p95 des predictions depasse 0.55s sur les 5 dernieres minutes (seuil ajustable).
+  - alert: HighLatencyMean
+    expr: (rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])) > 0.2
+    for: 5m
+    labels:
+      severity: warning
+      project: champy
+    annotations:
+      summary: Latence moyenne elevee sur les predictions
+      description: La latence moyenne des predictions depasse 0.2s sur les 5 dernieres minutes (seuil ajustable).
+  - alert: LowMeanConfidence
+    expr: (rate(champy_prediction_confidence_sum[10m]) / rate(champy_prediction_confidence_count[10m])) < 0.5
+    for: 10m
+    labels:
+      severity: warning
+      project: champy
+    annotations:
+      summary: Confiance moyenne basse - possible drift
+      description: La confiance moyenne des predictions est tombee sous 0.5 sur les 10 dernieres minutes. Generer un rapport drift Evidently pour investiguer (seuil ajustable).
+  - alert: NoRecentPredictions
+    expr: rate(champy_predictions_total[10m]) == 0 and on() rate(champy_requests_total{endpoint="/predict"}[10m]) > 0
+    for: 10m
+    labels:
+      severity: warning
+      project: champy
+    annotations:
+      summary: Requetes /predict recues mais aucune prediction loggee
+      description: Le compteur champy_requests_total{endpoint=/predict} progresse mais champy_predictions_total stagne. Probable erreur cote inference (modele non charge ou exception silencieuse).

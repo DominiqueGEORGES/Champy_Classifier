@@ -1,0 +1,42 @@
+# Configuration Alertmanager pour le projet Champy Classifier.
+#
+# Achemine toutes les alertes vers le receiver "discord-champy" qui POST
+# en HTTP local sur l'adaptateur alertmanager-discord (port 9094, meme
+# reseau Docker). L'adaptateur convertit le payload Alertmanager au
+# format Discord embed et le push sur le webhook configure via la
+# variable d'environnement DISCORD_WEBHOOK.
+#
+# Notes sur le routing :
+#   - group_by: une seule notification par alertname (evite le spam si
+#     plusieurs instances de la meme alerte se declenchent ensemble).
+#   - group_wait: attendre 30s avant la premiere notif d'un groupe,
+#     pour laisser le temps a d'autres alertes du meme groupe d'arriver.
+#   - group_interval: ne pas renotifier le meme groupe avant 5min, meme
+#     si de nouvelles alertes du groupe arrivent.
+#   - repeat_interval: relancer la notif toutes les 4h si l'alerte reste
+#     active (eviter de l'oublier).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'discord-champy'
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: 'discord-champy'
+    webhook_configs:
+      - url: 'http://alertmanager-discord:9094'
+        send_resolved: true
+
+# Regles d'inhibition : si une alerte critique se declenche, supprimer
+# les alertes warning du meme alertname pour eviter le double-notif.
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname']

@@ -20,11 +20,18 @@ crash. Grafana down -> fallback vers des liens. SQLite vide -> placeholder.
 
 from __future__ import annotations
 
-import asyncio
+import os
 import sys
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from demo import auth
+
+auth.setup_page(min_role="user")  # ou "guest" pour pages publiques
+
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -60,7 +67,7 @@ THRESHOLDS = load_thresholds()
 
 st.caption(
     f"Prometheus : `{PROMETHEUS_URL}`  |  Grafana : `{GRAFANA_URL}`  |  "
-    f"Last load : {datetime.now(UTC).isoformat(timespec='seconds')}"
+    f"Last load : {datetime.now(ZoneInfo('Europe/Paris')).strftime('%d/%m/%Y %H:%M:%S (%Z)')}"
 )
 if st.button("Rafraichir maintenant", type="primary"):
     st.cache_data.clear()
@@ -159,7 +166,6 @@ grafana_ok = _grafana_alive(GRAFANA_URL)
 # le DNS interne du compose). On tape donc une URL externe :
 # - via env var CHAMPY_GRAFANA_URL_EXTERNAL si on est en compose,
 # - sinon on retombe sur GRAFANA_URL (mode local natif).
-import os
 
 GRAFANA_EXTERNAL_URL = os.environ.get("CHAMPY_GRAFANA_URL_EXTERNAL", GRAFANA_URL)
 parsed = urlparse(GRAFANA_EXTERNAL_URL)
@@ -227,62 +233,42 @@ with col_prom:
 # Si le store n'est pas accessible (compose sans BentoML, fichier
 # manquant), on degrade silencieusement.
 with col_sql:
-    st.subheader("Tendance 24h (SQLite)")
-    db_path = _PROJECT_ROOT / "data" / "runtime" / "predictions.db"
-    if not db_path.exists():
-        st.info(
-            f"Pas de base SQLite a `{db_path.relative_to(_PROJECT_ROOT)}`. "
-            "Le service BentoML alimente le store ; le compose actuel sert "
-            "encore FastAPI qui n'ecrit pas dans le store."
+    st.subheader("Tendance 24h (via API)")
+    from demo.lib.api_utils import get_recent_predictions
+
+    records = get_recent_predictions(hours=24, limit=10000)
+    if records is None:
+        st.warning(
+            "L'API n'a pas répondu pour `/predictions/recent`. "
+            "Vérifier que le service `champy_api` est sain."
         )
+    elif not records:
+        st.info("Aucune prédiction sur les 24 dernières heures.")
     else:
-        try:
-            from src.serving_bentoml.storage import PredictionStore
-
-            async def _load() -> list:
-                """Charge les predictions des 24h depuis le store SQLite.
-
-                Returns:
-                    Liste de ``PredictionRecord``.
-                """
-                store = PredictionStore(db_path)
-                await store.init()
-                try:
-                    return await store.get_recent(hours=24, limit=10000)
-                finally:
-                    await store.close()
-
-            records = asyncio.run(_load())
-            if not records:
-                st.info("Aucune prediction sur les 24 dernieres heures.")
-            else:
-                df_sql = pd.DataFrame(
-                    [
-                        {
-                            "timestamp": pd.Timestamp(r.timestamp),
-                            "species": r.predicted_class,
-                        }
-                        for r in records
-                    ]
-                )
-                # Agregation horaire par classe (top-5 visibles).
-                top5_species = df_sql["species"].value_counts().head(5).index.tolist()
-                df_top = df_sql[df_sql["species"].isin(top5_species)].copy()
-                df_top["hour"] = df_top["timestamp"].dt.floor("h")
-                trend = df_top.groupby(["hour", "species"]).size().reset_index(name="count")
-                fig = px.line(
-                    trend,
-                    x="hour",
-                    y="count",
-                    color="species",
-                    markers=True,
-                )
-                fig.update_layout(height=420, legend_title_text="")
-                st.plotly_chart(fig, use_container_width=True)
-                st.caption(f"{len(records)} predictions sur 24h, top-5 especes affichees.")
-        except Exception as e:
-            st.warning(f"Lecture SQLite impossible : {e}")
-
+        df_sql = pd.DataFrame(
+            [
+                {
+                    "timestamp": pd.Timestamp(r["timestamp"]).tz_convert("Europe/Paris"),
+                    "species": r["predicted_class"],
+                }
+                for r in records
+            ]
+        )
+        # Agregation horaire par classe (top-5 visibles).
+        top5_species = df_sql["species"].value_counts().head(5).index.tolist()
+        df_top = df_sql[df_sql["species"].isin(top5_species)].copy()
+        df_top["hour"] = df_top["timestamp"].dt.floor("h")
+        trend = df_top.groupby(["hour", "species"]).size().reset_index(name="count")
+        fig = px.line(
+            trend,
+            x="hour",
+            y="count",
+            color="species",
+            markers=True,
+        )
+        fig.update_layout(height=420, legend_title_text="")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"{len(records)} prédictions sur 24h, top-5 espèces affichées.")
 st.divider()
 
 # =====================================================================

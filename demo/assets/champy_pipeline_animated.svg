@@ -1,0 +1,692 @@
+<svg id="champy-svg-root" class="scene-1-active" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet" font-family="'Source Sans 3', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <style>
+      :root {
+        --primary: #1F4E3D;
+        --accent: #B85C00;
+        --bg: #FAFAF5;
+      }
+
+      .bg-rect { fill: #FAFAF5; }
+
+      /* Modules par defaut : grises */
+      .module { fill: #f0efe9; stroke: #b8b8b0; stroke-width: 1.5; rx: 8; ry: 8; }
+      .module-label { fill: #6b6b65; font-size: 13px; font-weight: 600; text-anchor: middle; }
+      .module-sub { fill: #9b9b95; font-size: 11px; text-anchor: middle; }
+
+      /* Fleches statiques (decor) */
+      .arrow { fill: none; stroke: #d8d7d0; stroke-width: 1.5; }
+
+      /* Fleches animees : effet de flux dash qui se deplace en permanence */
+      .arrow-flow {
+        fill: none;
+        stroke: #1F4E3D;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 10 6;
+        animation: dash 1.2s linear infinite;
+      }
+      .arrow-flow-human {
+        fill: none;
+        stroke: #B85C00;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 10 6;
+        animation: dash 1.2s linear infinite;
+      }
+      @keyframes dash { to { stroke-dashoffset: -32; } }
+
+      /* ==========================================================
+         Etat de scene actif : pilote par JS via la classe
+         .scene-N-active appliquee sur la racine du SVG.
+         ========================================================== */
+
+      /* Modules : opacite 0.4 par defaut (decor), 1 pour la scene active */
+      [class*="anim-mod-s"] { opacity: 0.4; transition: opacity 0.4s ease; }
+      .scene-1-active .anim-mod-s1 { opacity: 1; }
+      .scene-2-active .anim-mod-s2 { opacity: 1; }
+      .scene-3-active .anim-mod-s3 { opacity: 1; }
+      .scene-4-active .anim-mod-s4 { opacity: 1; }
+      .scene-5-active .anim-mod-s5 { opacity: 1; }
+      .scene-6-active .anim-mod-s6 { opacity: 1; }
+      .scene-7-active .anim-mod-s7 { opacity: 1; }
+
+      /* Bandeau texte : visible uniquement pour la scene active */
+      [class*="anim-text-s"] { opacity: 0; transition: opacity 0.3s ease; }
+      .scene-1-active .anim-text-s1 { opacity: 1; }
+      .scene-2-active .anim-text-s2 { opacity: 1; }
+      .scene-3-active .anim-text-s3 { opacity: 1; }
+      .scene-4-active .anim-text-s4 { opacity: 1; }
+      .scene-5-active .anim-text-s5 { opacity: 1; }
+      .scene-6-active .anim-text-s6 { opacity: 1; }
+      .scene-7-active .anim-text-s7 { opacity: 1; }
+
+      /* Fleches animees : invisibles sauf pendant la scene active */
+      [class*="anim-flow-s"] { opacity: 0; transition: opacity 0.3s ease; }
+      .scene-1-active .anim-flow-s1 { opacity: 1; }
+      .scene-2-active .anim-flow-s2 { opacity: 1; }
+      .scene-3-active .anim-flow-s3 { opacity: 1; }
+      .scene-4-active .anim-flow-s4 { opacity: 1; }
+      .scene-5-active .anim-flow-s5 { opacity: 1; }
+      .scene-6-active .anim-flow-s6 { opacity: 1; }
+      .scene-7-active .anim-flow-s7 { opacity: 1; }
+
+      /* Highlight des modules actifs : vert + texte blanc pendant leur scene */
+      .scene-1-active .hi-s1 rect, .scene-1-active .hi-s1 ellipse, .scene-1-active .hi-s1 circle { fill: #1F4E3D; }
+      .scene-1-active .hi-s1 text { fill: #ffffff; }
+      .scene-2-active .hi-s2 rect, .scene-2-active .hi-s2 ellipse, .scene-2-active .hi-s2 circle { fill: #1F4E3D; }
+      .scene-2-active .hi-s2 text { fill: #ffffff; }
+      .scene-3-active .hi-s3 rect, .scene-3-active .hi-s3 ellipse, .scene-3-active .hi-s3 circle { fill: #1F4E3D; }
+      .scene-3-active .hi-s3 text { fill: #ffffff; }
+      .scene-4-active .hi-s4 rect, .scene-4-active .hi-s4 ellipse, .scene-4-active .hi-s4 circle { fill: #1F4E3D; }
+      .scene-4-active .hi-s4 text { fill: #ffffff; }
+      .scene-5-active .hi-s5 rect, .scene-5-active .hi-s5 ellipse, .scene-5-active .hi-s5 circle { fill: #1F4E3D; }
+      .scene-5-active .hi-s5 text { fill: #ffffff; }
+      .scene-6-active .hi-s6 rect, .scene-6-active .hi-s6 ellipse, .scene-6-active .hi-s6 circle { fill: #1F4E3D; }
+      .scene-6-active .hi-s6 text { fill: #ffffff; }
+      .scene-7-active .hi-s7 rect, .scene-7-active .hi-s7 ellipse, .scene-7-active .hi-s7 circle { fill: #1F4E3D; }
+      .scene-7-active .hi-s7 text { fill: #ffffff; }
+
+      /* Decor des zones */
+      .zone-bg { fill: none; stroke-width: 1; stroke-dasharray: 4 3; rx: 12; ry: 12; }
+      .zone-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+
+      /* Texte du bandeau de scene */
+      .scene-title { font-size: 24px; font-weight: 800; fill: #1F4E3D; text-anchor: middle; }
+      .scene-desc { font-size: 17px; font-weight: 600; fill: #333; text-anchor: middle; }
+
+      /* ==========================================================
+         Controles de navigation interactifs
+         ========================================================== */
+      .nav-control {
+        cursor: pointer;
+        pointer-events: all;
+        transition: opacity 0.2s ease, transform 0.15s ease;
+      }
+      .nav-control:hover { opacity: 0.8; }
+      /* Seuls les cercles de FOND prennent le vert (pas les anneaux de progression) */
+      .nav-control > circle:not(#progress-ring) {
+        fill: #1F4E3D;
+      }
+      .nav-control text { fill: #ffffff; font-size: 22px; font-weight: 800; text-anchor: middle; }
+
+
+      /* Pastilles timeline cliquables (zone hit augmentee via pointer-events) */
+      .timeline-dot {
+        cursor: pointer;
+        pointer-events: all;
+        transition: r 0.2s ease, fill 0.2s ease;
+      }
+      .timeline-dot:hover { r: 9; }
+
+      /* Pastille de scene active (curseur ambre) */
+      .timeline-cursor {
+        fill: #B85C00;
+        transition: cx 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg-rect" width="1200" height="720" />
+
+
+
+  <!-- ============================================================ -->
+  <!-- Titre principal -->
+  <!-- ============================================================ -->
+
+  <text x="600" y="32" text-anchor="middle" font-size="20" font-weight="800" fill="#1F4E3D">
+    Champy Classifier — Cycle de vie complet
+  </text>
+  <text x="600" y="52" text-anchor="middle" font-size="13" fill="#666">
+    Pipeline MLOps : entraînement, déploiement, inference, monitoring, drift, alerting
+  </text>
+
+  <!-- ============================================================ -->
+  <!-- Zones (decor) -->
+  <!-- ============================================================ -->
+
+  <rect class="zone-bg" x="20" y="80" width="220" height="170" stroke="#0288d1" />
+  <text x="40" y="100" class="zone-label" fill="#0288d1">Dev XPS 9520</text>
+
+  <rect class="zone-bg" x="270" y="80" width="280" height="170" stroke="#f57c00" />
+  <text x="290" y="100" class="zone-label" fill="#f57c00">Cloud DagsHub (alternative)</text>
+
+  <rect class="zone-bg" x="580" y="80" width="600" height="290" stroke="#558b2f" />
+  <text x="600" y="100" class="zone-label" fill="#558b2f">Production NUC3 (Docker Compose)</text>
+
+  <rect class="zone-bg" x="580" y="400" width="600" height="120" stroke="#c2185b" />
+  <text x="600" y="420" class="zone-label" fill="#c2185b">Alerting</text>
+
+  <g class="anim-mod-s7">
+    <rect class="zone-bg" x="20" y="400" width="540" height="120" stroke="#5e35b1" />
+    <text x="40" y="420" class="zone-label" fill="#5e35b1">Exposition prod entreprise (cible)</text>
+  </g>
+
+  <!-- Marker definitions pour les fleches -->
+  <defs>
+    <marker id="arrow-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d8d7d0" />
+    </marker>
+    <marker id="arrow-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1F4E3D" />
+    </marker>
+    <marker id="arrow-flow-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#B85C00" />
+    </marker>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- Flèches statiques en arriere-plan (decor de l'archi complete) -->
+  <!-- ============================================================ -->
+
+  <!-- Training : Dev -> MLflow + DVC remote -->
+  <path d="M 220 200 L 290 145" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 220 210 L 290 210" class="arrow" marker-end="url(#arrow-grey)" />
+
+  <!-- Deploy : DVC remote -> API -->
+  <path d="M 410 215 L 610 150" class="arrow" marker-end="url(#arrow-grey)" stroke-dasharray="3 3" />
+  <!-- Fleche decor : MinIO -> API BentoML (chemin de pull alternatif) -->
+  <path d="M 1040 315 C 1040 250, 800 200, 750 170" class="arrow" marker-end="url(#arrow-grey)" stroke-dasharray="3 3" />
+
+
+  <!-- Inference path: Client → Internet → Cloudflare → Streamlit ← API -->
+  <path d="M 76 290 L 128 290" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 192 290 L 290 290" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 490 290 C 600 290, 700 200, 780 165" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 780 145 L 750 145" class="arrow" marker-end="url(#arrow-grey)" />
+
+  <!-- API → SQLite + Prometheus → Grafana -->
+  <path d="M 680 175 L 680 238" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 750 145 C 820 145, 850 200, 850 233" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 940 263 L 970 263" class="arrow" marker-end="url(#arrow-grey)" />
+
+  <!-- Airflow → SQLite -->
+  <path d="M 1020 175 C 850 200, 770 240, 740 260" class="arrow" marker-end="url(#arrow-grey)" />
+
+  <!-- Prometheus → Alertmanager → Adapter → Discord → MLOps -->
+  <path d="M 870 290 C 800 350, 720 400, 685 440" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 760 467 L 800 467" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 950 467 L 990 467" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 1140 467 L 1125 485" class="arrow" marker-end="url(#arrow-grey)" />
+
+  <!-- ============================================================ -->
+  <!-- Modules : Dev XPS -->
+  <!-- ============================================================ -->
+
+  <g class="hi-s1">
+    <rect class="module" x="40" y="180" width="180" height="50" />
+    <text x="130" y="200" class="module-label">PyTorch</text>
+    <text x="130" y="216" class="module-sub" fill="#6b6b65">ConvNeXt-Tiny + ONNX</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Modules : Cloud DagsHub -->
+  <!-- ============================================================ -->
+
+  <g class="hi-s1">
+    <rect class="module" x="290" y="120" width="120" height="50" />
+    <text x="350" y="140" class="module-label">MLflow</text>
+    <text x="350" y="158" class="module-sub" fill="#6b6b65">Tracking</text>
+  </g>
+
+  <!-- DVC remote actif scene 1 (push) ET scene 2 (pull) -->
+  <g class="hi-s1">
+    <rect class="module" x="290" y="190" width="120" height="50" />
+    <text x="350" y="210" class="module-label">DVC remote</text>
+    <text x="350" y="226" class="module-sub" fill="#6b6b65">data + modèles</text>
+  </g>
+
+  <g>
+    <rect class="module" x="425" y="120" width="115" height="50" />
+    <text x="482" y="140" class="module-label">Git repo</text>
+    <text x="482" y="158" class="module-sub" fill="#6b6b65">Champy_Classifier</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Modules : Production NUC3 -->
+  <!-- ============================================================ -->
+
+  <!-- API BentoML : actif scenes 2, 3, 4 -->
+  <g class="hi-s2">
+    <rect class="module" x="610" y="120" width="140" height="55" />
+    <text x="680" y="140" class="module-label">API BentoML</text>
+    <text x="680" y="158" class="module-sub" fill="#6b6b65">BentoML 1.4 + ONNX</text>
+    <text x="680" y="172" class="module-sub" fill="#6b6b65">:8000</text>
+  </g>
+
+  <!-- Streamlit : actif scene 3 -->
+  <g class="hi-s3">
+    <rect class="module" x="780" y="120" width="140" height="55" />
+    <text x="850" y="140" class="module-label">Streamlit</text>
+    <text x="850" y="158" class="module-sub" fill="#6b6b65">demo portfolio</text>
+    <text x="850" y="172" class="module-sub" fill="#6b6b65">:8501</text>
+  </g>
+
+  <!-- Airflow : actif scene 5 -->
+  <g class="hi-s5">
+    <rect class="module" x="950" y="120" width="140" height="55" />
+    <text x="1020" y="140" class="module-label">Airflow</text>
+    <text x="1020" y="158" class="module-sub" fill="#6b6b65">scheduler</text>
+    <text x="1020" y="172" class="module-sub" fill="#6b6b65">:8081</text>
+  </g>
+
+  <!-- SQLite : actif scenes 4 et 5 -->
+  <g class="hi-s4">
+    <rect class="module" x="610" y="235" width="140" height="55" />
+    <text x="680" y="255" class="module-label">SQLite</text>
+    <text x="680" y="273" class="module-sub" fill="#6b6b65">prédictions.db</text><text x="680" y="285" class="module-sub" fill="#6b6b65">PredictionStore</text>
+  </g>
+
+  <!-- Prometheus : actif scenes 4 et 6 -->
+  <g class="hi-s4">
+    <rect class="module" x="800" y="235" width="140" height="55" />
+    <text x="870" y="255" class="module-label">Prometheus</text>
+    <text x="870" y="273" class="module-sub" fill="#6b6b65">+ alert rules</text>
+    <text x="870" y="285" class="module-sub" fill="#6b6b65">:9090</text>
+  </g>
+
+  <!-- Grafana : actif scene 4 -->
+  <g class="hi-s4">
+    <rect class="module" x="970" y="235" width="140" height="55" />
+    <text x="1040" y="255" class="module-label">Grafana</text>
+    <text x="1040" y="273" class="module-sub" fill="#6b6b65">dashboards</text>
+    <text x="1040" y="285" class="module-sub" fill="#6b6b65">:3000</text>
+  </g>
+
+
+  <!-- Stockage objet MinIO : alternative locale a DagsHub pour les blobs DVC.
+       Actif pendant scene 2 (deploiement, pull du modele). -->
+  <g class="hi-s2">
+    <rect class="module" x="970" y="315" width="140" height="55" />
+    <text x="1040" y="335" class="module-label">MinIO</text>
+    <text x="1040" y="353" class="module-sub" fill="#6b6b65">stockage objet</text>
+    <text x="1040" y="365" class="module-sub" fill="#6b6b65">self-hosted</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Modules : Alerting (scene 6) -->
+  <!-- ============================================================ -->
+
+  <g class="hi-s6">
+    <rect class="module" x="610" y="440" width="150" height="55" />
+    <text x="685" y="460" class="module-label">Alertmanager</text>
+    <text x="685" y="476" class="module-sub" fill="#6b6b65">routing + dedup</text>
+    <text x="685" y="490" class="module-sub" fill="#6b6b65">:9093</text>
+  </g>
+
+  <g class="hi-s6">
+    <rect class="module" x="800" y="440" width="150" height="55" />
+    <text x="875" y="460" class="module-label">Adapter Discord</text>
+    <text x="875" y="476" class="module-sub" fill="#6b6b65">conversion payload</text>
+    <text x="875" y="490" class="module-sub" fill="#6b6b65">:9094</text>
+  </g>
+
+  <g class="hi-s6">
+    <rect class="module" x="990" y="440" width="150" height="55" />
+    <text x="1065" y="460" class="module-label">Discord</text>
+    <text x="1065" y="478" class="module-sub" fill="#6b6b65">#champy-alerts</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Modules : Exposition Cloudflare (toujours visible) -->
+  <!-- ============================================================ -->
+
+  <g class="hi-s3">
+    <circle cx="160" cy="290" r="32" class="module" />
+    <text x="160" y="288" class="module-label">Internet</text>
+    <text x="160" y="304" class="module-sub" fill="#6b6b65">global</text>
+  </g>
+
+  <g class="hi-s3">
+    <rect class="module" x="290" y="265" width="200" height="55" />
+    <text x="390" y="285" class="module-label">Cloudflare Tunnel</text>
+    <text x="390" y="303" class="module-sub" fill="#6b6b65">+ Accèss (OTP email)</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Modules : Cible prod entreprise (scene 7 uniquement) -->
+  <!-- ============================================================ -->
+
+  <g class="anim-mod-s7">
+    <rect class="module" x="40" y="450" width="150" height="50" />
+    <text x="115" y="470" class="module-label" fill="#5e35b1">nginx</text>
+    <text x="115" y="486" class="module-sub">reverse-proxy</text>
+  </g>
+
+  <g class="anim-mod-s7">
+    <rect class="module" x="210" y="450" width="150" height="50" />
+    <text x="285" y="470" class="module-label" fill="#5e35b1">Let's Encrypt</text>
+    <text x="285" y="486" class="module-sub">SSL auto</text>
+  </g>
+
+  <g class="anim-mod-s7">
+    <rect class="module" x="380" y="450" width="160" height="50" />
+    <text x="460" y="470" class="module-label" fill="#5e35b1">oauth2-proxy</text>
+    <text x="460" y="486" class="module-sub">SSO LDAP / OIDC</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Acteurs humains -->
+  <!-- ============================================================ -->
+
+  <!-- Acteur humain : Client (en ambre, taille augmentee pour visibilite) -->
+  <g>
+    <circle cx="60" cy="290" r="22" fill="#B85C00" stroke="#8a4400" stroke-width="2" />
+    <text x="60" y="299" font-size="22" text-anchor="middle">👤</text>
+  </g>
+  <text x="60" y="335" font-size="13" font-weight="700" fill="#B85C00" text-anchor="middle">Client</text>
+
+  <!-- Acteur humain : Data Scientist -->
+  <g>
+    <circle cx="130" cy="120" r="22" fill="#B85C00" stroke="#8a4400" stroke-width="2" />
+    <text x="130" y="129" font-size="22" text-anchor="middle">🧑‍🔬</text>
+  </g>
+  <text x="130" y="162" font-size="13" font-weight="700" fill="#B85C00" text-anchor="middle">Data Scientist</text>
+
+  <!-- Acteur humain : MLOps -->
+  <g>
+    <circle cx="1140" cy="510" r="22" fill="#B85C00" stroke="#8a4400" stroke-width="2" />
+    <text x="1140" y="519" font-size="22" text-anchor="middle">🧑‍💻</text>
+  </g>
+  <text x="1140" y="552" font-size="13" font-weight="700" fill="#B85C00" text-anchor="middle">MLOps</text>
+
+  <!-- ============================================================ -->
+  <!-- FLECHES ANIMEES PAR SCENE                                    -->
+  <!-- Apparaissent en vert vif avec effet de "flux" pendant la     -->
+  <!-- scene active uniquement                                       -->
+  <!-- ============================================================ -->
+
+  <!-- Scene 1 : Data Scientist → PyTorch, PyTorch → MLflow et DVC -->
+  <g class="anim-flow-s1">
+    <path d="M 130 142 L 130 178" class="arrow-flow-human" marker-end="url(#arrow-flow-human)" />
+    <path d="M 220 200 L 290 145" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 220 210 L 290 210" class="arrow-flow" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Scene 2 : DVC → API -->
+  <g class="anim-flow-s2">
+    <path d="M 410 215 L 610 150" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <!-- Chemin alternatif : MinIO -> API (en parallele de DagsHub -> API) -->
+    <path d="M 1040 315 C 1040 250, 800 200, 750 170" class="arrow-flow" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Scene 3 : Client → Internet → Cloudflare → Streamlit ← API -->
+  <g class="anim-flow-s3">
+    <path d="M 82 290 L 128 290" class="arrow-flow-human" marker-end="url(#arrow-flow-human)" />
+    <path d="M 192 290 L 290 290" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 490 290 C 600 290, 700 200, 780 165" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 780 145 L 750 145" class="arrow-flow" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Scene 4 : API → SQLite, API → Prometheus → Grafana -->
+  <g class="anim-flow-s4">
+    <path d="M 680 175 L 680 238" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 750 145 C 820 145, 850 200, 850 233" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 940 263 L 970 263" class="arrow-flow" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Scene 5 : Airflow → SQLite (drift check) -->
+  <g class="anim-flow-s5">
+    <path d="M 1020 175 C 850 200, 770 240, 740 260" class="arrow-flow" marker-end="url(#arrow-flow)" />
+  </g>
+
+  <!-- Scene 6 : Prometheus → Alertmanager → Adapter → Discord → MLOps -->
+  <g class="anim-flow-s6">
+    <path d="M 870 290 C 800 350, 720 400, 685 440" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 760 467 L 800 467" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 950 467 L 990 467" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 1140 482 L 1130 495" class="arrow-flow-human" marker-end="url(#arrow-flow-human)" />
+  </g>
+
+  <!-- Scene 7 : Internet → nginx → API (alternative au tunnel) -->
+  <g class="anim-flow-s7">
+    <path d="M 130 322 C 150 380, 130 430, 115 448" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
+    <path d="M 190 475 L 210 475" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
+    <path d="M 540 475 C 580 475, 620 350, 680 250" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Bandeau d'explication scene par scene                        -->
+  <!-- IMPORTANT : fond opaque qui MASQUE le diagramme              -->
+  <!-- ============================================================ -->
+
+  <!-- Fond opaque du bandeau -->
+  <rect x="0" y="600" width="1200" height="120" fill="#FAFAF5" />
+  <rect x="0" y="600" width="1200" height="2" fill="#1F4E3D" />
+
+  <!-- Conteneur scene 1 -->
+  <g class="anim-text-s1">
+    <text x="600" y="638" class="scene-title">Scène 1/7 — Entraînement &amp; Tracking</text>
+    <text x="600" y="665" class="scene-desc">
+      Le Data Scientist entraîne ConvNeXt-Tiny en PyTorch sur le XPS, logue paramètres et métriques dans MLflow,
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      exporte au format ONNX puis push le modèle et les données vers DVC remote (DagsHub).
+    </text>
+  </g>
+
+  <g class="anim-text-s2">
+    <text x="600" y="638" class="scene-title">Scène 2/7 — Déploiement du modèle</text>
+    <text x="600" y="665" class="scene-desc">
+      L'API BentoML fait `dvc pull` pour récupérer le dernier modèle ONNX validé,
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      depuis MinIO (self-hosted, default) ou DagsHub (cloud, alternative). Le modèle est chargé en mémoire.
+    </text>
+  </g>
+
+  <g class="anim-text-s3">
+    <text x="600" y="638" class="scene-title">Scène 3/7 — Inférence live</text>
+    <text x="600" y="665" class="scene-desc">
+      Le Client uploade une photo sur Streamlit via Internet et Cloudflare Tunnel (auth OTP par email).
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      Streamlit appelle l'API BentoML qui renvoie la prédiction top-5 en moins de 100 ms.
+    </text>
+  </g>
+
+  <g class="anim-text-s4">
+    <text x="600" y="638" class="scene-title">Scène 4/7 — Persistance &amp; Monitoring</text>
+    <text x="600" y="665" class="scene-desc">
+      L'API logge chaque prédiction dans SQLite (PredictionStore) et expose ses métriques au format Prometheus.
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      Prometheus scrape /metrics toutes les 15 secondes ; Grafana visualise les KPI live.
+    </text>
+  </g>
+
+  <g class="anim-text-s5">
+    <text x="600" y="638" class="scene-title">Scène 5/7 — Détection de drift</text>
+    <text x="600" y="665" class="scene-desc">
+      Airflow planifie quotidiennement un job qui compare les prédictions récentes à la baseline du test set.
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      Evidently AI génère un rapport HTML : chi-2 sur les classes, KS sur la confiance.
+    </text>
+  </g>
+
+  <g class="anim-text-s6">
+    <text x="600" y="638" class="scene-title">Scène 6/7 — Alerting</text>
+    <text x="600" y="665" class="scene-desc">
+      Prometheus évalue les règles d'alerte (API down, latence, drift). Quand un seuil est franchi,
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      Alertmanager route via l'adaptateur Discord vers le canal #champy-alerts. MLOps reçoit la notification.
+    </text>
+  </g>
+
+  <g class="anim-text-s7">
+    <text x="600" y="638" class="scene-title">Scène 7/7 — Cible production entreprise</text>
+    <text x="600" y="665" class="scene-desc">
+      En production entreprise, Cloudflare Tunnel serait remplacé par nginx (reverse-proxy + rate limiting),
+    </text>
+    <text x="600" y="690" class="scene-desc">
+      Let's Encrypt pour le SSL, oauth2-proxy pour l'auth SSO LDAP/OIDC. Code applicatif inchangé.
+    </text>
+  </g>
+
+  <!-- Timeline -->
+  <g transform="translate(0, 590)">
+    <rect x="100" y="0" width="1000" height="4" fill="#c8c7be" rx="2" />
+    <circle class="timeline-dot" data-action="jump" data-scene="1" cx="171" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="2" cx="314" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="3" cx="457" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="4" cx="600" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="5" cx="743" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="6" cx="886" cy="2" r="6" fill="#1F4E3D" />
+    <circle class="timeline-dot" data-action="jump" data-scene="7" cx="1029" cy="2" r="6" fill="#1F4E3D" />
+
+    <!-- Curseur de progression -->
+    <circle id="timeline-cursor" class="timeline-cursor" cx="171" cy="2" r="9" />
+  </g>
+
+
+  <!-- ============================================================ -->
+  <!-- Controles de navigation interactifs                           -->
+  <!-- ============================================================ -->
+
+  <!-- ============================================================ -->
+  <!-- Controles de navigation (zone libre au-dessus du bandeau)     -->
+  <!-- ============================================================ -->
+
+  <!-- Bouton precedent (gauche) - icone chevron gauche en path SVG -->
+  <g class="nav-control" data-action="prev" transform="translate(60, 565)">
+    <title>Scene precedente</title>
+    <circle cx="0" cy="0" r="24" />
+    <path d="M 6 -10 L -6 0 L 6 10" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+<!-- Bouton suivant (droite) - icone chevron droit en path SVG -->
+  <g class="nav-control" data-action="next" transform="translate(1140, 565)">
+    <title>Scene suivante</title>
+    <circle cx="0" cy="0" r="24" />
+    <path d="M -6 -10 L 6 0 L -6 10" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- Script de navigation                                          -->
+  <!-- ============================================================ -->
+  <script type="text/javascript"><![CDATA[
+    (function() {
+      const svgRoot = document.getElementById('champy-svg-root');
+      const timelineCursor = document.getElementById('timeline-cursor');
+      const playPauseIcon = document.getElementById('play-pause-icon');
+      const TOTAL_SCENES = 7;
+      const SCENE_DURATION_MS = 8000;
+      const TIMELINE_POSITIONS = [171, 314, 457, 600, 743, 886, 1029];
+
+      let currentScene = 1;
+      let isPlaying = true;
+      let autoTimer = null;
+
+      function applyScene(n) {
+        for (let i = 1; i <= TOTAL_SCENES; i++) {
+          svgRoot.classList.remove('scene-' + i + '-active');
+        }
+        svgRoot.classList.add('scene-' + n + '-active');
+        currentScene = n;
+        if (timelineCursor) {
+          timelineCursor.setAttribute('cx', TIMELINE_POSITIONS[n - 1]);
+        }
+        // Note : l'anneau CSS reset tout seul en infinite, pas besoin de toucher ici.
+        // Resync uniquement sur action utilisateur (cf. userJump).
+      }
+
+      function startAuto() {
+        if (autoTimer) return;
+        autoTimer = setInterval(function() {
+          const next = currentScene === TOTAL_SCENES ? 1 : currentScene + 1;
+          applyScene(next);
+        }, SCENE_DURATION_MS);
+        isPlaying = true;
+      }
+
+      function stopAuto() {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+        }
+        isPlaying = false;
+      }
+
+
+      function userJump(n) {
+        // Action utilisateur : changement de scene + reset visuel + arret auto
+        applyScene(n);
+        resetProgressRing();
+        stopAuto();
+      }
+
+
+      // ==========================================================
+      // Attache des event listeners au chargement.
+      // Robuste a la CSP de Streamlit qui peut bloquer les onclick
+      // inline dans une iframe components.html.
+      // ==========================================================
+      function attachListeners() {
+        // Event delegation : listener sur DOCUMENT plutot que svgRoot.
+        // Si l'iframe Streamlit relaie les clics au document HTML englobant,
+        // on les attrape la. Sinon, les clics SVG remonteront jusqu'a document
+        // par bubbling.
+
+        // Tracker debug : tout clic detecte met l'indicateur en bleu.
+        // Permet de savoir si les clics arrivent ou si le dispatch foire.
+        // Helper : remontee manuelle du DOM pour trouver un parent avec data-action.
+        // Robuste sur SVG (closest() peut buguer) avec try/catch et parentElement fallback.
+        function findActionAncestor(node) {
+          let safety = 0;
+          while (node && safety < 20) {
+            safety++;
+            try {
+              if (node.getAttribute && node.getAttribute('data-action')) {
+                return node;
+              }
+            } catch (e) {}
+            node = node.parentNode || node.parentElement;
+          }
+          return null;
+        }
+
+        document.addEventListener('click', function(e) {
+
+          try {
+            const t = e.target;
+            tagInfo = (t.tagName || 'unk').toLowerCase();
+            const cls = t.getAttribute && t.getAttribute('class');
+            if (cls) tagInfo += '.' + cls.split(' ')[0];
+            const act = t.getAttribute && t.getAttribute('data-action');
+            if (act) tagInfo += '@' + act;
+          } catch (err) { tagInfo = 'err'; }
+
+          const el = findActionAncestor(e.target);
+          if (!el) return;
+          const action = el.getAttribute('data-action');
+          // Si action trouvee : indicateur vert
+          switch (action) {
+            case 'prev':
+              userJump(currentScene === 1 ? TOTAL_SCENES : currentScene - 1);
+              break;
+            case 'next':
+              userJump(currentScene === TOTAL_SCENES ? 1 : currentScene + 1);
+              break;
+            case 'jump':
+              const sceneNum = parseInt(el.getAttribute('data-scene'), 10);
+              if (sceneNum >= 1 && sceneNum <= TOTAL_SCENES) userJump(sceneNum);
+              break;
+          }
+        }, true);  // capture phase : on attrape avant que d'autres listeners interceptent
+      }
+
+      // Init : attache les listeners, puis demarre en scene 1 mode auto
+      try {
+        setTimeout(attachListeners, 100);
+      } catch (e) {}
+      applyScene(1);
+      startAuto();
+    })();
+  ]]></script>
+
+</svg>

@@ -1,0 +1,49 @@
+# =====================================================================
+# Champy Classifier - Référentiel des comptes utilisateurs
+#
+# Bonnes pratiques appliquees :
+#   - Les mots de passe sont stockes uniquement sous forme de hash bcrypt
+#     (algorithme slow-hash anti brute force, 12 rounds par defaut).
+#   - Le sel est integre dans le hash bcrypt (format $2b$cost$salt+hash).
+#   - Aucun mot de passe en clair dans ce fichier.
+#   - En production reelle, ce fichier serait stocke hors du repo
+#     (secrets manager, variable d'environnement chiffree, vault).
+#     Pour le portfolio de demonstration, les credentials sont volontairement
+#     publies sur la page de login afin que tout visiteur puisse tester.
+#
+# Pour regenerer un hash :
+#   python -c "import bcrypt; print(bcrypt.hashpw(b'mot_de_passe', bcrypt.gensalt(rounds=12)).decode())"
+# =====================================================================
+
+users:
+  admin:
+    display_name: Administrateur
+    role: admin
+    password_hash: $2b$12$CdyuPXV9ZdBqBWNxU.q4pu6.v9XHImW4zxAN.zxandvL/A2nwUegC
+    description: Compte avec droits etendus (actions administratives, retrain, reset baseline).
+
+  user:
+    display_name: Utilisateur standard
+    role: user
+    password_hash: $2b$12$XiEl7bmUtvN9.SAdokDPM.AZ/i2h3oOa2HGrz4LDymAXA1s6ZKoIO
+    description: Compte en lecture seule sur l'ensemble du portfolio.
+
+# Credentials a afficher en clair sur la page de login (mode demo uniquement).
+# Cette section est destinee a l'usage pedagogique : tout visiteur peut tester
+# les deux roles. EN PRODUCTION CETTE SECTION SERAIT SUPPRIMEE.
+demo_credentials_visible: true
+demo_credentials:
+  - username: admin
+    password: ChampyAdmin2026!
+    role_display: Administrateur
+  - username: user
+    password: ChampyUser2026!
+    role_display: Utilisateur standard
+
+# Politique de securite
+security_policy:
+  max_login_attempts: 5             # Nombre max d'essais avant lockout
+  lockout_duration_seconds: 300     # Duree du lockout : 5 minutes
+  session_max_age_seconds: 7200     # Expiration session : 1 heure
+  password_min_length: 12           # Longueur minimale (controle a l'inscription)
+  bcrypt_rounds: 12                 # Cout bcrypt (12 = ~250ms par verification)

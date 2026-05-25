@@ -1,5 +1,9 @@
 [core]
-    remote = origin
+    remote = minio
 ['remote "origin"']
     url = s3://dvc
     endpointurl = https://dagshub.com/LoicFocraud/Champy_Classifier.s3
+['remote "minio"']
+    url = s3://champy-dvc
+    endpointurl = http://localhost:9010
+    region = us-east-1

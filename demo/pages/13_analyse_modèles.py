@@ -20,11 +20,17 @@ analyses passées.
 """
 
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from demo import auth
+
+auth.setup_page(min_role="user")  # ou "guest" pour pages publiques
 
 # ---------------------------------------------------------------------------
 # Configuration et helpers

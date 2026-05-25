@@ -37,9 +37,16 @@ class MLflowSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
-    mlflow_tracking_uri: str = "https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow"
+    # Configuration MLflow / DagsHub
+    mlflow_tracking_uri: str = "http://localhost:5050"
+    # Backend DagsHub (utilisé uniquement si l'URI pointe vers dagshub.com)
     dagshub_user: str = "LoicFocraud"
     dagshub_token: str = ""
+    # Backend MinIO (S3-compatible) pour les artefacts MLflow en local
+    mlflow_s3_endpoint_url: str = "http://localhost:9010"
+    aws_access_key_id: str = "minioadmin"
+    aws_secret_access_key: str = ""
+    aws_default_region: str = "us-east-1"
 
 
 # ---------------------------------------------------------------------------

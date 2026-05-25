@@ -1,11 +1,40 @@
+# Configuration Prometheus pour le projet Champy Classifier.
+#
+# Comporte trois sections :
+#   - global       : parametres par defaut (scrape, evaluation)
+#   - rule_files   : fichiers de regles d'alerte charges au demarrage
+#   - alerting     : Alertmanager(s) cibles pour les alertes declenchees
+#   - scrape_configs : cibles a scraper
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# =====================================================================
+# Chargement des regles d'alerte.
+# Le wildcard permet d'ajouter d'autres fichiers sans toucher au compose.
+# =====================================================================
+rule_files:
+  - /etc/prometheus/alerts/champy_*.yml
+
+# =====================================================================
+# Routage des alertes vers Alertmanager.
+# 'alertmanager:9093' utilise le DNS du reseau docker-compose interne.
+# Le port 9093 est le port d'ecoute du container Alertmanager (le mapping
+# 9193 cote hote n'a pas d'importance ici, c'est container-to-container).
+# =====================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# =====================================================================
+# Cibles a scraper.
 # Cible : service API via le network interne docker-compose.
 # Le nom 'api' est resolu par le DNS interne du compose, le port 8000
 # est le port ecoute dans le container (le port host 8010 n'est pas utilise
 # ici, c'est une communication container-to-container).
+# =====================================================================
 scrape_configs:
   - job_name: "champy-api"
     metrics_path: "/metrics"

@@ -1,0 +1,25 @@
+# Theme Champy Classifier : editorial refined-tech
+# Direction : sobre, premium, sans AI slop
+
+[theme]
+# Couleur principale : vert foret (rappel champignon/nature, serieux pour pro)
+primaryColor = "#1F4E3D"
+
+# Fond de l'application : creme subtil
+backgroundColor = "#FAFAF5"
+
+# Fond secondaire (sidebars, widgets) : gris tres clair
+secondaryBackgroundColor = "#F1EFE8"
+
+# Texte principal : noir doux (pas pur noir, plus elegant)
+textColor = "#1A1A1A"
+
+# Famille de police par defaut : sans serif (custom fonts charges via CSS injecte dans app.py)
+font = "sans serif"
+
+[server]
+# Conserver les configs existantes
+runOnSave = true
+
+[browser]
+gatherUsageStats = false

@@ -24,7 +24,9 @@ Usage :
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import io
 import os
 import time
 from pathlib import Path
@@ -33,14 +35,20 @@ from typing import Any
 import bentoml
 import numpy as np
 from loguru import logger
+from PIL import Image
 from PIL.Image import Image as PILImage  # noqa: TC002 (BentoML introspecte le type au runtime)
 from prometheus_client import Counter, Histogram, Summary
 
 from src.serving_bentoml.preprocessing import preprocess_pil
 from src.serving_bentoml.runner import DEFAULT_MODEL_TAG, OnnxRunner
 from src.serving_bentoml.schemas import (
+    CheckpointMetadata,
+    ExplainResponse,
     HealthResponse,
+    ModelFileInfo,
     ModelInfoResponse,
+    ModelRegistryResponse,
+    OnnxValidation,
     PredictionItem,
     PredictionResponse,
 )
@@ -56,6 +64,12 @@ _DEFAULT_DB_PATH = (
     Path(__file__).resolve().parent.parent.parent / "data" / "runtime" / "predictions.db"
 )
 PREDICTIONS_DB_PATH = Path(os.environ.get("CHAMPY_PREDICTIONS_DB", _DEFAULT_DB_PATH))
+
+# Modele PyTorch pour Grad-CAM (l'API serve ONNX en standard, mais Grad-CAM
+# necessite l'acces aux gradients d'ou un second chargement PyTorch).
+_DEFAULT_PYTORCH_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "best_model.pt"
+PYTORCH_MODEL_PATH = Path(os.environ.get("CHAMPY_PYTORCH_MODEL_PATH", _DEFAULT_PYTORCH_PATH))
+NUM_CLASSES = 30
 
 # ---------------------------------------------------------------------------
 # Metriques Prometheus custom (les metriques HTTP natives BentoML sont deja
@@ -151,6 +165,11 @@ class ChampyService:
         # Sans ca, le GC peut collecter la Task avant son completion et
         # interrompre l'ecriture (Python <3.13 documente ce comportement).
         self._pending_writes: set[asyncio.Task[None]] = set()
+        # Grad-CAM : initialise paresseusement au premier appel /explain
+        # (import torch lourd, on evite de payer ce cout au demarrage).
+        self.pytorch_model: Any = None
+        self.cam: Any = None
+        self._gradcam_init_lock = asyncio.Lock()
 
     async def _ensure_store(self) -> None:
         """Initialise le store SQLite a la premiere prediction.
@@ -168,6 +187,114 @@ class ChampyService:
                     await self.store.init()
                 except Exception as exc:
                     logger.error(f"Echec init PredictionStore : {exc}")
+
+    async def _ensure_gradcam(self) -> bool:
+        """Initialise PyTorch + GradCAM au premier appel /explain.
+
+        Returns:
+            True si l'initialisation a reussi (ou avait deja eu lieu), False
+            en cas d'erreur (modele PyTorch absent, dependance manquante).
+        """
+        if self.cam is not None:
+            return True
+        async with self._gradcam_init_lock:
+            if self.cam is not None:
+                return True
+            if not PYTORCH_MODEL_PATH.exists():
+                logger.error(f"Modele PyTorch introuvable : {PYTORCH_MODEL_PATH}")
+                return False
+            try:
+                import torch
+                from pytorch_grad_cam import GradCAM
+                from torchvision.models import convnext_tiny
+
+                model = convnext_tiny(weights=None)
+                in_features = model.classifier[2].in_features
+                model.classifier[2] = torch.nn.Linear(in_features, NUM_CLASSES)
+                state_dict = torch.load(PYTORCH_MODEL_PATH, map_location="cpu", weights_only=True)
+                if isinstance(state_dict, dict):
+                    for key in ("state_dict", "model_state_dict", "model"):
+                        if key in state_dict:
+                            state_dict = state_dict[key]
+                            break
+                model.load_state_dict(state_dict, strict=False)
+                model.eval()
+                self.pytorch_model = model
+                self.cam = GradCAM(model=model, target_layers=[model.features[-1]])
+                logger.info(
+                    f"PyTorch + GradCAM charges depuis {PYTORCH_MODEL_PATH} "
+                    "(target_layer=model.features[-1])"
+                )
+                return True
+            except Exception as exc:
+                logger.error(f"Echec init GradCAM : {exc}")
+                return False
+
+    @bentoml.api(route="/explain")  # type: ignore[misc]
+    async def explain(self, image: PILImage, target_class_id: int = -1) -> ExplainResponse:
+        """Genere une visualisation Grad-CAM de la decision du modele.
+
+        Args:
+            image: Image a expliquer.
+            target_class_id: Classe pour laquelle expliquer la decision.
+                Si -1 (defaut), utilise la classe predite top-1 via ONNX.
+
+        Returns:
+            ExplainResponse avec original/heatmap/overlay en base64 PNG.
+
+        Raises:
+            bentoml.exceptions.ServiceUnavailable: 503 si PyTorch ou
+                GradCAM indisponibles.
+        """
+        if not await self._ensure_gradcam():
+            raise bentoml.exceptions.ServiceUnavailable(
+                f"GradCAM indisponible. Verifier {PYTORCH_MODEL_PATH}."
+            )
+
+        # Si target_class_id non specifie : predire d'abord via ONNX (rapide)
+        if target_class_id < 0:
+            arr = preprocess_pil(image)
+            logits_batch = await self.infer_batch(arr)
+            target_class_id = int(np.argmax(logits_batch[0]))
+
+        # Preprocessing PyTorch (224x224 + normalisation ImageNet)
+        import torch
+        from pytorch_grad_cam.utils.image import show_cam_on_image
+        from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+
+        image_rgb = image.convert("RGB").resize((224, 224))
+        image_array = np.array(image_rgb).astype(np.float32) / 255.0
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        image_normalized = (image_array - mean) / std
+        tensor = torch.from_numpy(image_normalized).permute(2, 0, 1).unsqueeze(0)
+
+        targets = [ClassifierOutputTarget(target_class_id)]
+        grayscale_cam = self.cam(input_tensor=tensor, targets=targets)[0]
+
+        original_uint8 = (image_array * 255).astype(np.uint8)
+        heatmap_uint8 = (grayscale_cam * 255).astype(np.uint8)
+        overlay_uint8 = show_cam_on_image(image_array, grayscale_cam, use_rgb=True)
+
+        def _to_b64(arr: np.ndarray) -> str:
+            """Encode un tableau numpy en chaîne base64 PNG (helper Grad-CAM)."""
+            img = Image.fromarray(arr)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return base64.b64encode(buf.getvalue()).decode("ascii")
+
+        class_name = (
+            self.runner.class_names[target_class_id]
+            if target_class_id < len(self.runner.class_names)
+            else f"class_{target_class_id}"
+        )
+        return ExplainResponse(
+            target_class_id=target_class_id,
+            target_class_name=class_name,
+            original_b64=_to_b64(original_uint8),
+            heatmap_b64=_to_b64(heatmap_uint8),
+            overlay_b64=_to_b64(overlay_uint8),
+        )
 
     # ------------------------------------------------------------------
     # Methode batchable interne : c'est ici que le pooling adaptatif a lieu.
@@ -408,6 +535,82 @@ class ChampyService:
         if not self.store.is_open:
             return []
         return await self.store.get_recent(hours=hours, limit=limit)
+
+    @bentoml.api(route="/model/registry")  # type: ignore[misc]
+    async def model_registry(self) -> ModelRegistryResponse:
+        """Inventaire des fichiers modèles + métadonnées (checkpoint, ONNX, classes).
+
+        Centralise tout ce que la page Streamlit Model Registry affichait
+        précédemment en accès direct au filesystem.
+
+        Returns:
+            ModelRegistryResponse avec liste des fichiers, métadonnées du
+            checkpoint PyTorch, validation ONNX et liste des classes.
+        """
+        models_dir = Path("/app/models")
+        files: list[ModelFileInfo] = []
+        if models_dir.exists():
+            for ext in ("*.pt", "*.onnx"):
+                for f in models_dir.glob(ext):
+                    files.append(
+                        ModelFileInfo(
+                            filename=f.name,
+                            format=f.suffix.upper(),
+                            size_mb=round(f.stat().st_size / 1024 / 1024, 1),
+                        )
+                    )
+
+        # Métadonnées du checkpoint PyTorch (epoch, best_score)
+        checkpoint: CheckpointMetadata | None = None
+        ckpt_path = models_dir / "best_model.pt"
+        if ckpt_path.exists():
+            try:
+                import torch
+
+                ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+                if isinstance(ckpt, dict):
+                    checkpoint = CheckpointMetadata(
+                        epoch=ckpt.get("epoch"),
+                        best_score=ckpt.get("best_score"),
+                    )
+            except Exception as exc:
+                logger.warning(f"Lecture checkpoint impossible : {exc}")
+
+        # Validation ONNX
+        onnx_validation: OnnxValidation | None = None
+        onnx_path = models_dir / "best_model.onnx"
+        if onnx_path.exists():
+            try:
+                import onnx
+
+                model = onnx.load(str(onnx_path))
+                onnx.checker.check_model(model)
+                inp_shape = (
+                    [d.dim_value for d in model.graph.input[0].type.tensor_type.shape.dim]
+                    if model.graph.input
+                    else None
+                )
+                out_shape = (
+                    [d.dim_value for d in model.graph.output[0].type.tensor_type.shape.dim]
+                    if model.graph.output
+                    else None
+                )
+                onnx_validation = OnnxValidation(
+                    valid=True, input_shape=inp_shape, output_shape=out_shape
+                )
+            except Exception as exc:
+                onnx_validation = OnnxValidation(valid=False, error=str(exc))
+
+        # Liste des classes (depuis le runner BentoML déjà chargé)
+        class_names = self.runner.class_names if self.runner.is_loaded else []
+
+        return ModelRegistryResponse(
+            models=files,
+            checkpoint=checkpoint,
+            onnx_validation=onnx_validation,
+            num_classes=len(class_names) if class_names else None,
+            class_names=class_names,
+        )
 
 
 # Permet d'importer ``service`` au niveau module (convention BentoML pour

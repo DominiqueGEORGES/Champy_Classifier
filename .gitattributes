@@ -1,16 +1,60 @@
-# Force LF line endings in the repo (cross-platform)
-* text=auto eol=lf
+# Champy Classifier — règles de normalisation Git
+# Garantit que les fichiers ont les bonnes fins de ligne sur tous les OS.
 
-# Explicitly mark binary files
-*.jpg binary
-*.jpeg binary
-*.png binary
-*.gif binary
-*.ico binary
-*.onnx binary
-*.pt binary
-*.pth binary
-*.keras binary
-*.npy binary
-*.pkl binary
-*.pdf binary
+# Par défaut, Git détecte automatiquement les fichiers texte vs binaire.
+* text=auto
+
+# === Scripts shell : toujours LF (sinon bash refuse de les exécuter sous Linux) ===
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# === Scripts PowerShell : CRLF natif Windows ===
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.psd1      text eol=crlf
+
+# === Code Python : LF (convention PEP 8 / standard Unix) ===
+*.py        text eol=lf
+*.pyi       text eol=lf
+
+# === Configuration et données texte : LF (convention Docker, Kubernetes, etc.) ===
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.toml      text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+.env*       text eol=lf
+Dockerfile  text eol=lf
+Makefile    text eol=lf
+
+# === Documentation : LF (rendu identique partout) ===
+*.md        text eol=lf
+*.rst       text eol=lf
+*.txt       text eol=lf
+
+# === Web : LF ===
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+
+# === Fichiers binaires : pas de conversion ===
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.svg       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tar       binary
+*.7z        binary
+*.onnx      binary
+*.pt        binary
+*.pth       binary
+*.bentomodel binary
+*.pkl       binary
+*.joblib    binary
+*.h5        binary
+*.parquet   binary

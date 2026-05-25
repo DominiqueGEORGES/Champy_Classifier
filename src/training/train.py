@@ -427,9 +427,17 @@ def train(
 
     # -- MLflow --
     mlflow.set_tracking_uri(mlflow_settings.mlflow_tracking_uri)
-    if mlflow_settings.dagshub_token:
-        os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_settings.dagshub_user
-        os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_settings.dagshub_token
+    if "dagshub.com" in mlflow_settings.mlflow_tracking_uri:
+        # Backend DagsHub cloud (alternative)
+        if mlflow_settings.dagshub_token:
+            os.environ["MLFLOW_TRACKING_USERNAME"] = mlflow_settings.dagshub_user
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = mlflow_settings.dagshub_token
+    else:
+        # Backend MLflow local + artefacts sur MinIO (default)
+        os.environ["MLFLOW_S3_ENDPOINT_URL"] = mlflow_settings.mlflow_s3_endpoint_url
+        os.environ["AWS_ACCESS_KEY_ID"] = mlflow_settings.aws_access_key_id
+        os.environ["AWS_SECRET_ACCESS_KEY"] = mlflow_settings.aws_secret_access_key
+        os.environ["AWS_DEFAULT_REGION"] = mlflow_settings.aws_default_region
 
     with mlflow.start_run(run_name=f"{config.model_name}_2phase_{config.seed}"):
         mlflow.log_params(config.model_dump())

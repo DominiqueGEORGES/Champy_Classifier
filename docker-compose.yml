@@ -20,10 +20,13 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
+    command: ["bentoml", "serve", "src.serving_bentoml.service:ChampyService", "--host", "0.0.0.0", "--port", "8000"]
+    container_name: champy_api
     ports:
       - "8010:8000"
     volumes:
       - ./models:/app/models:ro
+      - bentoml_data:/root/bentoml
       # data/runtime/ accueille la DB SQLite des predictions (PredictionStore,
       # Bloc M2). FastAPI n'utilise pas le store - le volume est prepare ici
       # pour que le service BentoML qui le remplace au Bloc 5 (api-bento)
@@ -34,7 +37,8 @@ services:
     environment:
       - CHAMPY_PREDICTIONS_DB=/app/data/runtime/predictions.db
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -45,27 +49,64 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.demo
+    container_name: champy_demo
     ports:
       - "8501:8501"
     env_file: .env
     environment:
       # La demo Streamlit tape sur l'API via le network interne du compose.
       - CHAMPY_API_URL=http://api:8000
+      - CHAMPY_API_PUBLIC_URL=https://champy.sbdg-ia.fr/api
+      # Prometheus et Grafana : URLs internes pour les requetes serveur,
+      # URL externe pour les iframes et liens cliquables cote navigateur.
+      - CHAMPY_PROMETHEUS_URL=http://prometheus:9090/prometheus
+      - CHAMPY_GRAFANA_URL=http://grafana:3000
+      - CHAMPY_GRAFANA_URL_EXTERNAL=https://champy.sbdg-ia.fr/grafana
+      - TZ=Europe/Paris
+      - GRAFANA_PUBLIC_URL=https://grafana.sbdg-ia.fr
+      - AIRFLOW_ADMIN_USERNAME=${AIRFLOW_ADMIN_USERNAME:-admin}
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
+      - GRAFANA_USER=${GRAFANA_USER:-admin}
+      - GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     depends_on:
       api:
         condition: service_healthy
+      prometheus:
+        condition: service_started
+      grafana:
+        condition: service_started
     restart: unless-stopped
+    volumes:
+      - ./demo:/app/demo                  # ← ajouter en haut pour code live
+      - ./models:/app/models:ro
+      - ./data:/app/data
+      - ./configs:/app/configs:ro
+      - ./monitoring:/app/monitoring:ro
+      - ./monitoring/reports:/app/monitoring/reports:rw
+      - ./docs:/app/docs:ro
+      - ./.streamlit:/app/.streamlit:ro
+      - ./configs/alerts:/app/configs/alerts:rw
 
   prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'   # <- AJOUT pour autoriser POST /-/reload
+      - '--web.external-url=https://champy.sbdg-ia.fr/prometheus'
+      - '--web.route-prefix=/prometheus'
+    container_name: champy_prometheus
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
       - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/alerts:/etc/prometheus/alerts:ro
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
+    container_name: champy_grafana
     ports:
       - "3010:3000"
     volumes:
@@ -77,16 +118,193 @@ services:
       - grafana-data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-changeme}
+      - GF_SECURITY_ALLOW_EMBEDDING=true
       # Auth anonyme + embedding pour les iframes Streamlit (page 10).
       # Acceptable en demo locale ; en prod il faudrait un reverse proxy
       # avec auth deleguee. Voir PLAYBOOK.md (piege "Grafana iframe").
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
+      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://champy.sbdg-ia.fr/grafana}
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_SECURITY_ALLOW_EMBEDDING=true
+
     depends_on:
       - prometheus
     restart: unless-stopped
 
+# =====================================================================
+# A AJOUTER dans docker-compose.yml, section services:
+# =====================================================================
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: champy_alertmanager
+    restart: unless-stopped
+    ports:
+      - "9193:9093"
+    volumes:
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=${ALERTMANAGER_EXTERNAL_URL:-http://localhost:8088/alertmanager}'
+      - '--web.route-prefix=/alertmanager'
+
+  alertmanager-discord:
+    image: rogerrum/alertmanager-discord:latest
+    container_name: champy_alertmanager_discord
+    restart: unless-stopped
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK_URL}
+      - DISCORD_USERNAME=Champy AlertBot
+      # Optionnel : seuil de severite pour bot user/avatar
+      # - DEFAULT_AVATAR_URL=
+
+  minio:
+    image: minio/minio:latest
+    container_name: champy_minio
+    restart: unless-stopped
+    ports:
+      - "9010:9000"   # API S3 (host:container) - offset +10 par coherence projet
+      - "9011:9001"   # Console web
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-changeme_in_env_file}
+      - MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL:-http://localhost:8088/minio}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.18.0
+    container_name: champy_mlflow
+    ports:
+      - "5050:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - AWS_DEFAULT_REGION=us-east-1
+    command: >
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri sqlite:///mlflow/mlflow.db
+        --default-artifact-root s3://champy-mlflow/
+        --serve-artifacts
+        --static-prefix /mlflow
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  nginx:
+      image: nginx:1.27-alpine
+      container_name: champy_nginx
+      ports:
+        - "8088:80"
+      volumes:
+        - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      depends_on:
+        - demo
+      healthcheck:
+        test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+      restart: unless-stopped
+
+  postgres_airflow:
+    image: postgres:16-alpine
+    container_name: champy_airflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER:-airflow} -d ${AIRFLOW_DB_NAME:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: champy_airflow:latest
+    container_name: champy_airflow
+    restart: unless-stopped
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
+      AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET}
+      # AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8081
+      AIRFLOW__WEBSERVER__BASE_URL: ${AIRFLOW_BASE_URL:-http://localhost:8088/airflow}
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres_airflow:5432/${AIRFLOW_DB_NAME:-airflow}
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: us-east-1
+      PYTHONPATH: /opt/champy:/opt/airflow
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./scripts:/opt/champy/scripts:ro
+      - ./configs:/opt/champy/configs:ro
+      - ./docs:/opt/champy/docs
+      - ./.env:/opt/champy/.env:ro
+    command: standalone
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/airflow/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
   grafana-data:
+  alertmanager_data:
+  bentoml_data:
+  minio_data:
+  mlflow_data:
+  postgres_airflow_data:
+    external: true
+    name: champy_airflow_postgres_data

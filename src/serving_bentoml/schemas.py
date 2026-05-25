@@ -79,3 +79,47 @@ class ErrorResponse(BaseModel):
     """
 
     detail: str = Field(description="Message d'erreur")
+
+
+class ExplainResponse(BaseModel):
+    """Reponse Grad-CAM avec 3 images encodees en base64 PNG."""
+
+    target_class_id: int
+    target_class_name: str
+    original_b64: str
+    heatmap_b64: str
+    overlay_b64: str
+
+
+class ModelFileInfo(BaseModel):
+    """Métadonnées d'un fichier modèle du registry."""
+
+    filename: str
+    format: str
+    size_mb: float
+
+
+class CheckpointMetadata(BaseModel):
+    """Métadonnées extraites d'un checkpoint PyTorch."""
+
+    epoch: int | None = None
+    best_score: float | None = None
+
+
+class OnnxValidation(BaseModel):
+    """Résultat de la validation du modèle ONNX."""
+
+    valid: bool
+    input_shape: list[int] | None = None
+    output_shape: list[int] | None = None
+    error: str | None = None
+
+
+class ModelRegistryResponse(BaseModel):
+    """Inventaire complet du model registry."""
+
+    models: list[ModelFileInfo]
+    checkpoint: CheckpointMetadata | None = None
+    onnx_validation: OnnxValidation | None = None
+    num_classes: int | None = None
+    class_names: list[str] = Field(default_factory=list)
