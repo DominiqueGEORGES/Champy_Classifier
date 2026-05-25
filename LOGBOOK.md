@@ -1523,3 +1523,6 @@ Pour les variables d'env uniquement, `--force-recreate` seul peut suffire.
 - Schema d'interconnexion Docker (cf. to-do #2)
 - Verification visuelle de la page Plateforme apres `--force-recreate` du demo : tous les "Ouvrir" doivent etre soit vides soit pointer vers `champy.sbdg-ia.fr`
 - Test depuis le smartphone (4G hors LAN) : valider le parcours SSO Cloudflare Access -> hub Streamlit -> selection d'un service
+- Dette test : `test_run_phase_early_stopping_breaks_loop` skip en CI (assert
+  non-deterministe selon le backend Windows/Linux). Refactor : mocker `val_loss`
+  pour forcer le declenchement de EarlyStopping de maniere reproductible.
