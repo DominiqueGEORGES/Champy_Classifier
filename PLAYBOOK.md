@@ -6,6 +6,144 @@
 
 ---
 
+## Table des matières par thématique
+
+> Le playbook est organisé chronologiquement par étape MLOps (cadrage,
+> data, training, ...). Cette TOC permet de naviguer **par sujet** entre
+> les ~80 pièges accumulés. Chaque entrée pointe vers la section qui
+> contient le piège (Ctrl+F sur le mot-clé pour le retrouver précisément).
+
+### Git, DVC et données partagées
+- [Fichiers `.dvc` doivent rester dans git](#etape-1---structure-du-projet-et-config) (les exclure casse le lien vers les données versionnées)
+- [`requirements.txt` UTF-16 silencieux sur Windows](#etape-1---structure-du-projet-et-config) (pip ne parse pas l'UTF-16)
+- [Conflits `git stash` après `git pull` sur artefacts générés](#etape-2---data-pipeline) (manifests CSV, reports JSON regénérés par d'autres)
+- [`git pull && dvc pull` comme séquence atomique](#etape-2---data-pipeline) (les `.dvc` suivent git, les données pas)
+- [Token DagsHub unique pour MLflow + DVC + Git + AWS_SECRET_ACCESS_KEY](#etape-1---structure-du-projet-et-config)
+
+### Windows / PowerShell
+- [`.env` fragile sur reboot Windows](#etape-1---structure-du-projet-et-config) (considérer comme reconstructible)
+- [Path translation Git Bash dans `docker exec`](#etape-7---monitoring) (`MSYS_NO_PATHCONV=1` ou PowerShell direct)
+- [`num_workers=0` par défaut sur Windows](#etape-2---data-pipeline) (multiprocessing fork non supporté)
+- [`pin_memory=True` warning sans GPU](#etape-2---data-pipeline) (acceptable, pas bloquant)
+- [Cohabitation hôte partagé : audit ports + offset +10](#etape-8---dockerisation)
+- [Préfixer env vars avec `CHAMPY_*`](#etape-8---dockerisation) (sinon télescope avec autres projets)
+- [Bind mount Windows Docker Desktop non fiable pour le code Python live](#etape-85---reverse-proxy-nginx-et-exposition-publique) (rebuild + force-recreate obligatoire)
+
+### MLflow
+- [MLflow 401/403 silencieux si env vars pas exportées](#etape-3---training-pipeline)
+- [Token DagsHub périssable](#etape-3---training-pipeline) (révoquer/régénérer côté UI)
+- [`load_dotenv` en début de script avant `import mlflow`](#etape-3---training-pipeline)
+
+### PyTorch / Training
+- [`@torch.no_grad()` casse mypy pre-commit](#etape-3---training-pipeline) (utiliser `with torch.no_grad():`)
+- [`type: ignore` sur generics PyTorch inutiles avec mirrors-mypy](#etape-3---training-pipeline)
+- [`torch.cuda.get_device_properties(0).total_memory`, pas `total_mem`](#etape-3---training-pipeline)
+- [Gradient accumulation : diviser la loss par `accumulation_steps`](#etape-3---training-pipeline)
+- [Classes < 15 images test = F1 instable](#etape-3---training-pipeline)
+- [Espèces visuellement similaires (7 Russules) = plafond F1](#etape-3---training-pipeline)
+
+### ONNX export
+- [Dynamo exporter torch >=2.9 produit fichier vide](#etape-4---model-registry-et-export) (forcer `dynamo=False`)
+- [`onnxscript` requis même en mode legacy](#etape-4---model-registry-et-export)
+- [Comparer sorties numériques (max_diff < 1e-4)](#etape-4---model-registry-et-export) (pas juste `onnx.checker`)
+- [Export agnostique de l'architecture : auto-detection state_dict](#etape-4---model-registry-et-export)
+- [`.onnx.data` orphelin entre exports successifs](#etape-4---model-registry-et-export)
+- [Transfert checkpoint XPS -> NUC3 via `python -m http.server`](#etape-4---model-registry-et-export)
+- [Taille `.pt` (334 MB) != taille déployée (110 MB ONNX)](#etape-4---model-registry-et-export)
+
+### BentoML 1.4
+- [`bentoml.onnx` deprecated en 1.4](#etape-5---api-serving) (mais fonctionnel, plan migration `bentoml.models.create()`)
+- [`@bentoml.api` force POST](#etape-5---api-serving) (pas de paramètre `method=`)
+- [Appel intra-service async-only](#etape-5---api-serving) (`predict` -> `infer_batch` via proxy RPC)
+- [Sérialisation float64 silencieuse via le proxy](#etape-5---api-serving) (cast `dtype=np.float32` requis)
+- [`PIL.Image.Image` doit rester import runtime](#etape-5---api-serving) (`noqa: TC002`)
+- [`ModelOptions` n'est pas un dict](#etape-5---api-serving) (glob `saved_model.onnx` à la place)
+- [Schema `python.version` n'existe pas en 1.4](#etape-5---api-serving) (utiliser `docker.python_version`)
+- [Modèle non auto-détecté au build sans `models: [tag]`](#etape-5---api-serving) (Model Size = 0)
+- [Conflit `anyio` / `httpx-ws`](#etape-5---api-serving) (pin `anyio>=4.7`)
+- [Query params HTTP non mappés automatiquement](#etape-5---api-serving) (passer en body JSON)
+- [`bentoml serve <module>` (dev) vs `bentoml serve <bento_tag>` (prod)](#etape-5---api-serving)
+- [Swagger UI à la racine `/`, OpenAPI JSON à `/docs.json`](#etape-85---reverse-proxy-nginx-et-exposition-publique) (pas `/docs` ni `/openapi.json`)
+
+### SQLite + async (PredictionStore)
+- [`PRAGMA journal_mode=WAL` obligatoire pour la concurrence](#etape-7---monitoring)
+- [`PRAGMA busy_timeout=5000` anti-`database is locked`](#etape-7---monitoring)
+- [`PRAGMA synchronous=NORMAL` recommandé pour WAL](#etape-7---monitoring) (~3x plus rapide que FULL)
+- [`row_factory` après `connect()` en aiosqlite](#etape-7---monitoring)
+- [Sidecars `.db-wal` et `.db-shm` à gitignore](#etape-7---monitoring)
+- [Partager une connexion aiosqlite entre coroutines est sûr](#etape-7---monitoring) (thread interne sérialise)
+- [Init async + `__init__` sync](#etape-7---monitoring) (lazy init + `asyncio.Lock`)
+- [Fire-and-forget `asyncio.create_task` exige référence forte](#etape-7---monitoring) (sinon GC → RUF006)
+- [Mount Docker dossier > fichier](#etape-7---monitoring) (sidecars + fichier inexistant)
+- [Hash image via `image.tobytes()` après `convert("RGB")`](#etape-7---monitoring)
+- [SQLite WAL ~10k req/s, PostgreSQL au-delà de 1M lignes](#etape-7---monitoring)
+
+### Evidently 0.7+ (drift detection)
+- [API moderne `Dataset.from_pandas` + `Report([Preset()])`](#etape-7---monitoring) (≠ legacy 0.4 des tutos)
+- [`DataDefinition` obligatoire pour cat/num](#etape-7---monitoring)
+- [`save_html` sur `Snapshot` (retour de `.run()`)](#etape-7---monitoring) (pas sur `Report`)
+- [HTML self-contained 3-4 MB](#etape-7---monitoring) (gitignore les rapports)
+- [`DataDriftPreset` chi-2 + KS par défaut](#etape-7---monitoring) (PSI / Wasserstein possibles)
+- [Materialiser baseline depuis aggregats perd la variance](#etape-7---monitoring)
+- [Index rglob pré-construit sur dataset scrape](#etape-7---monitoring) (1.6 → 40 img/s)
+- [`subprocess.run` avec `sys.executable`](#etape-7---monitoring) (pas `python` sur Windows)
+- [`st.components.v1.html(html, height=H, scrolling=True)`](#etape-7---monitoring) (height obligatoire)
+
+### Docker / Compose / Grafana
+- [Cohabitation hôte partagé + offset +10 sur ports occupés](#etape-8---dockerisation)
+- [Port host vs port interne du container](#etape-8---dockerisation) (containers se parlent sur port interne)
+- [`docker compose restart` n'applique PAS les nouveaux volumes / env vars](#etape-7---monitoring) (`up -d` requis)
+- [Volume nommé `grafana-data` persiste les datasources manuelles](#etape-7---monitoring)
+- [`uid` explicite obligatoire dans datasource yaml](#etape-7---monitoring)
+- [`folderUid` recommandé pour stabilité des liens](#etape-7---monitoring)
+- [`schemaVersion >= 36` requis pour Grafana 10+](#etape-7---monitoring)
+- [Datasource ref doit être `{type, uid}` objet, pas string](#etape-7---monitoring)
+- [`prometheus_client` expose `process_*` / `python_*` automatiquement](#etape-7---monitoring) (pas besoin cAdvisor)
+- [Privilégier métriques applicatives custom (`champy_*`)](#etape-7---monitoring) sur natives (`bentoml_service_*`)
+
+### Reverse-proxy nginx et exposition publique (Cloudflare Tunnel + Access)
+- [nginx cache les IPs des backends et casse après `--force-recreate`](#etape-85---reverse-proxy-nginx-et-exposition-publique) (resolver 127.0.0.11 ou restart nginx)
+- [`$host` vs `$http_host` dans `proxy_set_header`](#etape-85---reverse-proxy-nginx-et-exposition-publique) (utiliser `$http_host` pour préserver les redirections externes)
+- [BentoML : Swagger UI à `/`, pas `/docs`](#etape-85---reverse-proxy-nginx-et-exposition-publique) (et OpenAPI à `/docs.json`, pas `/openapi.json`)
+- [Airflow double-préfixe `/airflow/airflow/`](#etape-85---reverse-proxy-nginx-et-exposition-publique) (`AIRFLOW__WEBSERVER__BASE_URL` + pas de réécriture nginx)
+- [Bind mount Windows non fiable pour code Python live](#etape-85---reverse-proxy-nginx-et-exposition-publique) (build + force-recreate obligatoire)
+- [Streamlit `runOnSave` ne fonctionne pas sur Windows Docker Desktop](#etape-85---reverse-proxy-nginx-et-exposition-publique)
+- [Cloudflare Tunnel YAML strict sur l'indentation](#etape-85---reverse-proxy-nginx-et-exposition-publique) (valider avec `cloudflared tunnel ingress validate`)
+- [Healthcheck nginx `localhost` foire sur IPv6 BusyBox](#etape-85---reverse-proxy-nginx-et-exposition-publique) (forcer `127.0.0.1`)
+
+### Streamlit + iframes
+- [Grafana refuse l'embed par défaut](#etape-7---monitoring) (`GF_SECURITY_ALLOW_EMBEDDING=true`)
+- [Auth bloque l'iframe même avec ALLOW_EMBEDDING](#etape-7---monitoring) (auth anonyme + Viewer requis)
+- [DNS interne compose != côté browser](#etape-7---monitoring) (heuristique `urlparse`)
+- [`histogram_quantile` retourne NaN sans données récentes](#etape-7---monitoring) (convertir en `None`)
+- [Métric Prometheus inexistante = empty array](#etape-7---monitoring) (`or on() vector(0)` en PromQL)
+- [Cache `st.cache_data(ttl=15-30)` indispensable sur requêtes externes](#etape-7---monitoring)
+- [`st.components.v1.iframe` (URL) vs `html` (HTML brut)](#etape-7---monitoring)
+- [Cartes alerting via `st.markdown(unsafe_allow_html=True)`](#etape-7---monitoring) (st.metric trop limité)
+- [Charger seuils depuis YAML, pas hardcoded](#etape-7---monitoring) (regle "zero hardcoded")
+- [Résilience défensive partout : try/except + `st.warning`](#etape-7---monitoring)
+
+### Streamlit zero hardcoded (demo)
+- [Streamlit = portfolio narratif, pas outil de prod](#etape-6---demo-streamlit) (consomme MLflow/Prom, ne les remplace pas)
+- [Aucune valeur écrite en dur](#etape-6---demo-streamlit) (tout depuis JSON/MLflow/API/Prometheus)
+- [Pages incrementalement au fil des etapes](#etape-6---demo-streamlit)
+- [Imports lourds dans try/except](#etape-6---demo-streamlit) (pour ne pas planter la page)
+- [`use_container_width=True` pour les graphiques](#etape-6---demo-streamlit)
+
+### CI/CD GitHub Actions
+- [Drift de version ruff entre pre-commit et CI](#etape-9---cicd) (aligner explicitement les versions)
+- [`pip install -r requirements.txt` source de vérité](#etape-9---cicd) (vs liste figée dans le workflow)
+- [`pip install torch --index-url cpu` pour les tests CI](#etape-9---cicd) (éviter le pull CUDA inutile)
+- [Cache `pip` via `actions/setup-python@v5 cache: pip`](#etape-9---cicd) (~30s/job après le 1er run)
+- [`concurrency` group + `cancel-in-progress`](#etape-9---cicd) (évite saturation runners)
+- [`dorny/paths-filter@v3` pour skip Docker build](#etape-9---cicd) (PR documentaires)
+- [mypy 1.13 ne supporte pas `disable_error_code = ["untyped-decorator"]`](#etape-9---cicd) (introduit en 1.16)
+
+### Tests
+- [Coverage > 80% objectif](#etape-10---tests-et-couverture)
+
+---
+
 ## Etape 0 - Cadrage
 
 **But** : Definir le perimetre, la stack, et la repartition des responsabilites avant d'ecrire une ligne de code.
@@ -421,21 +559,176 @@ docker compose ps
 
 ---
 
+## Etape 8.5 - Reverse-proxy nginx et exposition publique
+
+**But** : Exposer la stack derrière un point d'entrée unique HTTPS, protégé par Cloudflare Access (Zero Trust), avec routage par sous-path vers chaque service.
+
+**A produire** :
+- [x] Reverse-proxy nginx interne (container `champy_nginx`, port 8088)
+- [x] Configuration `configs/nginx/nginx.conf` avec `location` par service
+- [x] Cloudflare Tunnel (`cloudflared` en service systemd sur le NUC Ubuntu)
+- [x] Cloudflare Access application (Zero Trust, SSO e-mail magic-link)
+- [x] Page **Plateforme** dans Streamlit comme hub interactif
+
+**Pourquoi sous-paths plutôt que sous-domaines** :
+
+| Critère | Sous-domaines (`api.champy.sbdg-ia.fr`) | Sous-paths (`champy.sbdg-ia.fr/api/`) |
+|---|---|---|
+| DNS | 1 entrée par service | 1 seule entrée |
+| Certificat TLS | Wildcard requis | Simple |
+| Cloudflare Access | 1 policy par sous-domaine | 1 seule policy |
+| CORS | Configuration par origine | Origin unique |
+| Session SSO | Une session par service | Une session pour tout |
+
+Coût : configuration nginx plus délicate (gestion fine des préfixes par service).
+
+**Pieges connus** :
+
+- **nginx cache les IPs des backends et casse après `--force-recreate`** : nginx résout les noms DNS (par exemple `grafana`, `mlflow`) au démarrage et garde les IPs en cache. Quand un container backend est recréé (`docker compose up -d --force-recreate <service>`), son IP Docker change, mais nginx pointe encore vers l'ancienne. Symptôme : 502 Bad Gateway sur les routes concernées.
+  - **Fix rapide** : `docker compose restart nginx` après tout `--force-recreate` d'un backend.
+  - **Fix permanent** : ajouter dans le bloc `http` de `nginx.conf` :
+    ```nginx
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    ```
+    Et utiliser des variables dans les `proxy_pass` :
+    ```nginx
+    set $upstream http://api:8000;
+    proxy_pass $upstream;
+    ```
+
+- **`$host` vs `$http_host` dans `proxy_set_header`** : la directive `proxy_set_header Host $host;` ne préserve pas le port et utilise parfois le nom interne du container. Symptôme : les redirections HTTP générées par certains backends (notamment Airflow et MinIO) cassent et pointent vers `champy_nginx` au lieu de `champy.sbdg-ia.fr`.
+  - **Fix** : utiliser `proxy_set_header Host $http_host;` dans tous les blocs `location`. `$http_host` préserve l'en-tête `Host:` original envoyé par le client.
+
+- **BentoML expose Swagger UI à la racine `/`, pas à `/docs`** : contrairement à FastAPI, BentoML utilise sa propre convention. Symptôme : `https://champy.sbdg-ia.fr/api/docs` retourne 404.
+  - **Fix** : utiliser `https://champy.sbdg-ia.fr/api/` (avec slash final) pour Swagger. Le schéma OpenAPI JSON est à `/api/docs.json` (pas `/openapi.json`). **ReDoc n'est pas disponible**. Mettre à jour tous les liens dans le code Streamlit en conséquence (vérifier avec `Get-ChildItem -Recurse | Select-String -Pattern "/docs|/openapi.json|/redoc"`).
+
+- **Airflow double-préfixe le path : `/airflow/airflow/`** : Airflow construit ses URLs internes en concaténant `AIRFLOW__WEBSERVER__BASE_URL` avec le path de chaque route. Si on configure mal, les liens du menu donnent `/airflow/airflow/dags`.
+  - **Fix** : dans `docker-compose.yml`, définir :
+    ```yaml
+    environment:
+      AIRFLOW__WEBSERVER__BASE_URL: "https://champy.sbdg-ia.fr/airflow"
+    ```
+    Et dans `nginx.conf`, **ne pas stripper le préfixe** (utiliser `proxy_pass http://airflow:8080;` sans modification du path, surtout pas de `rewrite`).
+
+- **Bind mount Windows Docker Desktop non fiable pour le code Python live** : sur Windows, le bind mount `./demo:/app/demo` ne propage pas les changements de manière fiable. Symptôme : modification d'un fichier Python, restart du container, mais l'ancien code continue de s'exécuter.
+  - **Fix** : après toute modification de code, **rebuild + force-recreate obligatoire** :
+    ```powershell
+    docker compose build demo
+    docker compose up -d --force-recreate demo
+    ```
+    `docker compose restart` seul n'est pas suffisant. Le `restart` redémarre seulement le process dans le container existant ; il faut recréer le container pour que le nouveau code soit pris en compte.
+
+- **Streamlit `runOnSave` ne fonctionne pas sur Windows Docker Desktop** : le mécanisme de file watching de Streamlit utilise `inotify` (Linux). À travers un bind mount Windows → Linux, les événements ne sont pas remontés correctement.
+  - **Fix** : désactiver `runOnSave` dans `.streamlit/config.toml` (ou le laisser activé sans s'attendre à ce qu'il fonctionne) et adopter la procédure `build + force-recreate` ci-dessus.
+
+- **Cloudflare Tunnel YAML strict sur l'indentation** : `cloudflared` refuse de démarrer après modification du fichier `config.yml` avec une erreur `did not find expected key`. YAML est strict sur l'indentation. Un mélange de tabulations et d'espaces, ou un commentaire mal placé, peut casser le parsing.
+  - **Fix** : valider avec `cloudflared tunnel ingress validate /home/<user>/.cloudflared/config.yml` avant `systemctl restart cloudflared`. Utiliser exclusivement des espaces pour l'indentation (2 espaces de niveau).
+
+- **Healthcheck nginx `localhost` foire sur IPv6 BusyBox** : le `wget` de l'image `nginx:alpine` (BusyBox) tente IPv6 (`::1`) d'abord. Si nginx n'écoute pas sur IPv6 dans le bloc `server`, le healthcheck échoue en boucle avec `Connection refused`. Symptôme : container `(unhealthy)` alors que nginx sert les requêtes normalement.
+  - **Fix** : forcer IPv4 dans le healthcheck. Dans `docker-compose.yml` :
+    ```yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1"]
+    ```
+    Et ajouter un endpoint dédié `/nginx-health` dans `nginx.conf` :
+    ```nginx
+    location = /nginx-health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'OK\n';
+    }
+    ```
+
+**Cloudflare Tunnel + Access (recettes)** :
+
+```bash
+# Sur le NUC Ubuntu (où tourne cloudflared)
+sudo systemctl status cloudflared
+sudo journalctl -u cloudflared -n 30 --no-pager
+sudo systemctl restart cloudflared
+
+# Validation du fichier de config avant restart
+cloudflared tunnel ingress validate /home/<user>/.cloudflared/config.yml
+
+# Tester depuis le NUC Ubuntu que la liaison vers le NUC3 fonctionne
+curl -I http://192.168.50.55:8088/nginx-health
+```
+
+**Configuration nginx type pour un nouveau service** :
+
+```nginx
+# Bloc à ajouter dans http { server { ... } } de configs/nginx/nginx.conf
+location /<service>/ {
+    proxy_pass http://<service>:<port>/;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Prefix /<service>;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+**Commandes clés** :
+
+```powershell
+# Reload nginx sans downtime après modification de la config
+docker exec champy_nginx nginx -t                # Test syntaxe
+docker exec champy_nginx nginx -s reload         # Reload sans coupure
+
+# Diagnostic healthcheck nginx
+docker inspect champy_nginx --format '{{json .State.Health}}'
+
+# Test direct des routes en local
+curl.exe -I http://localhost:8088/grafana/
+curl.exe -I http://localhost:8088/api/
+curl.exe -I http://localhost:8088/airflow/
+
+# Test depuis Internet (renvoie 302 vers Cloudflare Access si pas authentifié)
+curl.exe -I "https://champy.sbdg-ia.fr/api/" -L
+```
+
+**Durée typique** : 1 jour (setup initial) + 2-3 itérations sur les pièges (~ 0.5 jour chacune)
+
+---
+
 ## Etape 9 - CI/CD
 
 **But** : Automatiser lint, tests, build sur chaque push.
 
 **A produire** :
-- [ ] `.github/workflows/ci.yml` (lint + test + build images)
+- [x] `.github/workflows/ci.yml` (5 jobs : lint, typecheck, docstrings, tests, build)
 - [ ] `.github/workflows/cd.yml` (deploy, optionnel)
-- [ ] Badge CI dans README.md
+- [x] Badge CI dans README.md
 - [ ] Branch protection sur `main`
 
-**Pièges connus** :
--
+**Pieges connus** :
+- **Drift de version ruff entre pre-commit et CI** : si `mirrors-ruff` du pre-commit est pinne (ex: v0.8.0) mais le CI installe `pip install ruff>=0.4` (= latest), les regles de format different. Symptome : pre-commit local accepte un fichier que le CI rejette (ou inversement). Fix : aligner explicitement les versions (pin `mirrors-ruff` au meme tag que la version utilisee localement, ex: v0.15.0). Verifier regulierement avec `pre-commit autoupdate`.
+- **`pip install -r requirements.txt` est la source de verite** : maintenir une liste de deps figee dans le workflow CI casse a chaque ajout (cas reel : `aiosqlite`, `mlflow` ajoutes au Bloc M2 mais oublies dans le CI -> `ModuleNotFoundError` sur les tests). Le `requirements.txt` du repo est la seule liste a maintenir, le CI la consomme. Penser a regenerer `requirements.txt` a chaque ajout de dep dans `pyproject.toml`.
+- **`pip install torch --index-url https://download.pytorch.org/whl/cpu` pour les tests CI** : sinon torch tire la variante CUDA (~2 GB), inutile sur les runners GitHub. La variante CPU pese ~150 MB et suffit pour les tests d'inference (ONNX Runtime CPU deja).
+- **Cache `pip` via `actions/setup-python@v5 cache: pip`** : sans cache, chaque job reinstalle les deps en ~3 minutes. Avec cache, ~30 secondes apres le 1er run. Le cache est invalide automatiquement au changement de `requirements.txt`.
+- **`concurrency` group + `cancel-in-progress: true`** : sur des push successifs rapides (`git push --force` ou `git rebase`), GitHub Actions empile les runs et sature la queue gratuite. Cancel-in-progress annule les runs precedents sur la meme branche. A ajouter au top du workflow.
+- **`dorny/paths-filter@v3` pour skip le job docker build** : sur une PR purement documentaire (LOGBOOK + dashboards), rebuilder les images Docker (~2-3 min) est une perte. Le filter declenche le build seulement si `docker/`, `compose`, `requirements`, `src/`, `configs/` ou `demo/` ont change.
+- **mypy 1.13 ne supporte pas `disable_error_code = ["untyped-decorator"]`** : ce code n'a ete ajoute qu'en mypy 1.16. Pin a 1.13 partout (CI + pre-commit) ou retirer la directive. Sinon le pre-commit local plante avec "Invalid error code(s)" alors que le CI le traite en warning.
+- **Decorateurs FastAPI / BentoML "untyped" pour mirrors-mypy** : `mirrors-mypy` (pre-commit) n'installe pas FastAPI/BentoML stubs, donc tous les `@app.post`, `@bentoml.api` sont "untyped". Solution : `# type: ignore[misc]` sur chaque decorateur. En mypy >= 1.16, le code separe `untyped-decorator` rend les `[misc]` insuffisants - mais on garde 1.13 pour eviter ca.
+- **Verifier orphelins avant suppression** : avant de supprimer un fichier qui fait planter `interrogate` (ex: `# Script python a faire a martir du notebook` sans docstring), `grep -r` pour s'assurer qu'aucun import / config ne le reference. Cas reel : 4 fichiers vestiges du fork supprimes au CI fix, libere 96.5% -> 100% docstrings coverage.
 
-**Commandes clés** :
-- Push sur GitHub/DagsHub -> pipeline automatique
+**Commandes cles** :
+```powershell
+# Pousser et suivre le CI
+git push origin dev-dominique
+gh run list --workflow=ci.yml --limit=3
+gh run view <run_id> --log-failed   # extraire les erreurs
+
+# Reproduire le CI en local
+ruff check src/ data/data_split.py data/curate.py demo/lib/ monitoring/ scripts/ tests/
+ruff format --check src/ data/data_split.py data/curate.py demo/lib/ monitoring/ scripts/ tests/
+mypy src/ monitoring/ data/data_split.py --ignore-missing-imports
+interrogate src/ monitoring/ scripts/ -c pyproject.toml -v
+pytest tests/unit/ -v --tb=short
+```
 
 **Durée typique** : 0.5-1 jour
 
@@ -480,18 +773,31 @@ invoke status          # Etat Docker + DVC + Git
 invoke clean           # Nettoyage
 ```
 
-### Ports par défaut
-| Service | Port |
-|---------|------|
-| FastAPI | 8000 |
-| Streamlit | 8501 |
-| Prometheus | 9090 |
-| Grafana | 3000 |
-| MLflow (si local) | 5000 |
+### Ports par défaut (mapping actuel du projet Champy)
+
+| Service | Port interne | Port externe (host) | Sous-path via nginx hub |
+|---|---:|---:|---|
+| nginx (hub) | 80 | **8088** | — |
+| Streamlit demo | 8501 | 8501 | `/` |
+| BentoML API | 8000 | 8010 | `/api/` |
+| MLflow | 5000 | 5050 | `/mlflow/` |
+| Airflow webserver | 8080 | 8081 | `/airflow/` |
+| PostgreSQL Airflow | 5432 | 5433 | (interne uniquement) |
+| Prometheus | 9090 | 9090 | `/prometheus/` |
+| Grafana | 3000 | 3010 | `/grafana/` |
+| Alertmanager | 9093 | 9193 | `/alertmanager/` |
+| Alertmanager Discord adapter | 9094 | — | (interne uniquement) |
+| MinIO S3 API | 9000 | 9010 | (via console) |
+| MinIO console web | 9001 | 9011 | `/minio/` |
+
+**Point d'entrée public** : `https://champy.sbdg-ia.fr/<sous-path>/` (protégé par Cloudflare Access SSO).
 
 ### Checklist "avant de commit"
 - [ ] `invoke lint` passe
 - [ ] `invoke test` passe
-- [ ] Pas de secrets dans le code
+- [ ] Pas de secrets dans le code (vérifier que `.env` est dans `.gitignore`)
 - [ ] LOGBOOK.md à jour
 - [ ] PLAYBOOK.md enrichi si nouvelle leçon apprise
+- [ ] Si modif code Streamlit sur Windows : `docker compose build demo && docker compose up -d --force-recreate demo` testé
+- [ ] Si modif nginx.conf : `docker exec champy_nginx nginx -t` passe + `docker compose restart nginx`
+- [ ] Si modif `cloudflared` : `cloudflared tunnel ingress validate config.yml` passe + `sudo systemctl restart cloudflared`

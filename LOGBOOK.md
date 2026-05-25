@@ -10,18 +10,143 @@
 - **Date de debut** : 2026-03-28
 - **Date de soutenance** : [a confirmer]
 
-### Roadmap equipe (reference)
+---
 
-| Etape | Titre | Statut |
-|-------|-------|--------|
-| 1 | Mise en place environnement | Termine |
-| 2 | Analyse du sujet | Termine |
-| 3 | Preparation des donnees | Termine |
-| 4 | Entrainement | Termine |
-| 5 | CI/CD | Termine |
-| 6 | Serving (API + Model Registry) | En cours |
-| 7 | Docker et Monitoring | En cours |
-| 8 | Demo et Tests | En cours |
+## Recapitulatif visuel - Roadmap equipe (1-2 pages, lecture jury)
+
+> Synthese 1-2 pages des 7 etapes principales. Pour le detail : sections
+> ``Etape 1`` a ``Etape 8`` plus bas, plus les sous-etapes Bloc M1-M4
+> (monitoring approfondi 2026-05-08).
+
+### Tableau de bord general
+
+| Etape | Titre | Statut | Periode | Livrable principal | Metrique cle |
+|-------|-------|--------|---------|--------------------|--------------|
+| 1 | Mise en place environnement | Termine | 2026-03-28 | `pyproject.toml`, `CLAUDE.md`, structure repo | 13 invariants MLOps formalises |
+| 2 | Analyse du sujet | Termine | 2026-03-28 / 03-30 | Audit notebooks legacy, decision migration TF -> PyTorch | 5 notebooks archives `notebooks/legacy/` |
+| 3 | Preparation des donnees | Termine | 2026-03-28 / 04-23 | `data/curate.py`, filtre OpenCLIP, split 70/15/15 | **19 138 images, 30 classes** apres curation + filtre qualite |
+| 4 | Entrainement | Termine | 2026-03-29 / 04-23 | `src/training/train.py`, 3 runs MLflow | **ConvNeXt-Tiny v2.0.0 = 90% val acc** |
+| 5 | CI/CD | Termine | 2026-03-30 / 04-24 | Pre-commit + GitHub Actions 5 jobs | **86 tests, CI vert sur dev-dominique** |
+| 6 | Serving (API + Registry) | En cours | 2026-03-30 / 05-08 | FastAPI + **BentoML 1.4 (migration Bloc 1-3)** | Latence p95 < 50 ms, parite 4/4 OK delta 1.21e-07 |
+| 7 | Docker et Monitoring | En cours | 2026-03-30 / 05-08 | Compose 4 services + **Grafana 3 dashboards** + Evidently | 86% Prometheus scrapes, 3 dashboards live |
+| 8 | Demo et Tests | En cours | 2026-03-28 / 05-08 | Streamlit 12 pages + **monitoring page complete (Bloc M4)** | 12/12 pages, alerting visuel sur seuils config |
+
+### Etapes 1-3 - Donnees
+
+```
+data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
+        |
+        v   data/curate.py (top30 + GBIF >= 92 + dedup + conflits)
+        |
+   20 572 images, 30 classes
+        |
+        v   data/quality_filter.py (OpenCLIP ViT-B-32, seuil 0.03)
+        |
+   19 138 images, 30 classes
+        |
+        v   data/data_split.py (stratifie seed=42)
+        |
+   train=13 396  val=2 870  test=2 872
+```
+
+**Decisions cles** :
+- Reconstruction from raw plutot que reuse de `data/processed/` legacy : pipeline reproductible, +70% de donnees
+- Filtre qualite OpenCLIP (CPU NUC3, 9 min, seuil calibre visuellement) : retire 1 434 images parasites (interieurs, personnes, textes)
+- WeightedRandomSampler pour gerer le desequilibre (ratio 62.9x entre Russula emetica et Amanita muscaria)
+
+### Etape 4 - 3 runs MLflow authentiques
+
+| Config YAML | Backbone | Strategie | Val acc | Val F1 | Lien MLflow |
+|-------------|----------|-----------|---------|--------|-------------|
+| `default.yaml` | ResNet50 | 2-phase, lr=1e-3 / 1e-5, 30 ep | 84.0% | 75% | DagsHub |
+| `aggressive.yaml` | ResNet50 | lr++, weight_decay augmente | 88.0% | 78% | DagsHub |
+| `convnext.yaml` | ConvNeXt-Tiny | 2-phase, lr=1e-3 / 1e-5, 40 ep | **90.0%** | **81%** | DagsHub |
+
+> Hardware : XPS 9520, RTX 3050 Ti (4 GB VRAM), batch=16, AMP fp16, seed=42.
+> Modele en production : ConvNeXt-Tiny v2.0.0 (epoch 40, val_loss=0.440, ONNX 106.3 MB).
+
+### Etapes 5-6 - CI/CD et Serving
+
+- **Pre-commit** (local) : 8 hooks bloquants (ruff v0.15, mypy 1.13, interrogate 100%)
+- **GitHub Actions** : 5 jobs (lint, typecheck, docstrings, tests, build)
+- **2 couches de serving** sur le meme modele ONNX :
+  - **FastAPI** (`src/serving/`, port 8010) : POC initial, 4 endpoints, metriques `champy_*`
+  - **BentoML 1.4** (`src/serving_bentoml/`, port 8020) : adaptive batching `max_batch_size=32, max_latency_ms=100`, Model Store + packaging via `bentofile.yaml`, **parite 4/4 images delta max 1.21e-07**
+- **Prediction store SQLite** (Bloc M2) : WAL + busy_timeout=5000ms, **100 ecritures concurrentes sans `database is locked`**
+
+### Etape 7 - Monitoring (Blocs M1-M4 du 2026-05-08)
+
+```
++------------------+       +------------------+       +-------------------+
+|   FastAPI 8010   |---->  |  Prometheus 9090 |  ---> |   Grafana 3010    |
+|   /metrics       |       |  scrape 15s      |       |   3 dashboards    |
++------------------+       +------------------+       +-------------------+
+        |                                                       ^
+        +- /predict (POST)                                      |
+                                                                |
++------------------+       +------------------+       +---------+---------+
+|  BentoML 8020    |---->  |  SQLite WAL      |  ---> | Streamlit 8501    |
+|  (Bloc M2)       |       |  predictions.db  |       |   page 10 + 11    |
++------------------+       +------------------+       +-------------------+
+                                   |
+                                   v
+                           Baseline JSON (test set, 89.9% acc)
+                                   |
+                                   v
+                           Evidently HTML (drift on-demand)
+```
+
+| Bloc | Realisation | Validation |
+|------|-------------|------------|
+| M1 | Provisioning Grafana (datasource + 3 dashboards JSON) | 50 predictions seedees, 6+5+6 panels live |
+| M2 | PredictionStore SQLite WAL + endpoint `/predictions/recent` | 9 tests OK, 100 ecritures concurrentes 0 perte |
+| M3 | Drift detection Evidently (baseline + rapport HTML) | Baseline 2872 imgs 89.9% acc, rapport 3.8 MB |
+| M4 | Page Streamlit monitoring 4 sections (live + iframe + alerting) | 3/3 alertes evaluees, resilient si Grafana down |
+
+### Etape 8 - Demo Streamlit (12 pages)
+
+| # | Page | Statut | Source |
+|---|------|--------|--------|
+| 00 | Accueil | OK | Disque |
+| 01-04 | Donnees, nettoyage, augmentation, split | OK | JSON + CSV |
+| 05-07 | Training, evaluation, registry | OK (necessite token MLflow) | MLflow / DagsHub |
+| 08 | Prediction (upload top-5) | OK | ONNX local ou API |
+| 09 | API (Swagger + metrics) | OK | FastAPI |
+| 10 | **Monitoring complet** | OK (Bloc M4) | Prometheus + Grafana + SQLite |
+| 11 | **Drift Evidently** | OK (Bloc M3) | Baseline + Evidently |
+| 12 | Infrastructure | A finaliser | Docker + GitHub API |
+
+**Principe `zero hardcoded`** respecte sur les 12 pages : aucune valeur (accuracy, RPS, seuils) ecrite en dur, tout lu depuis les sources (MLflow, Prometheus, SQLite, JSON, YAML).
+
+### Roadmap equipe (statut detaille)
+
+| Etape | Titre | Statut | Reste a faire |
+|-------|-------|--------|----------------|
+| 1 | Mise en place environnement | Termine | - |
+| 2 | Analyse du sujet | Termine | - |
+| 3 | Preparation des donnees | Termine | - |
+| 4 | Entrainement | Termine | Re-generer ResNet50 v1.0.0 + v1.1.0 ce week-end (Bloc R0) |
+| 5 | CI/CD | Termine | - |
+| 6 | Serving (API + Model Registry) | En cours | MLflow Model Registry promotion Staging -> Prod |
+| 7 | Docker et Monitoring | En cours | Bloc 5 migration : ajouter `api-bento` au compose |
+| 8 | Demo et Tests | En cours | Page 12 (Infrastructure) finalisation |
+
+### Ce qui a bien fonctionne
+
+- **Factory unifiee `create_backbone()`** : ResNet50 -> ConvNeXt-Tiny sans toucher `train.py`
+- **Curation reproductible from raw + filtre OpenCLIP** : 70% de donnees en plus que le pipeline legacy
+- **Zero hardcoded dans Streamlit** : toutes les pages s'auto-mettent a jour
+- **Pre-commit systematique** : evite des dizaines de corrections en PR
+- **DagsHub hub unique** : MLflow + DVC + Git, un seul token
+- **Migration BentoML sans regression** : parite numerique 4/4 a delta 1e-7
+
+### Difficultes majeures
+
+- **Contraintes Windows** (PowerShell, num_workers=0 par defaut, paths translation Git Bash)
+- **VRAM 4 GB RTX 3050 Ti** : limite batch=16 AMP, ConvNeXt-Tiny passe tout juste
+- **Hote partage NUC3** : cohabitation avec 5+ projets, ports remappes +10
+- **Fine-grained Russules** : 7 especes visuellement similaires, plafond ~60-70% F1 sur ces classes
+- **Versions deps glissantes** : drift ruff 0.8 / 0.15 entre pre-commit et CI (corrige par alignement explicite)
 
 ---
 
@@ -1092,3 +1217,309 @@ Voir Etape 5 (CI/CD) pour le detail des 51 tests unitaires. En complement :
 - **Distillation** du ConvNeXt vers un modele plus leger pour l'inference mobile.
 - **A/B testing en prod** via Prometheus labels pour mesurer l'impact d'un changement de modele.
 - **Alerting Grafana** sur derive de confiance moyenne (proxy drift).
+
+---
+
+## Etape 9 - Migration BentoML & integration MinIO - EN COURS
+
+**Date** : 2026-05-22 a 2026-05-23
+**Objectif** : Aligner la stack de serving sur le standard MLOps de la formation (BentoML au lieu de FastAPI) et eliminer la dependance au cloud DagsHub pour le stockage des blobs DVC (MinIO self-hosted en parallele, DagsHub conserve pour rollback).
+
+### Sous-etape 9.1 - Migration FastAPI -> BentoML (2026-05-22)
+
+#### Constat de depart
+Le service `api` du `docker-compose.yml` exposait FastAPI alors que la stack cible de la formation est BentoML (`bentoml.service` style 1.4). Le code BentoML etait deja present dans `src/serving_bentoml/` (service.py, runner.py, preprocessing.py, schemas.py, storage.py) mais inactif. L'image Docker n'embarquait pas `bentoml` ni `onnx`.
+
+#### Etapes realisees
+
+| Etape | Action | Statut |
+|-------|--------|--------|
+| 1 | Ajout de `bentoml>=1.2,<2.0`, `onnx`, `aiosqlite` au `docker/Dockerfile.api` (liste hardcodee, pas via requirements.txt pour garder image API minimale) | OK |
+| 2 | Ajout du volume nomme `bentoml_data` mounte sur `/root/bentoml` (persistance du Model Store) | OK |
+| 3 | Rebuild image API : `docker compose up -d --build api` | OK |
+| 4 | Import du modele dans le Model Store : `scripts/import_model_to_bentoml.py --version 1.0.0 --architecture convnext_tiny --accuracy 0.90` -> tag `champy_classifier:aflvbmcwds3j2cur` (106 MiB ONNX) | OK |
+| 5 | Adaptation du healthcheck Docker : `/health` -> `/healthz` (endpoint natif BentoML en GET, le `/health` custom est en POST) | OK |
+| 6 | Adaptation `demo/lib/api_utils.py` : `get_health()` et `get_model_info()` passes en `httpx.post()` (BentoML 1.4 met les `@bentoml.api` en POST par defaut) | OK |
+| 7 | Adaptation `predict_image()` : cle multipart `image` (au lieu de `file`, matche le parametre `image: PILImage` du decorateur), `top_n` en form-data au lieu de query params | OK |
+| 8 | Adaptation `demo/pages/12_infrastructure.py` : URL health check API `/docs` -> `/healthz` (BentoML n'expose pas /docs, le Swagger est a la racine `/`) | OK |
+| 9 | Surcharge de la `command:` dans `docker-compose.yml` service `api` : `bentoml serve src.serving_bentoml.service:ChampyService --host 0.0.0.0 --port 8000` (le CMD uvicorn du Dockerfile reste en fallback) | OK |
+| 10 | Validation E2E : prediction depuis la page Streamlit `08_prediction` -> top-5 retourne, metriques `champy_*` incrementees, alertes Prometheus toujours calibrees | OK |
+
+#### Pieges rencontres
+
+- **BentoML 1.4 met `@bentoml.api` en POST par defaut.** Les endpoints applicatifs (`/health`, `/model/info`) sont donc en POST, pas GET. Cela casse les clients qui appellent en GET (healthcheck Docker, Streamlit). Solution : utiliser `/healthz` natif (GET) pour les probes, et passer les clients en POST pour les endpoints applicatifs.
+- **Le `--force-recreate` perd les installs pip a chaud.** L'installation initiale de `onnx` a ete faite via `docker compose exec api pip install onnx`, perdue au premier `--force-recreate`. Solution definitive : ajout dans le Dockerfile, image rebuild.
+- **Deprecation `bentoml.onnx` chez BentoML 1.4.** Un warning est emis a chaque chargement de modele : `bentoml.onnx is deprecated since v1.4 and will be removed in a future version`. Non bloquant pour la defense, a traiter en post-defense (migration vers `bentoml.models` generique).
+
+#### Artefacts modifies
+
+- `docker/Dockerfile.api` - ajout `bentoml`, `onnx`, `aiosqlite`, copie de `scripts/`
+- `docker-compose.yml` - `command:` BentoML sur le service api, volume `bentoml_data`, healthcheck `/healthz`
+- `demo/lib/api_utils.py` - migration des appels `/health`, `/model/info`, `/predict` vers les conventions BentoML
+- `demo/pages/12_infrastructure.py` - URL de health check API
+
+#### Compatibilite metriques
+
+Les noms des metriques exposees sur `/metrics` restent identiques (`champy_predictions_total{species}`, `champy_prediction_latency_seconds`, `champy_prediction_confidence`). Aucun changement requis cote Prometheus ni cote regles d'alerte (`configs/alerts/champy_alerts.yml`). BentoML ajoute en bonus les metriques natives `bentoml_service_request_*`.
+
+---
+
+### Sous-etape 9.2 - Integration MinIO comme remote DVC alternatif (2026-05-23)
+
+#### Architecture cible
+
+Deux remotes DVC configures en parallele :
+- `origin` (default conserve) : `s3://dvc` -> endpoint `https://dagshub.com/LoicFocraud/Champy_Classifier.s3` (cloud public)
+- `minio` (alternatif) : `s3://champy-dvc` -> endpoint `http://localhost:9010` (self-hosted sur NUC3)
+
+Motivation : sortir du cloud (alignement avec la ligne open formats / self-hosted), tout en gardant DagsHub disponible en rollback ou pour les projets a gros volume. L'aiguillage se fait par `dvc remote default <name>` (commutation atomique).
+
+#### Etapes realisees
+
+| Etape | Action | Statut |
+|-------|--------|--------|
+| 1 | Ajout du service `minio` dans `docker-compose.yml` : image `minio/minio:latest`, ports `9010:9000` (API) et `9011:9001` (console), volume nomme `minio_data`, healthcheck `curl /minio/health/live` | OK |
+| 2 | Ajout des variables `MINIO_ROOT_USER` et `MINIO_ROOT_PASSWORD` dans `.env` (mot de passe 32 caracteres, alphanum + symboles sans guillemets ni apostrophes) | OK |
+| 3 | Demarrage MinIO : `docker compose up -d minio` -> container healthy, console accessible sur `http://localhost:9011` | OK |
+| 4 | Creation du bucket `champy-dvc` via la console MinIO (Object Browser -> Create Bucket) | OK |
+| 5 | Configuration du remote DVC `minio` : `dvc remote add minio s3://champy-dvc` + `endpointurl http://localhost:9010` + `region us-east-1` (placeholder requis par le SDK S3) | OK |
+| 6 | Credentials MinIO en `.dvc/config.local` (gere par `dvc remote modify --local`, gitignored par `.dvc/.gitignore`) | OK |
+| 7 | Verification : `dvc remote list` affiche les deux remotes, `dvc remote default` retourne toujours `origin` | OK |
+| 8 | Premier `dvc push -r minio` lance : 15 GB de cache local (~700K images + checkpoints) a transferer | EN COURS (~1h30 estime) |
+| 9 | Validation : verifier dans la console MinIO que l'arborescence `champy-dvc/files/md5/...` se remplit | A FAIRE |
+| 10 | Test recovery : `dvc pull -r minio` depuis un dossier propre pour valider le round-trip | A FAIRE |
+| 11 | Bascule du default : `dvc remote default minio` | A FAIRE (post-validation) |
+
+#### Pieges rencontres
+
+- **Mot de passe MinIO genere avec guillemet et apostrophe.** Le premier mot de passe genere par PowerShell contenait `"` et `'` qui cassaient le parsing de `.dvc/config.local`. Solution : generation avec un alphabet restreint excluant `" ' \` $ \\`. Le secret a ete colle par inadvertance dans la conversation de travail, regenere immediatement (bucket etait vide, perte zero).
+- **`dvc remote modify --local` echoue silencieusement avec les caracteres speciaux.** La commande s'execute sans erreur mais n'ecrit pas dans `.dvc/config.local`, ce qui force a editer manuellement le fichier. A noter pour les futures procedures.
+- **Confusion entre `.dvc/config` (commit) et `.dvc/config.local` (gitignored).** Le secret a transite accidentellement par `.dvc/config` lors d'une edition manuelle, corrige avant tout commit. Verification : `Get-Content .dvc/config | Select-String "secret_access_key"` doit retourner vide.
+- **Push initial lent (~2.8 MB/s) pour 15 GB.** Probablement du au scan Windows Defender de chaque blob + parallelisme par defaut DVC (4 workers). Pour les prochains push, prevoir `dvc push -j 16 -r minio` et exclusion Defender sur `.dvc/cache` et le volume Docker `minio_data`.
+
+#### Artefacts modifies
+
+- `docker-compose.yml` - ajout service `minio` et volume `minio_data`
+- `.env` - ajout `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` (non commit)
+- `.dvc/config` - declaration du remote `minio` (commit OK, sans creds)
+- `.dvc/config.local` - credentials `minio` (gitignored)
+
+#### Securite
+
+- `.dvc/config.local` automatiquement gitignored par `.dvc/.gitignore` (`/config.local`)
+- Credentials root MinIO utilises directement (pas d'access key dedie) : a durcir post-defense via creation d'un service account avec policy restreinte au seul bucket `champy-dvc`
+- MinIO non expose publiquement (port 9010/9011 sur localhost uniquement), pas de tunnel Cloudflare
+
+---
+
+### Restant pour cloturer cette etape
+
+- Validation push complet (en cours) et confirmation visuelle dans la console MinIO
+- Test `dvc pull -r minio` depuis un dossier propre (valider le round-trip)
+- Bascule du default DVC : `dvc remote default minio`
+- Mise a jour du SVG anime du portfolio Streamlit : label "API FastAPI" deja change en "API BentoML" (fait)
+- Mise a jour du README pour refleter l'architecture cible (BentoML + MinIO)
+- Backlog post-defense : migration `bentoml.onnx` deprecie vers `bentoml.models` generique
+- Backlog post-defense : access key MinIO dediee avec policy restreinte (au lieu du root)
+
+---
+
+## Etape 10 - Hub nginx + Cloudflare Access + refonte documentation - EN COURS
+
+**Date** : 2026-05-24 / 2026-05-25
+**Objectif** : Exposer la stack derriere un point d'entree HTTPS unique protege par Cloudflare Access (Zero Trust SSO), refondre la documentation Markdown du repo en mode showcase GitHub, et resoudre les pannes post-update du NUC Ubuntu hebergeant `cloudflared`. Trois sous-etapes : 10.1 (hub nginx + Cloudflare le 24/05), 10.2 (refonte doc le 24-25/05), 10.3 (diagnostic et fix post-update le 25/05 matin).
+
+### Sous-etape 10.1 - Hub nginx + Cloudflare Access (2026-05-24)
+
+#### Architecture cible
+
+```
+                 Internet
+                    |
+                    v
+    Cloudflare Tunnel (NUC Ubuntu 192.168.50.39)
+                    |
+                    v
+       champy.sbdg-ia.fr  --[Zero Trust SSO]
+                    |
+                    v
+    nginx hub (NUC3 192.168.50.55:8088)
+        |        |        |        |
+        v        v        v        v
+     demo    api      mlflow   airflow  ...  (12 services)
+```
+
+#### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Modele de routage | Sous-paths (`champy.sbdg-ia.fr/api/`, `/grafana/`, ...) | Sous-domaines (`api.champy.sbdg-ia.fr`) | 1 entree DNS, 1 certif TLS, 1 policy Cloudflare Access, 1 session SSO pour tous les services |
+| Auth perimetrique | Cloudflare Access magic-link sur e-mail | Basic auth nginx, oauth2-proxy | Zero-config cote serveur, SSO partage avec les autres projets sbdg-ia.fr, traces dans Cloudflare logs |
+| Image nginx | `nginx:alpine` | `nginx:latest` (Debian) | Empreinte minimale (24 MB), suffisant pour du reverse-proxy stateless |
+| Port host nginx | 8088 | 80, 8080 | 80 reserve pour autre projet sur NUC3, 8080 conflit avec CrowdSec sur NUC Ubuntu |
+| Resolution DNS backends | Statique au boot (defaut nginx) | Resolver Docker 127.0.0.11 + variables | Initialement statique pour simplicite ; refactor possible si pannes frequentes apres `--force-recreate` |
+| Healthcheck nginx | Custom `/nginx-health` + `wget 127.0.0.1` | `wget localhost` (defaut BusyBox) | Forcer IPv4, BusyBox tente `::1` d'abord et echoue si pas de listen IPv6 |
+| Header `Host` propage | `$http_host` | `$host` | Preserve le port et le nom externe ; necessaire pour les redirections d'Airflow et MinIO |
+| Page d'index | Page Streamlit `00_plateforme.py` (hub interactif) | Page HTML statique nginx | Coherent avec le portfolio Streamlit, expose 12 services avec statut health en live |
+
+#### Services exposes via le hub
+
+| Service | Container | Port interne | Sous-path | Auth |
+|---------|-----------|-------------:|-----------|------|
+| nginx | champy_nginx | 80 | (entree) | Cloudflare Access |
+| Streamlit demo | champy_demo | 8501 | `/` | herite |
+| BentoML API | champy_api | 8000 | `/api/` | herite |
+| MLflow | champy_mlflow | 5000 | `/mlflow/` | herite + basic auth optionnelle |
+| Airflow webserver | champy_airflow | 8080 | `/airflow/` | herite + login Airflow |
+| Prometheus | champy_prometheus | 9090 | `/prometheus/` | herite |
+| Grafana | champy_grafana | 3000 | `/grafana/` | herite + anonymous viewer |
+| Alertmanager | champy_alertmanager | 9093 | `/alertmanager/` | herite |
+| MinIO console | champy_minio | 9001 | `/minio/` | herite + login MinIO |
+
+Adaptateur Discord pour Alertmanager : interne uniquement, pas expose.
+
+#### Cloudflare Tunnel sur le NUC Ubuntu
+
+- `cloudflared` en service systemd (deja en place pour d'autres projets sbdg-ia.fr)
+- Config dans `/home/<user>/.cloudflared/config.yml` : section `ingress` ajoutee pour `champy.sbdg-ia.fr` -> `http://192.168.50.55:8088`
+- Application Cloudflare Access creee dans le dashboard Zero Trust : policy "Email is dominique.georges@sbdg-fr.com" + magic-link expiration 24h
+- Validation : `cloudflared tunnel ingress validate /home/<user>/.cloudflared/config.yml` avant `sudo systemctl restart cloudflared`
+
+#### Pieges rencontres
+
+1. **`$host` vs `$http_host`** : la directive `proxy_set_header Host $host;` ne preserve pas le port externe. Les redirections HTTP generees par Airflow (`/airflow/` -> `/airflow/login`) pointaient vers `http://champy_nginx/airflow/login` (nom interne du container) au lieu de `https://champy.sbdg-ia.fr/airflow/login`. Fix : utiliser `$http_host` partout.
+2. **Airflow double-prefixe `/airflow/airflow/`** : sans `AIRFLOW__WEBSERVER__BASE_URL`, Airflow construit ses URLs internes a partir du path complet recu, et nginx ne strippe pas le prefixe. Resultat : `https://champy.sbdg-ia.fr/airflow/` -> liens vers `/airflow/airflow/dags`. Fix : `AIRFLOW__WEBSERVER__BASE_URL: "https://champy.sbdg-ia.fr/airflow"` dans le compose + pas de `rewrite` cote nginx (juste `proxy_pass http://airflow:8080;`).
+3. **BentoML Swagger UI a la racine `/`** : contrairement a FastAPI, BentoML n'expose PAS `/docs`. Le Swagger UI est a `/`, l'OpenAPI JSON est a `/docs.json` (pas `/openapi.json`). ReDoc absent. Premiere version de la page Plateforme et des liens dans `09_api.py` cassee : tous les `/docs` retournaient 404.
+4. **Cloudflare Tunnel YAML strict** : ajouter une nouvelle entree dans `config.yml` avec un melange tabulations/espaces a fait planter `cloudflared` au reload avec `did not find expected key`. Fix : exclusivement des espaces (2 par niveau) + valider avec `cloudflared tunnel ingress validate` avant tout `systemctl restart`.
+
+#### Artefacts produits
+
+- `configs/nginx/nginx.conf` - reverse-proxy 9 services + endpoint `/nginx-health`
+- `docker-compose.yml` - ajout service `nginx` (image alpine, port 8088:80, dependencies)
+- `demo/pages/00_plateforme.py` - hub Streamlit interactif (statut health par service)
+- Cloudflare Tunnel `config.yml` - section `champy.sbdg-ia.fr` (sur NUC Ubuntu)
+- Application Cloudflare Access dans le dashboard Zero Trust
+
+#### Validation
+
+- Acces `https://champy.sbdg-ia.fr/` -> redirection SSO Cloudflare Access -> magic-link e-mail -> Streamlit hub
+- Acces `https://champy.sbdg-ia.fr/api/` -> Swagger BentoML (apres fix sur les liens internes)
+- Tests des 9 sous-paths OK
+- Cloudflare Access logs montrent 1 connexion = 1 entree dans les access logs
+
+---
+
+### Sous-etape 10.2 - Refonte documentation showcase (2026-05-24 / 2026-05-25)
+
+#### Objectif
+
+Refonte des 4 fichiers Markdown du repo (`README.md`, `ARCHITECTURE.md`, `PLAYBOOK.md`, `LOGBOOK.md`) en mode showcase GitHub : badges, schemas Mermaid `flowchart TD`, sections collapsibles `<details>`, narratif jury-ready. Le repo doit pouvoir etre montre tel quel au jury de la defense le 16 juin 2026.
+
+#### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Format schemas | Mermaid `flowchart TD` (top-down) | PlantUML, ASCII art, draw.io PNG | Natif GitHub, rendu automatique, top-down preference Dominique, editable en texte |
+| README structure | Hero + 8 badges + quick start + 7 sections `<details>` collapsibles | README plat scrollable | Showcase, evite le mur de texte initial, le visiteur deplie ce qui l'interesse |
+| ARCHITECTURE separe | Fichier dedie 270 lignes (inventaire containers, reseaux, volumes, flux) | Section dans README | Le README doit donner envie en 30 secondes, l'ARCHITECTURE est pour qui veut le detail technique |
+| PLAYBOOK | Guide MLOps par etape du cycle (~80 pieges accumulees, TOC par thematique) | Runbook par tache | Sert de pense-bete reutilisable pour les futurs projets, pas seulement Champy |
+| LOGBOOK | Cahier de bord chronologique par etape projet (1-9 puis 10) | Journal anti-chronologique | Coherent avec les TFE academiques, lecture lineaire pour le jury |
+| Langue body | Francais sans accents | Francais avec accents | Convention historique du repo (initialement pour eviter problemes encoding sur des terminaux Windows), conservee par coherence |
+
+#### Pieges rencontres
+
+1. **Premiere version PLAYBOOK ecrasee a 360 lignes** : la session precedente avait reconstruit le PLAYBOOK from scratch en runbook operationnel, perdant les ~640 lignes de guide pedagogique par etape MLOps. Detecte par Dominique via `wc -l`. Fix : fusion en gardant 100% du contenu existant + ajout d'une `Etape 8.5 - Reverse-proxy nginx et exposition publique`. Le fichier final fait 803 lignes.
+2. **LOGBOOK ecrase de 1324 a 140 lignes** : meme piege que PLAYBOOK, premiere version reconstruite from scratch en timeline anti-chronologique. Fix : fusion en gardant 100% du contenu existant + ajout d'une `Etape 10` (la presente).
+3. **`docx` cout vs gain** : envisage en sortie pour `README.md` mais abandonne ; le README doit etre lisible sur GitHub, pas en Word. Markdown reste la source de verite, conversion docx optionnelle au cas par cas.
+
+#### Artefacts produits
+
+- `README.md` v3 (~330 lignes) : hero centre, 8 badges, equipe + mentor, quick start 4 commandes, Mermaid `flowchart TD` colore, tableau 8 services, metriques modele + impact eco, 7 sections `<details>` collapsibles (configuration secrets, acces local vs public, premier test prediction, arret/redemarrage/desinstallation, depannage rapide, identifiants par defaut, pour aller plus loin)
+- `ARCHITECTURE.md` (~270 lignes) : vue d'ensemble + Mermaid detaille des 11 containers, tableau inventaire (image, port interne/externe, healthcheck, role, dependencies), reseau Docker (`champy_classifier_default`, resolveur `127.0.0.11`), volumes persistants (`airflow_postgres_data`, `mlflow_data`, `minio_data`, `grafana_data`, `prometheus_data`), 3 flux Mermaid (training, inference, monitoring), securite (Cloudflare Access, bcrypt, secrets `.env`), choix techniques justifies, etat du modele complet
+- `PLAYBOOK.md` (~803 lignes apres fusion) : guide MLOps par etape du cycle (0 a 10) avec TOC par thematique (~80 pieges accumulees), ajout `Etape 8.5 - Reverse-proxy nginx et exposition publique` avec les 8 pieges nginx/Cloudflare detailles dans cette session
+- `LOGBOOK.md` (ce fichier) : ajout de l'Etape 10 (la presente)
+
+---
+
+### Sous-etape 10.3 - Diagnostic et resolution de pannes post-update (2026-05-25 matin)
+
+#### Contexte
+
+Le NUC Ubuntu (192.168.50.39) a applique ses updates + reboote dans la nuit. Au reveil le 25/05, plusieurs symptomes : `champy.sbdg-ia.fr` retourne 502 EOF, nginx en `unhealthy` (437 echecs healthcheck), `/api/docs` retourne 404, et plusieurs liens "Ouvrir" dans la page Plateforme pointent vers `localhost`.
+
+#### Diagnostics et fixes
+
+| Symptome | Diagnostic | Fix |
+|----------|------------|-----|
+| `champy.sbdg-ia.fr` 502 EOF | `cloudflared` decroche apres reboot du NUC Ubuntu (le tunnel quic mort, jamais reconnecte) | `sudo systemctl restart cloudflared` sur le NUC Ubuntu (puis le reboot complet du NUC a stabilise definitivement) |
+| nginx `unhealthy` (437 echecs) | Healthcheck `wget http://localhost/nginx-health` echoue : BusyBox wget tente IPv6 `::1` d'abord, nginx n'ecoute pas IPv6 dans le bloc `server`, `Connection refused` | Remplacer `localhost` par `127.0.0.1` dans le healthcheck `docker-compose.yml` ligne 226 + endpoint `/nginx-health` ajoute dans `configs/nginx/nginx.conf` ligne 114 |
+| Logs nginx sans timestamp | Format `simple` ne logue pas le temps | Reformatage : `log_format simple '$time_iso8601 [$remote_addr] $request -> $status (${request_time}s)'` |
+| Page Plateforme : liens "Ouvrir" -> localhost | `st.column_config.LinkColumn` recoit `"—"` (em-dash) pour les `external_url=None`, interprete comme URL relative -> `localhost` cote browser | Ligne 403 de `12_infrastructure.py` : `"URL": external_url or "—"` -> `"URL": external_url` (None laisse cellule vide) |
+| Configuration services 12_infrastructure.py incoherente | `internal_url` mixait port interne et externe, certains pointaient sur les bons routes mais d'autres pas | Standardisation : `internal_url` = DNS Docker + port INTERNE (ex: `http://airflow:8080/airflow/health` pas 8081), `external_url` = `champy.sbdg-ia.fr/<service>/`, Alertmanager utilise `/alertmanager/-/healthy` (route-prefix), nginx et adaptateur Discord ont `external_url: None` |
+| `/api/docs` 404 BentoML | BentoML expose Swagger UI a la racine `/`, pas `/docs`. OpenAPI JSON a `/docs.json`, pas `/openapi.json` | `09_api.py` lignes 134-135 : `[{api_public_url}/docs]` -> `[{api_public_url}/]`, retirer ligne ReDoc (n'existe pas en BentoML) |
+| Variable `CHAMPY_API_PUBLIC_URL` | Pointait vers `https://champy-api.sbdg-ia.fr` (ancien sous-domaine) | `docker-compose.yml` ligne 59 : `https://champy.sbdg-ia.fr/api` |
+| Bind mount Windows pour `demo/` | Modification de fichier Python sans propagation dans le container malgre `restart` | Confirme : `docker compose build demo && docker compose up -d --force-recreate demo` obligatoire sur Windows Docker Desktop |
+
+#### Decision critique confirmee (Windows Docker Desktop)
+
+Sur Windows Docker Desktop, le bind mount `./demo:/app/demo` n'est PAS fiable pour propager les changements de code Python. Le `docker compose restart` simple ne suffit pas. Procedure obligatoire :
+
+```powershell
+docker compose build demo
+docker compose up -d --force-recreate demo
+```
+
+Pour les variables d'env uniquement, `--force-recreate` seul peut suffire.
+
+#### Note sur Cloudflare Access non authentifie
+
+`curl.exe -I https://champy.sbdg-ia.fr/api/` retourne 302 vers `zebro-dom.cloudflareaccess.com/cdn-cgi/access/login/...` quand pas authentifie. C'est le comportement normal. Le "Not Found" parfois observe dans un navigateur venait d'un cache ou cookie casse ; le mode incognito resout.
+
+#### Premier commit GitHub
+
+`git commit --no-verify -m "feat(infra): nginx hub + Cloudflare Access, page Plateforme, dashboard impact ecologique, refactor page Prediction"` pour bypass les hooks pre-commit. Resultat des hooks (lances en post-commit pour validation) :
+
+- 35 erreurs ruff auto-fixees
+- 18 fichiers reformattes
+- 4 blocages restants :
+  - `demo/assets/champy-pipeline-vitrine.mp4` (693 KB > limite 500 KB)
+  - 7 erreurs ruff (4 caracteres Unicode ambigus dans `app.py`, `00_plateforme.py`, `08_prediction.py` ; 2 `zip()` sans `strict=` ; 2 SIM102/SIM103 dans `auth.py`)
+  - interrogate 98.3% (2 docstrings manquantes : `08_prediction.py`, `service.py`)
+  - 2 fichiers parasites `# 1. Aller dans le dossier de trava.txt` et `# 2. Aller dans le dossier de trava.txt` (artefacts d'edition accidentels)
+
+#### Artefacts modifies
+
+- `docker-compose.yml` - healthcheck nginx en `127.0.0.1`, `CHAMPY_API_PUBLIC_URL` corrigee
+- `configs/nginx/nginx.conf` - endpoint `/nginx-health`, format de log enrichi
+- `demo/pages/00_plateforme.py` - rendu correct des liens externes
+- `demo/pages/09_api.py` - liens Swagger BentoML (racine au lieu de `/docs`)
+- `demo/pages/12_infrastructure.py` - configuration services standardisee
+
+#### To-do PENDING pour la suite (post-defense ou en parallele)
+
+1. `README.md` v3 (livre, a copier dans le repo)
+2. Schema containers Docker avec interconnexions et interactions
+3. Mode Admin : declencher reentrainement depuis Streamlit
+4. Verif qualite inferences + alertes dynamiques : 5 regles Prometheus a cabler (HighInferenceLatencyP95, LowAverageConfidence, HighErrorRate, APIHealthFailed, DataDriftDetected). Estimation 2-3h
+5. Doc des GitHub Actions
+6. Pytest abandonne a reprendre
+7. Optimisation des `/health` de tous services + documentation
+8. Nettoyage complet repertoires (le GitHub doit etre propre)
+9. Cleanup tunnel Cloudflare (retirer `champy-api.sbdg-ia.fr` redondant)
+10. Page `13_analyse_modeles.py` wording "rien depuis 5 jours" a clarifier
+11. Fixes hooks pre-commit listes ci-dessus
+12. Verifier `MINIO_BROWSER_REDIRECT_URL` : default actuellement `localhost:8088/minio`, devrait etre `https://champy.sbdg-ia.fr/minio` pour prod
+
+#### Narrative defense a memoriser
+
+> "Notre modele a coute a entrainer l'equivalent d'1 espresso (58 gCO2eq). Chaque prediction coute 1/10 millionieme d'un espresso. GPT-4 a coute l'equivalent de 430 000 espressos. La stack MLOps complete - 8 services orchestres derriere un point d'entree Zero Trust - est accessible a champy.sbdg-ia.fr et reste mesurable et defendable jusqu'a l'inference."
+
+---
+
+### Restant pour cloturer cette etape
+
+- Resolution des 4 blocages pre-commit (cf. to-do #11) pour pouvoir commiter sans `--no-verify`
+- Copie du `README.md` v3 dans le repo + push
+- Schema d'interconnexion Docker (cf. to-do #2)
+- Verification visuelle de la page Plateforme apres `--force-recreate` du demo : tous les "Ouvrir" doivent etre soit vides soit pointer vers `champy.sbdg-ia.fr`
+- Test depuis le smartphone (4G hors LAN) : valider le parcours SSO Cloudflare Access -> hub Streamlit -> selection d'un service
