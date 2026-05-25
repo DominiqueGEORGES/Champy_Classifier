@@ -50,6 +50,7 @@ dev = [
     "pytest-cov>=5.0",
     "pre-commit>=3.7",
     "interrogate>=1.7",
+    "pytest-html>=4.1",
 ]
 # Pipeline de curation/filtrage des données brutes (step one-off, pas
 # requis par le training ni le serving).

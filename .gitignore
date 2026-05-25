@@ -81,3 +81,6 @@ uv.lock
 # Airflow
 airflow/logs/
 airflow/.env.airflow
+
+# Rapports de tests générés localement (Streamlit pointe dessus)
+reports/

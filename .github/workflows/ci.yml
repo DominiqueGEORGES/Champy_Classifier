@@ -67,7 +67,7 @@ jobs:
           interrogate scripts/ -c pyproject.toml -v
 
   test:
-    name: Tests (pytest)
+    name: Tests (pytest + reports)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,17 +76,27 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       - name: Install dependencies
-        # Strategie : torch CPU d'abord (eviter le pull CUDA inutile sur
-        # les runners GitHub) puis tout le reste depuis requirements.txt.
-        # Le requirements.txt est la source de verite des deps : il est
-        # tenu a jour avec pyproject.toml et ajoute aiosqlite, bentoml,
-        # mlflow, etc. sans avoir a maintenir une seconde liste dans le CI.
         run: |
           pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
-      - name: Run tests
-        run: pytest tests/unit/ -v --tb=short
+      - name: Run tests with HTML + coverage reports
+        run: |
+          mkdir -p reports
+          pytest tests/unit/ -v --tb=short \
+            --html=reports/pytest.html --self-contained-html \
+            --cov=src --cov=demo --cov=monitoring \
+            --cov-report=html:reports/coverage \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-report=term \
+            --junit-xml=reports/junit.xml
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.sha }}
+          path: reports/
+          retention-days: 30
 
   build:
     name: Docker Build

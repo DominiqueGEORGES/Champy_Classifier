@@ -77,13 +77,25 @@ def logs(c, service="api"):
 
 
 @task
-def test(c, verbose=True, cov=True):
-    """Run tests with pytest."""
+def test(c, verbose=True, cov=True, html=True):
+    """Run tests with pytest + HTML report + coverage.
+
+    Args:
+        verbose: Affiche le détail de chaque test.
+        cov: Mesure la couverture sur src/, demo/, monitoring/.
+        html: Génère les rapports HTML dans reports/ (consommés par la page Streamlit CI/CD).
+    """
+    Path("reports").mkdir(exist_ok=True)
+
     cmd = "pytest tests/"
     if verbose:
         cmd += " -v"
+    if html:
+        cmd += " --html=reports/pytest.html --self-contained-html"
+        cmd += " --junit-xml=reports/junit.xml"
     if cov:
-        cmd += " --cov=src --cov-report=html --cov-report=term"
+        cmd += " --cov=src --cov=demo --cov=monitoring"
+        cmd += " --cov-report=html:reports/coverage --cov-report=term"
     c.run(cmd)
 
 
