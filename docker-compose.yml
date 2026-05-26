@@ -70,6 +70,10 @@ services:
       - GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CHAMPY_GITHUB_OWNER=${CHAMPY_GITHUB_OWNER:-LoicFocraud}
+      - CHAMPY_GITHUB_REPO=${CHAMPY_GITHUB_REPO:-Champy_Classifier}
+      - CHAMPY_GITHUB_BRANCH=${CHAMPY_GITHUB_BRANCH:-dev-dominique}
     depends_on:
       api:
         condition: service_healthy
@@ -88,6 +92,7 @@ services:
       - ./docs:/app/docs:ro
       - ./.streamlit:/app/.streamlit:ro
       - ./configs/alerts:/app/configs/alerts:rw
+      - ./reports:/app/reports:ro
 
   prometheus:
     command:
