@@ -1,46 +1,36 @@
 FROM python:3.11-slim
-
 WORKDIR /app
-
 # Dependances systeme pour Pillow
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libjpeg62-turbo-dev \
         libxcb1 libgl1 libglib2.0-0 && \
     rm -rf /var/lib/apt/lists/*
-
-# Installer les deps Streamlit
+# Installer les deps Streamlit (streamlit-image-select : galerie cliquable)
 RUN python -m pip install --no-cache-dir \
-    streamlit plotly pandas numpy pillow httpx \
+    streamlit streamlit-image-select plotly pandas numpy pillow httpx \
     pydantic pydantic-settings pyyaml python-dotenv loguru \
     aiosqlite mlflow onnx onnxruntime bcrypt evidently
-
-# Dépendances pour Grad-CAM (calcul local de la heatmap dans la page prédiction)
+# Dependances pour Grad-CAM (calcul local de la heatmap dans la page prediction)
 # 1. Installer opencv-python-headless en premier (sans X11)
 RUN python -m pip install --no-cache-dir opencv-python-headless==4.10.0.84
-
 # 2. Installer torch CPU + torchvision
 RUN python -m pip install --no-cache-dir \
     torch==2.4.0+cpu \
     torchvision==0.19.0+cpu \
     --index-url https://download.pytorch.org/whl/cpu
-
 # 3. Installer les dependances de grad-cam, puis grad-cam sans tirer opencv-python
 RUN python -m pip install --no-cache-dir matplotlib scikit-learn ttach tqdm
 RUN python -m pip install --no-cache-dir --no-deps grad-cam>=1.5.0
-
 # 4. Forcer la suppression de la version GUI si grad-cam l'a tiree
 RUN python -m pip install --no-cache-dir \
     streamlit plotly pandas numpy pillow httpx \
     pydantic pydantic-settings pyyaml python-dotenv loguru \
     aiosqlite
-
 # Copier le code
 COPY demo/ demo/
 COPY src/ src/
-COPY data/raw_stats.json data/cleaning_report.json data/split_stats.json data/split_manifest.csv data/
+COPY data/raw_stats.json data/cleaning_report.json data/split_stats.json data/split_manifest.csv data/observations_mushroom.csv data/
 COPY .env.example .env
-
 EXPOSE 8501
-
 CMD ["streamlit", "run", "demo/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]

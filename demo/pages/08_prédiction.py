@@ -2,21 +2,22 @@
 
 Trois sources d'image au choix (onglets) :
     - Upload (drag and drop d'un fichier local)
-    - Browse dans un dossier d'exemples locaux (data/sample/, data/unseen/, etc.)
+    - Galerie d'exemples locaux (data/sample/, data/unseen/, etc.) : un clic sur
+      une vignette selectionne l'image ET lance la prediction (choix visuel direct)
     - URL distante (telechargement direct ou extraction og:image d'une page)
 
 L'image courante est conservee dans st.session_state pour ne reagir qu'aux
-actions explicites de l'utilisateur (nouvel upload, clic sur "Utiliser cet
-exemple", clic sur "Telecharger"). Cela evite que le selectbox de l'onglet
-"Exemples locaux" n'ecrase un upload, puisque chaque `with tab_X:` est
-re-execute a chaque rerun de Streamlit.
+actions explicites de l'utilisateur (nouvel upload, clic sur une vignette,
+clic sur "Telecharger"). Cela evite que la galerie de l'onglet "Exemples
+locaux" n'ecrase un upload, puisque chaque `with tab_X:` est re-execute a
+chaque rerun de Streamlit.
 
-L'inference et le Grad-CAM ne sont declenches que sur clic explicite du
-bouton "Lancer la prediction" (pattern UX clair : action utilisateur ->
-appel API). Conformement au pattern MLOps strict, la prediction et le
-calcul Grad-CAM sont entierement delegues a l'API BentoML (endpoints
-POST /predict et POST /explain). La page ne charge aucun modele en local,
-ne realise aucune inference et ne persiste aucune donnee.
+L'inference et le Grad-CAM ne sont declenches que sur action explicite :
+soit un clic sur une vignette (auto-run), soit le bouton "Lancer la
+prediction" (upload / URL). Conformement au pattern MLOps strict, la
+prediction et le calcul Grad-CAM sont entierement delegues a l'API BentoML
+(endpoints POST /predict et POST /explain). La page ne charge aucun modele
+en local, ne realise aucune inference et ne persiste aucune donnee.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ import base64
 import hashlib
 import re
 import sys
+import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,8 @@ import streamlit as st
 from demo import auth
 from demo.lib.api_utils import explain_image, predict_image
 from PIL import Image as PILImage
+from PIL import ImageOps
+from streamlit_image_select import image_select
 
 # =====================================================================
 # Configuration de la page (DOIT etre la premiere commande Streamlit)
@@ -73,7 +77,7 @@ auth.setup_page()
 # =====================================================================
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_IMAGES_IN_BROWSE = 100
+MAX_IMAGES_IN_BROWSE = 60
 
 SAMPLE_DIRECTORIES: list[tuple[str, Path]] = [
     ("Echantillon curé (data/sample)", Path("data/sample")),
@@ -81,12 +85,19 @@ SAMPLE_DIRECTORIES: list[tuple[str, Path]] = [
     ("Dataset brut (data/raw/Mushrooms_images)", Path("data/raw/Mushrooms_images")),
 ]
 
+# Referentiel complet des observations : colonne image_lien (nom de fichier) ->
+# label (espece). Couvre toutes les images, pas seulement le split du modele.
+# Sert a afficher l'espece reelle de chaque image dans la galerie.
+LABELS_CSV = Path("data/observations_mushroom.csv")
+
 # Cles session_state utilisees par la page
 SS_IMAGE = "pred_selected_image"
 SS_SOURCE = "pred_selected_source"
 SS_UPLOAD_HASH = "pred_last_upload_hash"
 SS_LAST_RESULT = "pred_last_result"
 SS_LAST_EXPLAIN = "pred_last_explain"
+SS_AUTORUN = "pred_autorun"
+SS_TRUE_LABEL = "pred_true_label"
 
 
 # =====================================================================
@@ -99,13 +110,26 @@ def _hash_bytes(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
-def _set_selected_image(image_bytes: bytes, source: str) -> None:
-    """Enregistre l'image active et invalide les caches de resultats."""
+def _set_selected_image(
+    image_bytes: bytes,
+    source: str,
+    autorun: bool = False,
+    true_label: str | None = None,
+) -> None:
+    """Enregistre l'image active et invalide les caches de resultats.
+
+    Si autorun est vrai, la prediction est lancee dans la foulee, sans bouton.
+    true_label est l'espece reelle connue (exemples du dataset) : elle sert a
+    colorer le verdict (bon / boff / cata) ; None pour un upload ou une URL.
+    """
     st.session_state[SS_IMAGE] = image_bytes
     st.session_state[SS_SOURCE] = source
+    st.session_state[SS_TRUE_LABEL] = true_label
     # Nouvelle image -> invalider les resultats precedents
     st.session_state[SS_LAST_RESULT] = None
     st.session_state[SS_LAST_EXPLAIN] = None
+    if autorun:
+        st.session_state[SS_AUTORUN] = True
 
 
 @st.cache_data(ttl=300, show_spinner="Indexation des images...")
@@ -124,6 +148,71 @@ def list_images_in_directory(
                 break
     images.sort()
     return images
+
+
+@st.cache_data(show_spinner="Chargement des espèces...")
+def load_label_map() -> dict[str, str]:
+    """Charge le mapping nom_de_fichier -> espece depuis le referentiel complet."""
+    if not LABELS_CSV.exists():
+        return {}
+    try:
+        frame = pd.read_csv(LABELS_CSV, usecols=["image_lien", "label"])
+    except (OSError, ValueError):
+        return {}
+    return dict(zip(frame["image_lien"], frame["label"], strict=False))
+
+
+def _placeholder_path() -> Path:
+    """Cree (une seule fois) une tuile neutre pour la 1ere case de la galerie.
+
+    Sa presence en tete evite qu'une vraie image soit pre-selectionnee au
+    chargement : toutes les images deviennent cliquables, y compris la premiere.
+    """
+    path = Path(tempfile.gettempdir()) / "champy_gallery_placeholder.png"
+    if not path.exists():
+        PILImage.new("RGB", (200, 200), (55, 60, 68)).save(path)
+    return path
+
+
+@st.cache_data(show_spinner=False)
+def load_known_classes() -> set[str]:
+    """Les 30 especes connues du modele = labels distincts du split d'entrainement."""
+    manifest = Path("data/split_manifest.csv")
+    if not manifest.exists():
+        return set()
+    try:
+        frame = pd.read_csv(manifest, usecols=["label"])
+    except (OSError, ValueError):
+        return set()
+    return set(frame["label"].dropna().unique())
+
+
+@st.cache_data(show_spinner=False)
+def bordered_thumbnail(image_path: str, in_known: bool) -> str:
+    """Vignette avec cadre vert (espece connue) ou rouge neon (hors 30 classes).
+
+    image_select ne permet pas de colorer les cadres conditionnellement ; on
+    dessine donc la bordure directement dans l'image via PIL, puis on sert le
+    fichier genere (mis en cache en /tmp).
+    """
+    color = (46, 204, 113) if in_known else (255, 35, 80)
+    try:
+        img = PILImage.open(image_path).convert("RGB")
+    except (OSError, ValueError):
+        return image_path
+    # Recadrage centre au carre : image_select affiche les vignettes dans des
+    # cases uniformes et rogne les ratios non conformes, ce qui couperait deux
+    # cotes du cadre. Un carre garantit une bordure visible sur les 4 cotes.
+    side = min(img.size)
+    left = (img.width - side) // 2
+    top = (img.height - side) // 2
+    img = img.crop((left, top, left + side, top + side)).resize((204, 204))
+    bordered = ImageOps.expand(img, border=8, fill=color)
+    out_dir = Path(tempfile.gettempdir()) / "champy_thumbs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{'in' if in_known else 'out'}_{Path(image_path).name}.png"
+    bordered.save(out)
+    return str(out)
 
 
 def _extract_image_url_from_html(html_content: str) -> str | None:
@@ -188,6 +277,8 @@ def _download_image_or_extract(url: str) -> bytes | None:
 for key in (SS_IMAGE, SS_SOURCE, SS_UPLOAD_HASH, SS_LAST_RESULT, SS_LAST_EXPLAIN):
     if key not in st.session_state:
         st.session_state[key] = None
+if SS_AUTORUN not in st.session_state:
+    st.session_state[SS_AUTORUN] = False
 
 
 # =====================================================================
@@ -198,10 +289,25 @@ st.title(":crystal_ball: Prédiction")
 
 st.markdown(
     """
-Choisissez une image dans l'un des trois onglets ci-dessous, puis cliquez
-sur **Lancer la prédiction**. La case Grad-CAM permet d'obtenir en plus
-une carte de chaleur des zones de l'image qui ont influencé le modèle.
+Cliquez une image dans l'onglet **Exemples locaux** : elle est sélectionnée et
+la prédiction se lance aussitôt. Un upload ou une URL déclenche la prédiction de
+la même façon, dès que l'image est chargée. Pour les exemples du dataset, le
+verdict est coloré selon que l'espèce réelle est bien retrouvée (vert), présente
+dans le top-5 (orange) ou manquée (rouge). La case **Grad-CAM** de la barre
+latérale ajoute une carte de chaleur des zones qui ont influencé le modèle.
 """
+)
+
+# Reglage Grad-CAM dans la barre laterale : choisi une fois, respecte a chaque
+# clic sur une vignette (lu en debut de script, avant tout declenchement).
+show_gradcam = st.sidebar.checkbox(
+    "Inclure l'explication Grad-CAM",
+    value=True,
+    key="pred_show_gradcam",
+    help=(
+        "Visualise les zones de l'image qui ont le plus influencé la prédiction. "
+        "Calcul plus lent (~500 ms à 5 s selon initialisation)."
+    ),
 )
 
 
@@ -233,10 +339,10 @@ with tab_upload:
         # Ne declencher la mise a jour que si c'est un nouveau fichier
         if new_hash != st.session_state[SS_UPLOAD_HASH]:
             st.session_state[SS_UPLOAD_HASH] = new_hash
-            _set_selected_image(data, f"Upload : {uploaded_file.name}")
+            _set_selected_image(data, f"Upload : {uploaded_file.name}", autorun=True)
             st.success(f"Image uploadée : `{uploaded_file.name}`")
 
-# --- Onglet Exemples : bouton explicite pour activer une image ---
+# --- Onglet Exemples : galerie de vignettes, un clic = selection + prediction ---
 with tab_browse:
     available_dirs = [
         (label, path) for label, path in SAMPLE_DIRECTORIES if path.exists() and path.is_dir()
@@ -257,23 +363,51 @@ with tab_browse:
         else:
             if len(image_paths) >= MAX_IMAGES_IN_BROWSE:
                 st.caption(
-                    f"Affichage limité aux {MAX_IMAGES_IN_BROWSE} premières images du dossier."
+                    f"Affichage limité aux {MAX_IMAGES_IN_BROWSE} premières images. "
+                    "Cliquez une vignette pour lancer directement la prédiction."
                 )
+            else:
+                st.caption("Cliquez une vignette pour lancer directement la prédiction.")
 
-            image_labels = [p.name for p in image_paths]
-            chosen_label = st.selectbox("Image", image_labels, key="browse_image")
-            chosen_path = image_paths[image_labels.index(chosen_label)]
-
-            if st.button(
-                "Utiliser cet exemple",
-                key="use_browse_button",
-                type="primary",
-            ):
-                _set_selected_image(
-                    chosen_path.read_bytes(),
-                    f"Exemple : {chosen_label}",
-                )
-                st.success(f"Image sélectionnée : `{chosen_label}`")
+            # Galerie cliquable. Une tuile "Choisir" est placee en tete : ainsi
+            # aucune vraie image n'est pre-selectionnee au chargement, et tout
+            # clic sur une image (y compris la premiere) declenche la prediction.
+            # La legende de chaque image est son espece reelle (manifest), pour
+            # comparer d'un coup d'oeil avec la prediction du modele.
+            label_map = load_label_map()
+            known = load_known_classes()
+            placeholder = str(_placeholder_path())
+            gallery_images = [placeholder]
+            gallery_captions = ["Choisir une image"]
+            origin_of: dict[str, Path] = {}  # vignette bordee -> image originale
+            for p in image_paths:
+                species = label_map.get(p.name)
+                in_known = bool(species and species in known)
+                thumb = bordered_thumbnail(str(p), in_known)
+                gallery_images.append(thumb)
+                gallery_captions.append(("🟢 " if in_known else "🔴 ") + (species or p.name))
+                origin_of[thumb] = p
+            clicked = image_select(
+                label="Cadre vert = espèce connue du modèle · cadre rouge = hors des 30 classes",
+                images=gallery_images,
+                captions=gallery_captions,
+                index=0,
+                return_value="original",
+                use_container_width=False,
+                key=f"imgsel_{dir_choice}",
+            )
+            prev_key = f"browse_prev_{dir_choice}"
+            if clicked and clicked != placeholder and clicked != st.session_state.get(prev_key):
+                st.session_state[prev_key] = clicked
+                chosen = origin_of.get(clicked)
+                if chosen is not None:
+                    species = label_map.get(chosen.name)
+                    _set_selected_image(
+                        chosen.read_bytes(),
+                        f"Exemple : {species or chosen.name} ({chosen.name})",
+                        autorun=True,
+                        true_label=species,
+                    )
 
 # --- Onglet URL : bouton explicite pour telecharger ---
 with tab_url:
@@ -297,7 +431,7 @@ with tab_url:
         ):
             downloaded = _download_image_or_extract(url)
             if downloaded:
-                _set_selected_image(downloaded, "URL distante")
+                _set_selected_image(downloaded, "URL distante", autorun=True)
                 st.success("Image téléchargée.")
 
 
@@ -308,10 +442,13 @@ with tab_url:
 image_bytes: bytes | None = st.session_state[SS_IMAGE]
 source_label: str = st.session_state[SS_SOURCE] or ""
 
+# Auto-run arme par un clic sur une vignette (consomme une seule fois).
+autorun = bool(st.session_state.pop(SS_AUTORUN, False))
+
 if image_bytes is None:
     st.info(
-        "Sélectionnez une image dans l'un des trois onglets ci-dessus, puis "
-        "cliquez sur **Lancer la prédiction**."
+        "Cliquez une image dans **Exemples locaux** (la prédiction se lance "
+        "aussitôt), ou utilisez **Upload** / **URL**."
     )
     st.stop()
 
@@ -325,31 +462,18 @@ with col_preview:
 with col_action:
     st.markdown(f"**Source** : {source_label}")
     st.markdown(f"**Taille** : {len(image_bytes) / 1024:.1f} Ko")
-    st.markdown("")
 
-    show_gradcam = st.checkbox(
-        "Inclure l'explication Grad-CAM",
-        value=True,
-        help=(
-            "Visualise les zones de l'image qui ont le plus influencé la "
-            "prédiction. Calcul plus lent (~500 ms à 5 s selon initialisation)."
-        ),
-    )
+# La prediction part automatiquement a chaque nouvelle selection (autorun).
+run_prediction = autorun
 
-    run_prediction = st.button(
-        "🚀 Lancer la prédiction",
-        type="primary",
-        use_container_width=True,
-    )
-
-# Si pas de clic et pas de resultat en cache, on s'arrete ici
+# Aucune nouvelle selection et aucun resultat en cache : on attend.
 if not run_prediction and st.session_state[SS_LAST_RESULT] is None:
-    st.info("Cliquez sur **Lancer la prédiction** pour interroger le modèle.")
+    st.info("Cliquez une image pour lancer la prédiction.")
     st.stop()
 
 
 # =====================================================================
-# Section 3 : Inference (uniquement si bouton cliqué ou résultat en cache)
+# Section 3 : Inference (uniquement si declenche ou résultat en cache)
 # =====================================================================
 
 if run_prediction:
@@ -370,34 +494,124 @@ if run_prediction:
 result = st.session_state[SS_LAST_RESULT]
 predictions: list[dict[str, Any]] = result["predictions"]
 top1 = predictions[0]
+top1_species = top1["species"]
+species_top5 = [p["species"] for p in predictions]
+true_label = st.session_state.get(SS_TRUE_LABEL)
+known = load_known_classes()
 
 st.divider()
 st.subheader("3. Résultats")
 
+# Verdict colore. On distingue trois situations :
+#  - espece hors des 30 classes : le modele ne peut pas la connaitre (erreur attendue) ;
+#  - espece connue : vert (top-1 correct), orange (dans le top-5), rouge (manque) ;
+#  - espece reelle inconnue (upload / URL) : on affiche juste la prediction.
+if true_label and true_label not in known:
+    st.info(
+        f"🔵 **Hors des 30 classes du modèle.** Espèce réelle : *{true_label}*. "
+        f"Le modèle ne l'a jamais apprise, il a forcément répondu autre chose "
+        f"(*{top1_species}*, {top1['confidence']:.1%}). L'erreur est **attendue**, "
+        "ce n'est pas un échec du modèle."
+    )
+    if run_prediction:
+        st.toast(f"🔵 Hors 30 classes : {true_label}", icon="🔵")
+elif true_label:
+    if top1_species == true_label:
+        verdict_icon = "✅"
+        st.success(
+            f"✅ **Bien reconnu.** Réel : *{true_label}*, "
+            f"prédit : *{top1_species}* ({top1['confidence']:.1%})"
+        )
+    elif true_label in species_top5:
+        verdict_icon = "⚠️"
+        rang = species_top5.index(true_label) + 1
+        st.warning(
+            f"⚠️ **Presque.** Réel : *{true_label}* (rang {rang} du top-5), "
+            f"prédit : *{top1_species}* ({top1['confidence']:.1%})"
+        )
+    else:
+        verdict_icon = "❌"
+        st.error(
+            f"❌ **Manqué.** Réel : *{true_label}* (dans les 30 classes), "
+            f"prédit : *{top1_species}* ({top1['confidence']:.1%})"
+        )
+    if run_prediction:
+        st.toast(f"{verdict_icon} {true_label} → {top1_species}", icon=verdict_icon)
+else:
+    st.info(f"Prédiction : **{top1_species}** ({top1['confidence']:.1%})")
+    if run_prediction:
+        st.toast(f"Prédiction : {top1_species}", icon="🔮")
+
+is_ood = bool(true_label and true_label not in known)
+if is_ood:
+    st.markdown(
+        """
+        <style>
+        @keyframes ood-pulse {
+            0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 35, 80, 0.45); }
+            50%      { box-shadow: 0 0 22px 6px rgba(255, 35, 80, 0.95); }
+        }
+        .st-key-ood_chart_frame {
+            border: 3px solid #ff2350;
+            border-radius: 12px;
+            padding: 10px;
+            animation: ood-pulse 2.4s ease-in-out infinite;
+        }
+        .ood-banner {
+            background: rgba(255, 35, 80, 0.12);
+            color: #ff2350;
+            font-weight: 700;
+            text-align: center;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin: 4px 0 10px 0;
+            animation: ood-pulse 2.4s ease-in-out infinite;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 col_top, col_chart = st.columns([1, 2])
 with col_top:
-    st.metric(f":trophy: {top1['species']}", f"{top1['confidence']:.1%}")
+    st.metric(f":trophy: {top1_species}", f"{top1['confidence']:.1%}")
     st.caption(f"Modèle : `{result.get('model_version', '?')}`")
 
 with col_chart:
-    df_pred = pd.DataFrame(predictions)
-    df_pred["confidence_pct"] = df_pred["confidence"] * 100
-    fig = px.bar(
-        df_pred,
-        x="confidence_pct",
-        y="species",
-        orientation="h",
-        title="Top-5 — Confiance par espèce",
-        labels={"confidence_pct": "Confiance (%)", "species": "Espèce"},
-        color="confidence_pct",
-        color_continuous_scale="Greens",
-        range_color=[0, 100],
-    )
-    fig.update_layout(
-        yaxis={"categoryorder": "total ascending"},
-        height=320,
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if is_ood:
+        st.markdown(
+            '<div class="ood-banner">⚠ Détection NON FIABLE : espèce hors des 30 classes</div>',
+            unsafe_allow_html=True,
+        )
+        try:
+            chart_box = st.container(key="ood_chart_frame")
+        except TypeError:
+            chart_box = st.container()
+    else:
+        chart_box = st.container()
+    with chart_box:
+        df_pred = pd.DataFrame(predictions)
+        df_pred["confidence_pct"] = df_pred["confidence"] * 100
+        fig = px.bar(
+            df_pred,
+            x="confidence_pct",
+            y="species",
+            orientation="h",
+            title=(
+                "Top-5 : détection NON FIABLE (hors des 30 classes)"
+                if is_ood
+                else "Top-5 : confiance par espèce"
+            ),
+            labels={"confidence_pct": "Confiance (%)", "species": "Espèce"},
+            color="confidence_pct",
+            color_continuous_scale="Reds" if is_ood else "Greens",
+            range_color=[0, 100],
+        )
+        fig.update_layout(
+            yaxis={"categoryorder": "total ascending"},
+            height=320,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # =====================================================================
