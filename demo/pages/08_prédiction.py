@@ -86,8 +86,10 @@ SAMPLE_DIRECTORIES: list[tuple[str, Path]] = [
 ]
 
 # Referentiel complet des observations : colonne image_lien (nom de fichier) ->
-# label (espece). Couvre toutes les images, pas seulement le split du modele.
-# Sert a afficher l'espece reelle de chaque image dans la galerie.
+# label (espece). Couvre toutes les images et utilise le meme vocabulaire que
+# split_manifest (colonne label), donc le marquage 30 / hors-30 est fiable.
+# Non versionne dans git (gere par DVC) : monte en volume au runtime, pas copie
+# dans l'image (sinon le build CI casse).
 LABELS_CSV = Path("data/observations_mushroom.csv")
 
 # Cles session_state utilisees par la page

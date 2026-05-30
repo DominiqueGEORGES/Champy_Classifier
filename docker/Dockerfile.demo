@@ -30,7 +30,7 @@ RUN python -m pip install --no-cache-dir \
 # Copier le code
 COPY demo/ demo/
 COPY src/ src/
-COPY data/raw_stats.json data/cleaning_report.json data/split_stats.json data/split_manifest.csv data/observations_mushroom.csv data/
+COPY data/raw_stats.json data/cleaning_report.json data/split_stats.json data/split_manifest.csv data/curated_manifest.csv data/
 COPY .env.example .env
 EXPOSE 8501
 CMD ["streamlit", "run", "demo/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
