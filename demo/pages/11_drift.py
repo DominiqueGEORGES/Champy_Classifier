@@ -9,6 +9,9 @@ Source de vérité : aucune valeur n'est écrite en dur. La baseline est
 lue dynamiquement, les rapports passés sont scannés au runtime, et la
 génération d'un nouveau rapport invoque ``monitoring/run_drift_report.py``
 via subprocess.
+
+La section 3 affiche d'abord une lecture en clair du rapport (verdict, chiffres,
+explication des termes), puis le rapport technique Evidently replié en dessous.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ import streamlit as st
 # Imports projet
 # =====================================================================
 from demo import auth
+from demo.lib.drift_utils import DriftVerdict, build_drift_verdict
 
 # =====================================================================
 # Constantes
@@ -66,6 +70,26 @@ MOIS_FR = {
     11: "novembre",
     12: "décembre",
 }
+
+# Explication des termes techniques, en langage humain.
+_TERM_EXPLANATION = """
+Le modèle a appris à reconnaître les champignons sur un jeu d'images précis :
+un certain mélange d'espèces, de cadrages, de lumières. C'est sa zone de confort.
+Tant que les photos reçues en production ressemblent à celles-là, ses réponses
+restent fiables.
+
+La **dérive** mesure l'écart entre ce que le modèle a connu (la **référence**,
+calculée sur le test set) et ce qu'il reçoit en ce moment (le **flux actuel**).
+Quand l'écart devient trop grand, on lève une alerte, avant que la qualité ne se dégrade.
+
+Deux mesures techniques apparaissent dans le rapport détaillé :
+
+- **Distance de Wasserstein** : imaginez deux tas de sable, un par distribution.
+  La distance, c'est l'effort minimal pour transformer le premier tas en le second.
+  Plus elle est grande, plus les deux situations sont éloignées.
+- **Divergence de Jensen-Shannon** : un score entre 0 et 1. Zéro signifie des
+  distributions identiques, un signifie totalement différentes.
+"""
 
 
 # =====================================================================
@@ -113,6 +137,118 @@ def _format_report_label(path: Path) -> str:
     if ts is None:
         return path.name
     return f"{ts:%Y-%m-%d %H:%M}  ({path.name})"
+
+
+def _safe_load_baseline() -> tuple[dict, dict]:
+    """Charge les blocs ``metadata`` et ``global`` de la baseline.
+
+    Returns:
+        Le couple ``(metadata, global)``, ou ``({}, {})`` si indisponible.
+    """
+    if not BASELINE_PATH.exists():
+        return {}, {}
+    try:
+        with open(BASELINE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("metadata", {}), data.get("global", {})
+    except (OSError, json.JSONDecodeError):
+        return {}, {}
+
+
+def _load_report_summary(html_path: Path) -> dict | None:
+    """Charge le résumé chiffré associé à un rapport, s'il existe.
+
+    Le résumé est un JSON compagnon, même nom que le HTML mais en ``.json``,
+    déposé par ``run_drift_report.py``. Il porte au minimum ``n_current`` et
+    ``n_reference``.
+
+    Args:
+        html_path: Chemin du rapport HTML sélectionné.
+
+    Returns:
+        Le dictionnaire de résumé, ou None si absent ou illisible.
+    """
+    summary_path = html_path.with_suffix(".json")
+    if not summary_path.exists():
+        return None
+    try:
+        with open(summary_path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _render_verdict_banner(verdict: DriftVerdict) -> None:
+    """Affiche le bandeau de verdict avec la couleur adaptée au statut.
+
+    Args:
+        verdict: Le verdict de dérive à afficher.
+    """
+    message = f"**{verdict.headline}**\n\n{verdict.detail}"
+    if verdict.status == "drift":
+        st.error(message)
+    elif verdict.status == "stable":
+        st.success(message)
+    elif verdict.status == "no_data":
+        st.info(message)
+    else:
+        st.warning(message)
+
+
+def _render_key_figures(verdict: DriftVerdict) -> None:
+    """Affiche les chiffres clés du verdict sous forme de métriques.
+
+    Args:
+        verdict: Le verdict de dérive à afficher.
+    """
+    col_current, col_reference, col_share = st.columns(3)
+    col_current.metric("Prédictions analysées", verdict.n_current)
+    col_reference.metric("Jeu de référence", verdict.n_reference)
+    if verdict.drift_share is not None:
+        col_share.metric("Colonnes en dérive", f"{verdict.drift_share:.0%}")
+    else:
+        col_share.metric("Colonnes en dérive", "n/a")
+
+
+def _render_clear_reading(summary: dict | None) -> None:
+    """Affiche la lecture en clair du rapport sélectionné.
+
+    Si un résumé chiffré est disponible, affiche le verdict, les chiffres clés
+    et la tendance de confiance. Sinon, indique comment l'activer. Dans tous les
+    cas, propose l'explication des termes techniques.
+
+    Args:
+        summary: Résumé chiffré du rapport (compagnon JSON), ou None.
+    """
+    st.subheader("Lecture en clair")
+
+    if summary is not None:
+        meta, glob = _safe_load_baseline()
+        verdict = build_drift_verdict(
+            n_current=int(summary.get("n_current", 0)),
+            n_reference=int(summary.get("n_reference", meta.get("n_images", 0))),
+            dataset_drift=summary.get("dataset_drift"),
+            drift_share=summary.get("share_of_drifted_columns"),
+            confidence_current_mean=summary.get("confidence_current_mean"),
+            confidence_reference_mean=summary.get(
+                "confidence_reference_mean", glob.get("confidence_mean")
+            ),
+            confidence_current_std=summary.get("confidence_current_std"),
+            confidence_reference_std=summary.get("confidence_reference_std"),
+        )
+        _render_verdict_banner(verdict)
+        _render_key_figures(verdict)
+        if verdict.confidence_trend:
+            st.info(verdict.confidence_trend)
+    else:
+        st.caption(
+            "Résumé chiffré indisponible pour ce rapport. Pour activer le verdict "
+            "automatique, `run_drift_report.py` doit déposer un JSON compagnon "
+            "(même nom, extension `.json`) à côté du HTML."
+        )
+
+    with st.expander("Que veut dire « dérive » ? (explication simple)"):
+        st.markdown(_TERM_EXPLANATION)
 
 
 # =====================================================================
@@ -275,11 +411,19 @@ else:
         )
 
         st.markdown("---")
-        st.markdown("**Rapport Evidently**")
-        st.caption(
-            "Note : la pagination en bas du tableau « Data Drift Summary » "
-            "est native à Evidently et reste affichée même quand il n'y a "
-            "qu'une seule page. C'est cosmétique."
-        )
 
-        st.components.v1.html(html_content, height=900, scrolling=True)
+        # =============================================================
+        # Lecture en clair (verdict + explication), avant le rapport brut
+        # =============================================================
+        _render_clear_reading(_load_report_summary(chosen))
+
+        # =============================================================
+        # Rapport technique brut, replié pour ne pas noyer la lecture
+        # =============================================================
+        with st.expander("Rapport technique complet (Evidently)"):
+            st.caption(
+                "Note : la pagination en bas du tableau « Data Drift Summary » "
+                "est native à Evidently et reste affichée même quand il n'y a "
+                "qu'une seule page. C'est cosmétique."
+            )
+            st.components.v1.html(html_content, height=900, scrolling=True)

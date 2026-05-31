@@ -7,6 +7,12 @@ sur une fenêtre glissante (défaut 24h) avec la baseline calculée par
 directement dans un navigateur ou embarqué dans la page Streamlit
 ``11_drift.py``.
 
+En complément du HTML, un JSON compagnon ``drift_YYYYMMDD_HHMM.json`` est
+déposé à côté. Il porte le résumé chiffré (tailles des datasets, part de
+colonnes en dérive, statistiques de confiance) qui alimente la « lecture
+en clair » de la page Streamlit. C'est la source de vérité du verdict
+lisible, indépendante du format interne d'Evidently.
+
 Le rapport HTML est augmenté d'un bandeau d'en-tête (date FR, fenêtre
 analysée, tailles des datasets) injecté juste après ``<body>`` pour
 que le fichier reste explicite quand on le télécharge ou le partage
@@ -73,6 +79,10 @@ DEFAULT_BASELINE = REPO_ROOT / "monitoring" / "baseline_reference.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "monitoring" / "reports"
 DEFAULT_DB_PATH = REPO_ROOT / "data" / "runtime" / "predictions.db"
 DEFAULT_HOURS = 24
+
+# Seuil de part de colonnes en dérive au-delà duquel Evidently déclare
+# une dérive du dataset (valeur par défaut d'Evidently).
+DRIFT_SHARE_THRESHOLD = 0.5
 
 # Mapping mois français pour formatage lisible (évite la dépendance à
 # la locale système qui peut ne pas être installée dans le container).
@@ -156,6 +166,60 @@ def _format_int_fr(n: int) -> str:
         Chaîne du type ``2&nbsp;872`` (HTML-safe pour insertion directe).
     """
     return f"{n:,}".replace(",", "&nbsp;")
+
+
+def _safe_float(value: Any) -> float | None:
+    """Convertit une valeur en float, ou None si elle est absente ou NaN.
+
+    Args:
+        value: Valeur à convertir (typiquement une statistique pandas).
+
+    Returns:
+        Le float correspondant, ou None si la valeur est NaN ou inconvertible.
+    """
+    try:
+        if pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_drift_share(snapshot: object) -> float | None:
+    """Extrait la part de colonnes en dérive depuis un snapshot Evidently.
+
+    Lecture défensive : la structure interne d'Evidently peut évoluer d'une
+    version à l'autre. En cas de format inattendu, on renvoie None et le
+    verdict lisible s'appuiera sur le seul garde-fou d'échantillon.
+
+    Args:
+        snapshot: Snapshot retourné par ``Report.run``.
+
+    Returns:
+        La part de colonnes en dérive (0 à 1), ou None si non extractible.
+    """
+    to_dict = getattr(snapshot, "dict", None)
+    if not callable(to_dict):
+        return None
+    try:
+        raw = to_dict()
+    except Exception as exc:
+        logger.warning("Extraction de la part de derive impossible : {}", exc)
+        return None
+
+    if not isinstance(raw, dict):
+        return None
+    metrics = raw.get("metrics")
+    if not isinstance(metrics, list):
+        return None
+
+    for metric in metrics:
+        if not isinstance(metric, dict):
+            continue
+        value = metric.get("value")
+        if isinstance(value, dict) and isinstance(value.get("share"), (int, float)):
+            return float(value["share"])
+    return None
 
 
 def build_header_html(
@@ -314,6 +378,62 @@ def inject_header(html_path: Path, header_html: str) -> None:
         f.write(content)
 
 
+def write_drift_summary(
+    html_path: Path,
+    *,
+    generated_at: datetime,
+    hours: int,
+    reference: pd.DataFrame,
+    current: pd.DataFrame,
+    n_reference_classes: int,
+    n_current_classes: int,
+    drift_share: float | None,
+) -> Path:
+    """Écrit le résumé chiffré du rapport dans un JSON compagnon.
+
+    Le JSON porte le même nom que le HTML mais avec l'extension ``.json``.
+    Il alimente la « lecture en clair » de la page Streamlit (verdict,
+    chiffres, tendance de confiance), sans dépendre du format interne
+    d'Evidently.
+
+    Args:
+        html_path: Chemin du rapport HTML associé.
+        generated_at: Horodatage de génération.
+        hours: Fenêtre temporelle analysée.
+        reference: DataFrame de référence (baseline matérialisée).
+        current: DataFrame des prédictions de production.
+        n_reference_classes: Nombre de classes distinctes en référence.
+        n_current_classes: Nombre de classes distinctes en production.
+        drift_share: Part de colonnes en dérive, ou None si non extractible.
+
+    Returns:
+        Le chemin du JSON écrit.
+    """
+    dataset_drift: bool | None = None
+    if drift_share is not None:
+        dataset_drift = drift_share >= DRIFT_SHARE_THRESHOLD
+
+    summary: dict[str, Any] = {
+        "generated_at": generated_at.strftime("%Y-%m-%dT%H:%M:%S"),
+        "hours": hours,
+        "n_current": len(current),
+        "n_reference": len(reference),
+        "n_current_classes": n_current_classes,
+        "n_reference_classes": n_reference_classes,
+        "dataset_drift": dataset_drift,
+        "share_of_drifted_columns": drift_share,
+        "confidence_current_mean": _safe_float(current["confidence"].mean()),
+        "confidence_reference_mean": _safe_float(reference["confidence"].mean()),
+        "confidence_current_std": _safe_float(current["confidence"].std()),
+        "confidence_reference_std": _safe_float(reference["confidence"].std()),
+    }
+
+    summary_path = html_path.with_suffix(".json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    return summary_path
+
+
 # =====================================================================
 # Helpers de chargement des données
 # =====================================================================
@@ -467,6 +587,22 @@ def main() -> int:
     )
     inject_header(output_path, header_html)
     logger.info("Bandeau d'en-tête injecté dans le rapport.")
+
+    # =================================================================
+    # Écriture du résumé chiffré (JSON compagnon pour la lecture claire)
+    # =================================================================
+    drift_share = _extract_drift_share(snapshot)
+    summary_path = write_drift_summary(
+        output_path,
+        generated_at=generated_at,
+        hours=args.hours,
+        reference=reference,
+        current=current,
+        n_reference_classes=n_baseline_classes,
+        n_current_classes=n_current_classes,
+        drift_share=drift_share,
+    )
+    logger.success(f"Résumé chiffré écrit : {summary_path}")
 
     logger.info(f"Ouvrir dans le navigateur : {output_path.resolve().as_uri()}")
     return 0

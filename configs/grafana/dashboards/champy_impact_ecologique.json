@@ -1,422 +1,234 @@
 {
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
-  "description": "Empreinte carbone du modèle Champy Classifier. Séparation stricte entre l'entraînement (coût unique) et les inférences en production (cumul live). Méthodologie inspirée de CodeCarbon, ADEME et Hugging Face Climate Change AI.",
+  "uid": "champy-eco-impact",
+  "title": "Champy — Impact écologique",
+  "description": "Message de communication sur l'empreinte carbone du projet : un modèle frugal, entraîné pour le coût d'un café.",
+  "tags": [
+    "carbone",
+    "champy",
+    "ecologie",
+    "mlops",
+    "comm"
+  ],
+  "schemaVersion": 39,
+  "version": 7,
   "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": null,
-  "links": [],
-  "liveNow": false,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
     {
-      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
-      "id": 100,
-      "options": {
-        "code": {"language": "plaintext", "showLineNumbers": false, "showMiniMap": false},
-        "content": "# 🌱 Impact écologique du modèle Champy Classifier\n\nDeux coûts carbone distincts : l'**entraînement** (calcul intensif unique sur GPU) et les **inférences en production** (coût marginal par prédiction). Toutes les valeurs sont en équivalent CO₂.",
-        "mode": "markdown"
-      },
-      "pluginVersion": "11.4.0",
-      "transparent": true,
-      "type": "text"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 3},
-      "id": 200,
-      "panels": [],
-      "title": "🏋️  Coût de l'entraînement (one-shot, payé une fois)",
-      "type": "row"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "green", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "massg"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 4},
       "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+      "type": "text",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
       },
-      "pluginVersion": "11.4.0",
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;padding:6px;\"><div style=\"font-size:26px;font-weight:800;\">🌱 L'empreinte carbone de Champy, en clair</div><div style=\"font-size:15px;color:#888;margin-top:4px;\">Un modèle d'IA frugal : entraîné pour le coût d'un café, des prédictions quasi gratuites.</div></div>"
+      }
+    },
+    {
+      "id": 2,
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;padding:8px 4px;\"><div style=\"font-size:64px;line-height:1.1;\">☕</div><div style=\"font-size:16px;color:#888;margin-top:4px;\">Entraîner ce modèle, c'est</div><div style=\"font-size:30px;font-weight:800;color:#1F4E3D;margin-top:6px;\">1 espresso</div><div style=\"font-size:12px;color:#999;margin-top:8px;\">58 gCO₂eq, une seule fois</div></div>"
+      }
+    },
+    {
+      "id": 3,
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;padding:8px 4px;\"><div style=\"font-size:64px;line-height:1.1;\">🚗</div><div style=\"font-size:16px;color:#888;margin-top:4px;\">Soit l'équivalent de</div><div style=\"font-size:30px;font-weight:800;color:#0E7C7B;margin-top:6px;\">341 mètres</div><div style=\"font-size:12px;color:#999;margin-top:8px;\">en voiture diesel</div></div>"
+      }
+    },
+    {
+      "id": 4,
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;padding:8px 4px;\"><div style=\"font-size:64px;line-height:1.1;\">🌍</div><div style=\"font-size:16px;color:#888;margin-top:4px;\">Face à GPT-4, Champy émet</div><div style=\"font-size:30px;font-weight:800;color:#E8654F;margin-top:6px;\">430 M× moins</div><div style=\"font-size:12px;color:#999;margin-top:8px;\">à l'entraînement</div></div>"
+      }
+    },
+    {
+      "id": 5,
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;padding:8px 4px;\"><div style=\"font-size:64px;line-height:1.1;\">♻️</div><div style=\"font-size:16px;color:#888;margin-top:4px;\">Il faut 10 millions de prédictions</div><div style=\"font-size:30px;font-weight:800;color:#B85C00;margin-top:6px;\">= 1 espresso</div><div style=\"font-size:12px;color:#999;margin-top:8px;\">le coût d'usage est infime</div></div>"
+      }
+    },
+    {
+      "id": 6,
+      "type": "text",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"text-align:center;font-size:15px;color:#888;padding-top:6px;\">📡 En direct depuis l'API</div>"
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Prédictions servies",
+      "description": "Nombre total de prédictions réalisées par l'API depuis son démarrage (mesuré en direct).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(58)",
-          "instant": true,
-          "legendFormat": "Empreinte training",
-          "range": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(champy_predictions_total)",
           "refId": "A"
         }
       ],
-      "title": "Émissions de l'entraînement",
-      "description": "ConvNeXt-Tiny entraîné en 15h sur RTX 3050 Ti (75W), mix électrique France (52 gCO₂eq/kWh). Calcul : 15 × 0.075 × 52 = 58 gCO₂eq. Coût unique, payé à la création du modèle.",
-      "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
-          "color": {"fixedColor": "green", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "none",
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "#1F4E3D",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Empreinte totale du projet (espressos)",
+      "description": "Impact carbone total à ce jour = entraînement (58 g, fixe) + toutes les inférences cumulées, exprimé en nombre d'espressos (1 espresso ≈ 50 gCO₂eq).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(58 + sum(champy_predictions_total) * 0.000005) / 50",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "#1F4E3D",
+                "value": null
+              }
+            ]
+          },
           "decimals": 2
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 4},
-      "id": 2,
       "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(58 / 50)",
-          "instant": true,
-          "legendFormat": "espressos",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Équivalent café",
-      "description": "Référence : 1 espresso ≈ 50 gCO₂eq (incluant culture du café, transport, eau chaude). Source : ADEME Base Empreinte®.",
-      "type": "stat"
+        "textMode": "value_and_name"
+      }
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "yellow", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "lengthm"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 4},
-      "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(58 / 170 * 1000)",
-          "instant": true,
-          "legendFormat": "mètres",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Équivalent voiture diesel",
-      "description": "Distance qu'une voiture diesel parcourrait pour émettre 58 gCO₂eq. Référence : 170 gCO₂eq/km (ADEME, voiture diesel moyenne européenne).",
-      "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "green", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 4},
-      "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(25000000 / 58)",
-          "instant": true,
-          "legendFormat": "fois moins que GPT-4",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Rapport vs GPT-4",
-      "description": "GPT-4 : ~25 000 kgCO₂eq d'entraînement (Patterson et al. 2023, estimation). Champy : 0.058 kgCO₂eq. Rapport ≈ 430 000.",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 10},
-      "id": 300,
-      "panels": [],
-      "title": "🔮  Coût des inférences en production (live, cumulé)",
-      "type": "row"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "blue", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "none",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 11},
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "sum(champy_predictions_total)",
-          "legendFormat": "prédictions",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Nombre d'inférences",
-      "description": "Compteur Prometheus `champy_predictions_total` : nombre total de prédictions servies par l'API depuis le démarrage du container. Métrique exposée par BentoML.",
-      "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "blue", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "massmg",
-          "decimals": 4
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 11},
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(0.005)",
-          "instant": true,
-          "legendFormat": "par prédiction",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Empreinte unitaire (par inférence)",
-      "description": "Coût marginal d'une prédiction : ~50ms CPU sur le container BentoML, à 20W de puissance, mix France. Valeur fixe estimée. Pour une mesure exacte en continu, intégrer CodeCarbon.",
-      "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "blue", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1000}, {"color": "orange", "value": 50000}]},
-          "unit": "massmg",
-          "decimals": 4
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 11},
-      "id": 7,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "sum(champy_predictions_total) * 0.005",
-          "legendFormat": "cumulé",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Empreinte cumulée (toutes inférences)",
-      "description": "Calcul live : nombre de prédictions × empreinte unitaire (0.005 mg). Couleur passe à orange au-delà de 50 g cumulés. Mise à jour temps réel.",
-      "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {
-        "defaults": {
-          "color": {"fixedColor": "blue", "mode": "fixed"},
-          "mappings": [],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "none",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 11},
-      "id": 8,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "editorMode": "code",
-          "expr": "vector(50 / 0.000005)",
-          "instant": true,
-          "legendFormat": "inférences = 1 espresso",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Pour atteindre 1 espresso (50 g)",
-      "description": "Nombre d'inférences à servir pour cumuler 50 gCO₂eq (équivalent d'un seul espresso). À 0.005 mg/inférence : 10 millions de prédictions.",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17},
-      "id": 400,
-      "panels": [],
-      "title": "📊  Comparaison avec d'autres modèles (entraînement uniquement)",
-      "type": "row"
-    },
-    {
-      "gridPos": {"h": 11, "w": 24, "x": 0, "y": 18},
       "id": 9,
-      "options": {
-        "code": {"language": "plaintext", "showLineNumbers": false, "showMiniMap": false},
-        "content": "## Empreinte d'entraînement comparée\n\n| Modèle | gCO₂eq | Rapport vs Champy |\n|---|---:|---:|\n| **Champy ConvNeXt-Tiny** | **58** | **× 1 (baseline)** |\n| ResNet-50 (ImageNet) | ~1 800 | × 31 |\n| BERT-base | ~650 000 | × 11 200 |\n| GPT-3 (175B) | ~552 000 000 | × 9 500 000 |\n| BLOOM (176B) | ~25 000 000 | × 431 000 |\n| GPT-4 (estimation) | ~25 000 000 000 | × 430 000 000 |\n\n## 💡 Pourquoi Champy est bas-carbone\n\n1. **GPU laptop** (RTX 3050 Ti, 75W) au lieu de cluster A100 (400W × N nœuds)\n2. **Mix électrique français** (~52 gCO₂eq/kWh) parmi les plus bas-carbone d'Europe (nucléaire + hydraulique)\n3. **Architecture efficiente** (ConvNeXt-Tiny, 28M paramètres) au lieu de transformers géants\n4. **Transfer learning** depuis ImageNet : pas d'entraînement *from scratch*\n",
-        "mode": "markdown"
+      "type": "text",
+      "gridPos": {
+        "h": 15,
+        "w": 24,
+        "x": 0,
+        "y": 19
       },
-      "pluginVersion": "11.4.0",
-      "transparent": false,
-      "type": "text"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 29},
-      "id": 500,
-      "panels": [],
-      "title": "📚  Méthodologie & sources",
-      "type": "row"
-    },
-    {
-      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 30},
-      "id": 10,
       "options": {
-        "code": {"language": "plaintext", "showLineNumbers": false, "showMiniMap": false},
-        "content": "## Formules utilisées\n\n**Entraînement** = durée × puissance × facteur carbone\n- 15h × 0.075 kW × 52 gCO₂eq/kWh = **58 gCO₂eq**\n\n**Inférence unitaire** = durée × puissance × facteur carbone\n- 0.05s × 0.020 kW × 52 / 3600 = **0.005 mgCO₂eq par prédiction**\n\n**Inférences cumulées** = nombre de prédictions × empreinte unitaire (métrique Prometheus `champy_predictions_total`).\n\n## Sources\n\n- **Mix énergétique France 2024** : ~52 gCO₂eq/kWh (RTE, *Bilan électrique 2024* ; ADEME *Base Empreinte®*).\n- **Voiture diesel moyenne** : 170 gCO₂eq/km (ADEME).\n- **Espresso** : ~50 gCO₂eq (incluant culture, transport, eau chaude — ADEME).\n- **Patterson et al. (2021)** *Carbon Emissions and Large Neural Network Training*, [arXiv:2104.10350](https://arxiv.org/abs/2104.10350).\n- **Patterson et al. (2023)** *The Carbon Footprint of Machine Learning Training Will Plateau, Then Shrink*, IEEE Computer Society.\n- **Strubell et al. (2019)** *Energy and Policy Considerations for Deep Learning in NLP*, [arXiv:1906.02243](https://arxiv.org/abs/1906.02243).\n- **Luccioni et al. (2022)** *Estimating the Carbon Footprint of BLOOM*, [arXiv:2211.02001](https://arxiv.org/abs/2211.02001).\n\n## Limites de l'estimation\n\n- Les valeurs d'**entraînement** sont basées sur la puissance nominale et la durée mesurée, pas sur une instrumentation continue (qui nécessiterait l'intégration de **CodeCarbon**).\n- L'**inférence unitaire** est statique (0.005 mg) car non instrumentée en temps réel. Le **cumul**, lui, est dynamique via Prometheus.\n- Les estimations pour **GPT-4** sont incertaines : OpenAI n'a pas publié de chiffres officiels. Les ordres de grandeur reposent sur des extrapolations académiques.\n\n## Pistes d'amélioration\n\n1. **Intégrer CodeCarbon** dans le pipeline Airflow d'entraînement pour mesurer les émissions réelles à chaque run et les pousser vers Prometheus.\n2. **Exporter `nvidia-smi`** via DCGM Exporter pour suivre la consommation GPU instantanée pendant les phases de réentraînement.\n3. **Affiner l'empreinte unitaire d'inférence** par mesure directe sur N requêtes contrôlées.",
-        "mode": "markdown"
-      },
-      "pluginVersion": "11.4.0",
-      "transparent": false,
-      "type": "text"
+        "mode": "html",
+        "content": "<h3 style=\"margin-top:0;\">Pour aller plus loin</h3><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">D'où vient l'« empreinte totale » ?</div><div>Elle additionne deux choses : l'<b>entraînement</b> du modèle (<span style=\"color:#1F4E3D;font-weight:700;\">58 g de CO₂</span>, payé une seule fois) et <b>toutes les prédictions</b> servies depuis (chacune coûte une fraction infime, le total monte doucement avec l'usage). Le chiffre <span style=\"color:#1F4E3D;font-weight:700;\">58</span> est donc la base fixe de départ, à laquelle s'ajoute l'usage réel.</div><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">Comment calcule-t-on l'entraînement ?</div><div>15 heures de calcul sur un GPU portable (RTX 3050 Ti, 75 W), avec le mix électrique français (52 gCO₂eq/kWh) : 15 × 0,075 × 52 = <span style=\"color:#1F4E3D;font-weight:700;\">58 gCO₂eq</span>.</div><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">Comment calcule-t-on une prédiction ?</div><div>Environ 50 ms de calcul à 20 W, soit <span style=\"color:#B85C00;font-weight:700;\">0,005 mgCO₂eq</span> par prédiction. Le cumul est mesuré en direct via Prometheus (compteur <code>champy_predictions_total</code>).</div><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">Pourquoi est-ce si bas ?</div><div>GPU portable au lieu d'un cluster de serveurs, mix électrique français bas-carbone (nucléaire + hydraulique), architecture compacte (ConvNeXt-Tiny, 28 M paramètres), et transfer learning : on part d'un modèle pré-entraîné plutôt que de repartir de zéro.</div><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">Pour situer (empreinte d'entraînement d'autres modèles)</div><div>ResNet-50 : ~1 800 gCO₂eq · BERT : ~650 000 · BLOOM : ~25 millions · <span style=\"color:#E8654F;font-weight:700;\">GPT-4 (estimation) : ~25 milliards</span>.</div><div style=\"color:#0E7C7B;font-weight:700;font-size:15px;margin-top:14px;\">Limites & honnêteté</div><div>Les valeurs d'entraînement et le coût unitaire d'une prédiction sont <i>estimés</i> (puissance × durée), pas mesurés en continu ; le cumul des prédictions, lui, est réel. Piste d'amélioration : intégrer CodeCarbon au pipeline pour mesurer les émissions exactes.</div><div style=\"color:#999;font-size:12px;margin-top:14px;\"><i>Sources : ADEME Base Empreinte® · Patterson et al. 2021/2023 · Luccioni et al. 2022.</i></div>"
+      }
     }
-  ],
-  "preload": false,
-  "refresh": "30s",
-  "schemaVersion": 40,
-  "tags": ["champy", "ecologie", "carbone", "mlops"],
-  "templating": {"list": []},
-  "time": {"from": "now-6h", "to": "now"},
-  "timepicker": {},
-  "timezone": "browser",
-  "title": "Champy — Impact écologique",
-  "uid": "champy-eco-impact",
-  "version": 3,
-  "weekStart": ""
+  ]
 }

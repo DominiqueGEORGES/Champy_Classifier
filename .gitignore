@@ -84,3 +84,7 @@ airflow/.env.airflow
 
 # Rapports de tests générés localement (Streamlit pointe dessus)
 reports/
+
+# Artefacts runtime (non versionnes)
+data/registry/
+last_deployed_api.txt

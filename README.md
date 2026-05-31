@@ -2,7 +2,15 @@
 
 # 🍄 Champy Classifier
 
-**Classification de 30 espèces de champignons par deep learning, livrée en stack MLOps complète.**
+**Photographiez un champignon, l'application reconnaît son espèce.**
+
+Champy Classifier identifie 30 espèces de champignons à partir d'une simple photo.
+Mais l'objet du projet va au-delà du modèle : il montre toute la chaîne qui amène
+une intelligence artificielle de l'expérimentation jusqu'à un service en ligne
+fiable, surveillé et reproductible, ce qu'on appelle le MLOps.
+
+> ⚠️ Projet académique de démonstration. Il n'est pas conçu pour décider de la
+> comestibilité d'un champignon : ne vous y fiez jamais pour la cueillette.
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -13,15 +21,27 @@
 [![License](https://img.shields.io/badge/License-Academic-green)]()
 [![Defense](https://img.shields.io/badge/Soutenance-16_juin_2026-orange)]()
 
-**ConvNeXt-Tiny &nbsp;•&nbsp; 90 % accuracy &nbsp;•&nbsp; F1 macro 81 % &nbsp;•&nbsp; Empreinte training ≈ 58 gCO₂eq**
+**ConvNeXt-Tiny &nbsp;•&nbsp; 90 % de bonnes réponses &nbsp;•&nbsp; F1 macro 81 % &nbsp;•&nbsp; Empreinte d'entraînement ≈ 58 gCO₂eq (un espresso)**
 
 </div>
 
 ---
 
+## En une minute
+
+Le projet couvre la chaîne complète d'un système d'apprentissage automatique, de la donnée brute jusqu'au service surveillé :
+
+- **Apprendre** : un modèle de vision (ConvNeXt-Tiny) entraîné à distinguer 30 espèces.
+- **Servir** : une API qui répond à une photo par une espèce, son niveau de confiance, et une carte de chaleur expliquant la décision.
+- **Montrer** : un portail web où l'on teste le modèle et où l'on explore chaque étape du projet.
+- **Surveiller** : des tableaux de bord qui suivent la santé du service et détectent si les données changent dans le temps (le *drift*).
+- **Industrialiser** : tout est conteneurisé, testé automatiquement et reproductible d'une machine à l'autre.
+
+---
+
 ## Équipe et cadre académique
 
-**Travail de Fin d'Études** — Master *Intelligence Artificielle*, DataScientest x Mines Paris PSL (RNCP niveau 7). Soutenance le **16 juin 2026**.
+**Travail de Fin d'Études**, Master *Intelligence Artificielle*, DataScientest x Mines Paris PSL (RNCP niveau 7). Soutenance le **16 juin 2026**.
 
 | Co-auteurs | Mentor |
 |---|---|
@@ -38,12 +58,19 @@
 git clone https://github.com/<votre-org>/Champy_Classifier.git
 cd Champy_Classifier
 cp .env.example .env
+
+# Données et modèle : gérés par DVC, stockés sur le remote DagsHub
+pip install "dvc[s3]"
+dvc pull
+
 docker compose up -d --build
 ```
 
-Onze containers démarrent. Comptez 5 à 15 minutes au premier lancement. Une fois la stack opérationnelle, ouvrez **http://localhost:8088** dans votre navigateur.
+Onze conteneurs démarrent (API, démo, MLflow, MinIO, Airflow et la surveillance de base). Comptez 5 à 15 minutes au premier lancement. Une fois la stack opérationnelle, ouvrez **http://localhost:8088** dans votre navigateur.
 
-> 🛠️ **Prérequis** : Docker Desktop 4.30+ (Windows / macOS) ou Docker Engine 24.0+ avec plugin Compose v2 (Linux). 16 Go de RAM. 20 Go de disque libre.
+> 🛠️ **Prérequis** : Docker Desktop 4.30+ (Windows / macOS) ou Docker Engine 24.0+ avec le plugin Compose v2 (Linux). Python 3.11 et un accès au remote DVC (identifiants DagsHub) pour le `dvc pull`. 16 Go de RAM. 20 Go de disque libre.
+
+> ℹ️ Sans le `dvc pull`, les dossiers `data/` et `models/` restent vides après le clone (ils sont hors git) : la démo démarrerait sans modèle ni images d'exemple. C'est l'étape à ne pas sauter pour une installation propre.
 
 ---
 
@@ -53,17 +80,17 @@ Onze containers démarrent. Comptez 5 à 15 minutes au premier lancement. Une fo
 flowchart TD
     Internet([🌐 Internet])
     CF[Cloudflare Edge<br/>+ Zero Trust Access]
-    Tunnel[Cloudflare Tunnel<br/>cloudflared]
-    NGINX{{nginx reverse-proxy<br/>:8088}}
+    Tunnel[Cloudflare Tunnel<br/>cloudflared, sur l'hote]
+    NGINX{{nginx reverse-proxy<br/>hote :8088}}
 
-    Streamlit[Streamlit<br/>:8501]
-    API[BentoML API<br/>:8000]
-    MLflow[MLflow<br/>:5000]
-    Airflow[Airflow<br/>:8080]
-    Grafana[Grafana<br/>:3000]
-    Prometheus[Prometheus<br/>:9090]
-    Alertmanager[Alertmanager<br/>:9093]
-    MinIO[MinIO<br/>:9000 / :9001]
+    Streamlit[Streamlit]
+    API[BentoML API]
+    MLflow[MLflow]
+    Airflow[Airflow]
+    Grafana[Grafana]
+    Prometheus[Prometheus]
+    Alertmanager[Alertmanager]
+    MinIO[MinIO]
 
     Internet --> CF
     CF --> Tunnel
@@ -85,70 +112,106 @@ flowchart TD
     class Streamlit,API,MLflow,Airflow,Grafana,Prometheus,Alertmanager,MinIO service
 ```
 
-Tous les services sont accessibles via un point d'entrée unique (`champy.sbdg-ia.fr`) avec routage par sous-path. Aucun port n'est exposé directement sur Internet : tout transite par Cloudflare Tunnel et est filtré par Cloudflare Access (authentification SSO par e-mail magic-link).
+Tous les services passent par un point d'entrée unique (`nginx` sur le port hôte `8088`), avec routage par sous-chemin. Le schéma montre les **services**, pas les ports : à l'intérieur du réseau Docker, chaque service garde son port standard (Streamlit 8501, API 8000, Grafana 3000, etc.), tandis que les ports exposés sur l'hôte ont un offset `+10` pour cohabiter avec d'autres projets (voir `docker-compose.yml`).
 
-Documentation détaillée : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+En production, l'ensemble est exposé derrière **Cloudflare Tunnel** (le démon `cloudflared` tourne sur l'hôte, hors stack Docker) et filtré par **Cloudflare Access** : une seule authentification SSO par e-mail (magic-link) donne accès à tous les sous-chemins sous `https://champy.sbdg-ia.fr/`. Aucun port n'est ouvert directement vers Internet.
+
+Documentation détaillée : [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
 ## Accès aux interfaces
 
-| Service | Sous-path | Auth interne | Rôle |
-|---|---|---|---|
-| 🍄 Streamlit | `/` | bcrypt | Démo interactive, exploration des résultats |
-| 🚀 BentoML API | `/api/` | — | Inférence, explicabilité, Swagger UI |
-| 📊 MLflow | `/mlflow/` | — | Tracking des expériences, registre de modèles |
-| 🌬️ Airflow | `/airflow/` | basic auth | Orchestration des pipelines |
-| 📈 Grafana | `/grafana/` | basic auth | Dashboards de monitoring |
-| 🔥 Prometheus | `/prometheus/` | — | Métriques time-series |
-| 🚨 Alertmanager | `/alertmanager/` | — | Routing des alertes vers Discord |
-| 💾 MinIO | `/minio/` | basic auth | Stockage S3-compatible auto-hébergé |
+Via le hub `nginx` (port `8088`), chaque service répond sur son sous-chemin :
 
-Les identifiants par défaut sont visibles dans la page **Plateforme** du portfolio Streamlit (interface graphique avec boutons « Copier » natifs).
+| Service | Sous-chemin | Auth interne | Rôle |
+|---|---|---|---|
+| 🍄 Streamlit | `/` | bcrypt | Portail de démonstration, exploration des résultats |
+| 🚀 BentoML API | `/api/` | aucune | Inférence, explicabilité, documentation OpenAPI |
+| 📊 MLflow | `/mlflow/` | aucune | Suivi des entraînements et registre de modèles |
+| 🌬️ Airflow | `/airflow/` | basic auth | Orchestration des pipelines |
+| 📈 Grafana | `/grafana/` | anonyme (Viewer) | Tableaux de bord de surveillance |
+| 🔥 Prometheus | `/prometheus/` | aucune | Métriques temporelles |
+| 🚨 Alertmanager | `/alertmanager/` | aucune | Routage des alertes vers Discord |
+| 💾 MinIO | `/minio/` | basic auth | Stockage S3 auto-hébergé (artefacts MLflow) |
+
+En accès local direct (sans passer par le hub), les ports hôte sont : Streamlit `8501`, API `8010`, Grafana `3010`, MLflow `5050`, MinIO console `9011`, Airflow `8081`. La liste complète est dans `docker-compose.yml`. Les identifiants par défaut sont affichés dans la page **Plateforme** du portail Streamlit, avec des boutons « Copier ».
 
 ---
 
-## Modèle et empreinte écologique
+## Le modèle et son empreinte
 
 | Indicateur | Valeur |
 |---|---:|
 | Architecture | ConvNeXt-Tiny (28 M paramètres) |
-| Test accuracy | 90 % |
+| Bonnes réponses (test) | 90 % |
 | F1 macro | 81 % |
 | Espèces classifiées | 30 |
-| Empreinte training | ≈ 58 gCO₂eq (1 espresso) |
-| Empreinte inférence unitaire | ≈ 0,005 mgCO₂eq |
-| Rapport vs GPT-4 (entraînement) | × 430 000 moins |
+| Empreinte d'entraînement | ≈ 58 gCO₂eq (un espresso) |
+| Empreinte d'une prédiction | ≈ 0,005 mgCO₂eq |
 
-Dashboard Grafana dédié à l'impact écologique : ouvrez Grafana → dashboard **Champy — Impact écologique**.
+L'entraînement complet émet environ 58 gCO₂eq, soit l'équivalent d'un espresso, ou d'environ 341 mètres parcourus en voiture diesel. Ces équivalents concrets sont repris dans le tableau de bord Grafana **Champy, Impact écologique**.
 
 ---
 
 ## Documentation complète
 
 <details>
+<summary><strong>🔬 Premier test de prédiction</strong></summary>
+
+<br>
+
+Le dossier `data/sample/` contient quelques images d'exemple.
+
+**Via le portail Streamlit** (recommandé) :
+
+1. Ouvrez http://localhost:8088/
+2. Connectez-vous (un compte de démonstration est indiqué sur la page de connexion).
+3. Allez sur la page **Prédiction** dans le menu de gauche.
+4. Choisissez une image (envoi d'un fichier, exemple de la galerie, ou URL).
+5. **Cliquez simplement sur une vignette** : la prédiction se lance automatiquement, sans bouton.
+
+Dans la galerie, chaque vignette est encadrée : **en vert** si l'espèce fait partie des 30 que le modèle connaît, **en rouge** sinon. Si vous choisissez une image hors de ces 30 espèces, la page signale clairement que la prédiction n'est pas fiable (le modèle est obligé de répondre une des 30 espèces, même quand l'image n'en fait pas partie). La page affiche aussi le top-5 des espèces les plus probables et une carte de chaleur **Grad-CAM** qui met en évidence les zones de l'image ayant pesé dans la décision.
+
+**Via l'API directement** :
+
+```bash
+# Prédiction
+curl -X POST "http://localhost:8088/api/predict" \
+     -F "image=@data/sample/100048.jpg"
+
+# Disponibilité du service
+curl http://localhost:8088/api/healthz
+```
+
+La documentation OpenAPI (Swagger) liste tous les points d'entrée disponibles, accessible depuis `/api/`.
+
+</details>
+
+<details>
 <summary><strong>📦 Configuration des secrets</strong></summary>
 
 <br>
 
-Le fichier `.env.example` contient des valeurs par défaut suffisantes pour une démo locale. Pour une exposition publique, générez vos propres secrets :
+Le fichier `.env.example` contient des valeurs par défaut suffisantes pour une démonstration locale. Pour une exposition publique, générez vos propres secrets :
 
 ```bash
-# Clé Fernet (chiffrement des connexions Airflow)
+# Cle Fernet (chiffrement des connexions Airflow)
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# Clé secrète du webserver Airflow
+# Cle secrete du webserver Airflow
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 Reportez les valeurs dans `.env` :
 
 ```env
-AIRFLOW_FERNET_KEY=<sortie de la première commande>
+AIRFLOW_FERNET_KEY=<sortie de la premiere commande>
 AIRFLOW_WEBSERVER_SECRET=<sortie de la seconde commande>
 GRAFANA_PASSWORD=<un mot de passe robuste>
 MINIO_ROOT_PASSWORD=<un mot de passe robuste>
 AIRFLOW_ADMIN_PASSWORD=<un mot de passe robuste>
+DISCORD_WEBHOOK_URL=<l'URL du webhook Discord pour les alertes>
 ```
 
 Puis :
@@ -160,52 +223,24 @@ docker compose up -d --force-recreate airflow grafana minio
 </details>
 
 <details>
-<summary><strong>🖥️ Accès local vs accès public</strong></summary>
+<summary><strong>🖥️ Accès local et accès public</strong></summary>
 
 <br>
 
-**Accès local** (sur la machine d'installation) :
+**Accès local** (sur la machine d'installation) : tous les services sont accessibles via le hub nginx sur le port `8088` (`http://localhost:8088/<sous-chemin>/`). Les ports natifs restent aussi exposés pour le débogage, avec un offset `+10` (Streamlit `8501`, API `8010`, Grafana `3010`, MLflow `5050`, MinIO console `9011`, Airflow `8081`). La liste complète est dans `docker-compose.yml`.
 
-Tous les services sont accessibles via le hub nginx sur le port 8088 : `http://localhost:8088/<sous-path>/`. Les ports natifs de chaque service restent également exposés pour le debug (Streamlit sur 8501, API sur 8010, Grafana sur 3010, MLflow sur 5050, MinIO console sur 9011, etc.). La liste complète est dans `docker-compose.yml`.
-
-**Accès public** (production) :
-
-En production, la stack est exposée derrière Cloudflare Tunnel et protégée par Cloudflare Access. Une seule authentification SSO donne accès à l'ensemble des sous-paths sous `https://champy.sbdg-ia.fr/`. L'authentification est gérée par e-mail magic-link via Cloudflare Zero Trust. Aucun port n'est ouvert vers Internet sur la machine hôte.
+**Accès public** (production) : la stack est exposée derrière Cloudflare Tunnel et protégée par Cloudflare Access. Une seule authentification SSO donne accès à l'ensemble des sous-chemins sous `https://champy.sbdg-ia.fr/`, par e-mail magic-link via Cloudflare Zero Trust. Aucun port n'est ouvert vers Internet sur la machine hôte.
 
 </details>
 
 <details>
-<summary><strong>🔬 Premier test de prédiction</strong></summary>
+<summary><strong>🌬️ Suivi des entraînements (MLflow)</strong></summary>
 
 <br>
 
-Le dossier `data/sample/` contient quelques images d'exemple, une par classe principale.
+La stack inclut un serveur **MLflow auto-hébergé** (`/mlflow/`), avec une base SQLite pour les métadonnées et MinIO comme stockage des artefacts. C'est lui que vise le pipeline d'entraînement orchestré par Airflow.
 
-**Via le portfolio Streamlit** (recommandé) :
-
-1. Ouvrez http://localhost:8088/
-2. Connectez-vous (compte de démo visible sur la page de connexion)
-3. Naviguez vers la page **Prédiction** dans le menu de gauche
-4. Sélectionnez une image (upload local, exemple fourni, ou URL distante)
-5. Cliquez sur **🚀 Lancer la prédiction**
-
-La page affiche la classe prédite, le top-5 des espèces les plus probables, et une carte de chaleur **Grad-CAM** mettant en évidence les zones de l'image qui ont influencé la décision.
-
-**Via l'API directement** :
-
-```bash
-# Prédiction top-5
-curl -X POST "http://localhost:8088/api/predict" \
-     -F "image=@data/sample/agaricus_bisporus_01.jpg"
-
-# Healthcheck
-curl http://localhost:8088/api/healthz
-
-# Métadonnées du modèle
-curl http://localhost:8088/api/model/info
-```
-
-Documentation OpenAPI : `http://localhost:8088/api/docs.json`.
+L'historique de référence des entraînements du projet (comparaison ConvNeXt vs ResNet, modèle retenu) est par ailleurs tracé sur une instance **DagsHub** distante. Les deux ne contiennent donc pas forcément les mêmes runs : pensez à regarder la bonne instance selon ce que vous cherchez.
 
 </details>
 
@@ -251,7 +286,7 @@ Pour un nettoyage total, supprimez ensuite le dossier du projet.
 
 **`Port is already allocated`**
 
-Un autre service utilise un port que la stack tente d'allouer. Identifiez-le :
+Un autre service occupe un port que la stack tente d'allouer. Identifiez-le :
 
 - Windows : `Get-NetTCPConnection -LocalPort 8088 | Select-Object OwningProcess`
 - Linux : `sudo lsof -i :8088`
@@ -260,7 +295,7 @@ Soit vous arrêtez le service conflictuel, soit vous modifiez le port hôte dans
 
 **nginx en état `unhealthy` après un `--force-recreate`**
 
-Quand un container backend est recréé, son IP Docker change mais nginx garde l'ancienne en cache DNS. Solution :
+Quand un conteneur backend est recréé, son IP Docker change mais nginx garde l'ancienne en cache DNS :
 
 ```bash
 docker compose restart nginx
@@ -268,7 +303,7 @@ docker compose restart nginx
 
 **Streamlit affiche `Connection error` pour l'API**
 
-L'API BentoML n'est pas encore prête. Vérifiez :
+L'API BentoML n'est pas encore prête :
 
 ```bash
 docker compose ps api
@@ -277,18 +312,18 @@ docker compose logs --tail 50 api
 
 **Airflow refuse de démarrer (`Fernet key must be specified`)**
 
-Le fichier `.env` n'a pas été correctement rempli. Vérifiez la section *Configuration des secrets*.
+Le fichier `.env` n'a pas été correctement rempli. Voir la section *Configuration des secrets*.
 
 **Modifications du code Streamlit non prises en compte (Windows)**
 
-Sur Windows Docker Desktop, `runOnSave` ne fonctionne pas de manière fiable. Solution :
+Sur Windows Docker Desktop, le rechargement automatique n'est pas fiable :
 
 ```bash
 docker compose build demo
 docker compose up -d --force-recreate demo
 ```
 
-Voir [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md) pour la liste complète des pièges connus et recettes de dépannage.
+Voir [`PLAYBOOK.md`](PLAYBOOK.md) pour la liste complète des pièges connus et des recettes de dépannage.
 
 </details>
 
@@ -316,14 +351,14 @@ En l'absence de configuration explicite dans `.env`, les identifiants par défau
 
 <br>
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Architecture détaillée, choix techniques, comparaison des modèles entraînés
-- [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md) — Procédures opérationnelles, pièges connus, recettes de dépannage
-- [`docs/LOGBOOK.md`](docs/LOGBOOK.md) — Journal des décisions et évolutions du projet
-- Page **Plateforme** du portfolio Streamlit — Hub d'accès interactif aux huit services
-- Page **Infrastructure** du portfolio Streamlit — Vue détaillée des services avec statuts en temps réel
-- Page **Monitoring** — Tableaux de bord Grafana intégrés et métriques live de l'API
-- Page **Drift** — Détection de dérive de distribution via Evidently AI
-- Dashboard Grafana **Impact écologique** — Empreinte carbone du modèle (entraînement et inférences)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) : architecture détaillée, choix techniques, comparaison des modèles entraînés.
+- [`PLAYBOOK.md`](PLAYBOOK.md) : procédures opérationnelles, pièges connus, recettes de dépannage.
+- [`LOGBOOK.md`](LOGBOOK.md) : journal des décisions et évolutions du projet.
+- [`docs/ci-cd.md`](docs/ci-cd.md) : fonctionnement de l'intégration et du déploiement continus.
+- Page **Plateforme** du portail Streamlit : hub d'accès interactif aux services.
+- Page **Infrastructure** : vue détaillée des services avec statuts en temps réel.
+- Page **Monitoring** : tableaux de bord Grafana intégrés et métriques live de l'API.
+- Page **Drift** : détection de dérive de distribution via Evidently AI.
 
 </details>
 
@@ -335,6 +370,6 @@ En l'absence de configuration explicite dans `.env`, les identifiants par défau
 
 Co-auteurs : Loïc FOCRAUD &nbsp;•&nbsp; Lionel SCHNEIDER &nbsp;•&nbsp; Dominique GEORGES &nbsp;•&nbsp; Saravana PREGASSAME &nbsp;•&nbsp; Mentor : Kylian POILLY
 
-Les jeux de données utilisés (700 000 images de champignons sur 30 espèces) proviennent de Mushroom Observer et iNaturalist, curés pour le projet. Les modèles pré-entraînés ConvNeXt-Tiny et ResNet-50 sont issus de torchvision. Le pipeline MLOps s'appuie exclusivement sur des composants open source auto-hébergés.
+Les images proviennent de Mushroom Observer et iNaturalist. Le jeu brut compte environ 647 000 photos couvrant de nombreuses espèces ; après curation pour le projet, environ 20 000 images réparties sur les 30 espèces retenues servent à l'entraînement. Les modèles pré-entraînés ConvNeXt-Tiny et ResNet-50 proviennent de torchvision. Le pipeline MLOps s'appuie exclusivement sur des composants open source auto-hébergés.
 
 </div>

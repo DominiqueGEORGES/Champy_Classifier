@@ -1,14 +1,14 @@
 {
-  "uid": "champy-system-health",
-  "title": "Champy - System Health",
-  "description": "Santé applicative de l'API Champy : métriques auto-mesurées par l'application (champy_app_* via psutil) et métriques natives BentoML. Observabilité by design.",
+  "uid": "champy-host",
+  "title": "Champy - Hôte (serveur WSL2)",
+  "description": "Ressources de l'hôte qui exécute Docker (environnement WSL2) : CPU, RAM, disque, charge, réseau. Alimenté par node-exporter. Complément du dashboard « Ressources containers ».",
   "tags": [
     "champy",
-    "process",
-    "system"
+    "host",
+    "node-exporter"
   ],
   "schemaVersion": 39,
-  "version": 3,
+  "version": 2,
   "editable": true,
   "refresh": "15s",
   "time": {
@@ -35,15 +35,15 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Santé applicative de l'API Champy** : métriques que l'application **s'auto-mesure** (préfixe `champy_app_`, via psutil) et métriques natives du service BentoML. Observabilité *by design* : seule l'application connaît son état interne réel (threads, descripteurs, uptime), là où une sonde externe ne voit que l'enveloppe.\n\n- **Uptime API** : durée depuis le dernier redémarrage du process (un reset = redéploiement).\n- **Threads / Descripteurs ouverts** : santé interne ; une hausse continue des descripteurs trahit une fuite.\n- **Mémoire de l'API (RSS/VMS)** : empreinte mémoire réelle du process.\n- **CPU de l'API (%)** : charge processeur auto-mesurée.\n- **Requêtes BentoML (req/s) / en cours** : débit traité et saturation éventuelle du service."
+        "content": "**Ressources de l'hôte qui exécute Docker** (environnement WSL2), mesurées par node-exporter. En WSL2, ces valeurs reflètent les ressources *allouées à WSL* (ajustables via `.wslconfig`), c'est-à-dire ce qui est réellement disponible pour les containers, et non le matériel Windows complet.\n\n- **CPU / RAM / Disque hôte (%)** : indicateurs de saturation globale (vert/orange/rouge).\n- **Mémoire hôte (octets)** : mémoire utilisée vs totale de l'environnement WSL2.\n- **Charge CPU (load average)** : charge système sur 1/5/15 min, à comparer au nombre de cœurs WSL2.\n- **Débit réseau hôte** : trafic agrégé des interfaces.\n- **Occupation disque par filesystem** : taux de remplissage du storage Docker (`/var/lib`)."
       },
       "transparent": false
     },
     {
       "id": 1,
       "type": "stat",
-      "title": "Uptime API",
-      "description": "Durée depuis le démarrage du process API.",
+      "title": "CPU hôte (%)",
+      "description": "Pourcentage CPU utilisé sur l'hôte WSL2 (100 - idle). Vue globale de la charge processeur.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -60,22 +60,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_uptime_seconds{job=\"champy-api\"}",
-          "legendFormat": "Uptime API",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) * 100)",
+          "legendFormat": "CPU hote (%)",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "percent",
           "color": {
             "mode": "thresholds"
           },
           "thresholds": {
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           }
@@ -88,7 +96,7 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
         "textMode": "value"
       }
@@ -96,8 +104,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Threads",
-      "description": "Nombre de threads actifs dans le process API.",
+      "title": "RAM hôte (%)",
+      "description": "Pourcentage de RAM utilisée sur l'hôte WSL2 (basé sur MemAvailable).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -114,22 +122,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_num_threads{job=\"champy-api\"}",
-          "legendFormat": "Threads",
+          "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100",
+          "legendFormat": "RAM hote (%)",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percent",
           "color": {
             "mode": "thresholds"
           },
           "thresholds": {
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           }
@@ -142,7 +158,7 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
         "textMode": "value"
       }
@@ -150,8 +166,8 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Descripteurs ouverts",
-      "description": "Fichiers/sockets ouverts par le process API. Une hausse continue signale une fuite de descripteurs.",
+      "title": "Disque Docker (%)",
+      "description": "Taux d'occupation du storage Docker (/var/lib, device du disque virtuel WSL). C'est ce disque qui se remplit avec les images, volumes et containers du projet.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -168,22 +184,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_open_fds{job=\"champy-api\"}",
-          "legendFormat": "Descripteurs ouverts",
+          "expr": "100 - (node_filesystem_avail_bytes{mountpoint=\"/var/lib\"} / node_filesystem_size_bytes{mountpoint=\"/var/lib\"} * 100)",
+          "legendFormat": "Disque Docker (%)",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percent",
           "color": {
             "mode": "thresholds"
           },
           "thresholds": {
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           }
@@ -196,7 +220,7 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
         "textMode": "value"
       }
@@ -204,8 +228,8 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Mémoire de l'API (octets)",
-      "description": "Mémoire résidente (RSS) et virtuelle (VMS) du process API, mesurées par psutil au sein de l'application.",
+      "title": "Mémoire hôte (octets)",
+      "description": "Mémoire utilisée et totale de l'hôte WSL2. L'écart avec le matériel Windows = ce que WSL2 ne s'est pas alloué.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -222,8 +246,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_memory_rss_bytes{job=\"champy-api\"}",
-          "legendFormat": "RSS",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "legendFormat": "utilisee",
           "refId": "A"
         },
         {
@@ -231,8 +255,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_memory_vms_bytes{job=\"champy-api\"}",
-          "legendFormat": "VMS",
+          "expr": "node_memory_MemTotal_bytes",
+          "legendFormat": "totale",
           "refId": "B"
         }
       ],
@@ -254,19 +278,24 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "last",
+            "max"
+          ]
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       }
     },
     {
       "id": 5,
       "type": "timeseries",
-      "title": "CPU de l'API (%)",
-      "description": "Pourcentage CPU instantané du process API (auto-mesuré via psutil).",
+      "title": "Charge CPU (load average)",
+      "description": "Charge moyenne du système sur 1, 5 et 15 minutes. À comparer au nombre de cœurs alloués à WSL2.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -283,8 +312,149 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "champy_app_cpu_percent{job=\"champy-api\"}",
-          "legendFormat": "CPU",
+          "expr": "node_load1",
+          "legendFormat": "1m",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_load5",
+          "legendFormat": "5m",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_load15",
+          "legendFormat": "15m",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "last",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Débit réseau hôte (octets/s)",
+      "description": "Trafic réseau entrant et sortant agrégé sur les interfaces de l'hôte WSL2 (hors loopback).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[$__rate_interval])",
+          "legendFormat": "rx {{device}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[$__rate_interval])",
+          "legendFormat": "tx {{device}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "last",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Occupation disque par filesystem (%)",
+      "description": "Taux d'occupation de chaque filesystem réel de l'hôte (hors tmpfs/overlay).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 - (node_filesystem_avail_bytes{mountpoint=~\"/var/lib|/mnt\"} / node_filesystem_size_bytes{mountpoint=~\"/var/lib|/mnt\"} * 100)",
+          "legendFormat": "{{mountpoint}}",
           "refId": "A"
         }
       ],
@@ -306,115 +476,16 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "last",
+            "max"
+          ]
         },
         "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "type": "timeseries",
-      "title": "Requêtes BentoML (req/s)",
-      "description": "Débit de requêtes traitées par le service BentoML, dérivé du compteur natif.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 19
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "rate(bentoml_service_request_total{job=\"champy-api\"}[$__rate_interval])",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Requêtes en cours",
-      "description": "Nombre de requêtes en cours de traitement dans le service BentoML (saturation éventuelle).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 19
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "bentoml_service_request_in_progress{job=\"champy-api\"}",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       }
     }

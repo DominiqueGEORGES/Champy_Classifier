@@ -1,36 +1,82 @@
 {
   "uid": "champy-api-performance",
   "title": "Champy - API Performance",
-  "description": "Latence (p50/p95/p99), throughput, et erreurs HTTP de l'API d'inference. Les requetes utilisent les metriques Champy (champy_*) qui sont communes a FastAPI et BentoML pour permettre la transition sans casser les dashboards.",
-  "tags": ["champy", "api", "performance"],
-  "schemaVersion": 38,
-  "version": 1,
-  "refresh": "15s",
-  "time": {"from": "now-1h", "to": "now"},
-  "timepicker": {},
-  "templating": {"list": []},
-  "annotations": {"list": []},
+  "description": "Performance de l'API d'inférence : latences, débit, erreurs et endpoints les plus sollicités.",
+  "tags": [
+    "api",
+    "champy",
+    "performance"
+  ],
+  "schemaVersion": 39,
+  "version": 3,
   "editable": true,
-  "graphTooltip": 0,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
     {
       "id": 1,
+      "type": "text",
+      "title": "À propos de ce tableau de bord",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Performance de l'API d'inférence Champy.** Ce tableau de bord suit la rapidité et le volume des prédictions servies par l'API BentoML. Les latences proviennent des métriques métier `champy_prediction_*`, le trafic des métriques natives `bentoml_service_request_total`. Les endpoints de healthcheck (`/health`, `/healthz`) sont exclus des vues de trafic pour ne montrer que l'activité réelle.\n\n**Contenu :**\n- **Latence d'inférence (p50/p95/p99)** : temps de réponse aux percentiles clés ; le p99 révèle les pires cas.\n- **Latence moyenne (5 min)** : latence moyenne récente, repère rapide.\n- **Total prédictions** : nombre cumulé de prédictions depuis le démarrage de l'API.\n- **Requêtes par seconde (par endpoint)** : débit de trafic métier par route.\n- **Erreurs HTTP (par endpoint)** : taux de réponses non-2xx ; vide = aucune erreur (état nominal).\n- **Top endpoints (par volume)** : routes les plus sollicitées (hors healthchecks)."
+      }
+    },
+    {
+      "id": 2,
       "type": "timeseries",
-      "title": "Latence d'inference (p50 / p95 / p99)",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Latence d'inférence (p50 / p95 / p99)",
+      "description": "Temps de réponse de l'inférence de bout-en-bout (preprocessing + ONNX) aux percentiles 50, 95 et 99, calculé sur 5 min.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 6
+      },
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.50, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.95, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.99, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
@@ -39,22 +85,159 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
     {
-      "id": 2,
-      "type": "timeseries",
-      "title": "Requetes par seconde (par endpoint)",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "id": 3,
+      "type": "stat",
+      "title": "Latence moyenne (5 min)",
+      "description": "Latence moyenne des prédictions sur les 5 dernières minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
       "targets": [
         {
-          "expr": "sum(rate(champy_requests_total[1m])) by (endpoint)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])",
+          "legendFormat": "Latence moyenne (5 min)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total prédictions (depuis démarrage)",
+      "description": "Nombre cumulé de prédictions servies depuis le dernier démarrage de l'API (compteur, remis à zéro au redéploiement).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(champy_predictions_total)",
+          "legendFormat": "Total predictions (depuis demarrage)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Requêtes par seconde (par endpoint)",
+      "description": "Débit de requêtes par route métier (healthchecks exclus), calculé sur 1 min.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(bentoml_service_request_total{endpoint!~\"/health.*\"}[1m])) by (endpoint)",
           "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
@@ -62,105 +245,145 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "stacking": {"mode": "none"}}
-        },
-        "overrides": []
-      },
-      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Total predictions (cumulatif)",
-      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum(champy_predictions_total)",
-          "legendFormat": "total",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {"mode": "thresholds"},
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
-        },
-        "overrides": []
-      },
-      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
-    },
-    {
-      "id": 4,
-      "type": "stat",
-      "title": "Latence moyenne (5 min)",
-      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [
-        {
-          "expr": "rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])",
-          "legendFormat": "avg",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {"mode": "thresholds"},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 0.1},
-              {"color": "red", "value": 0.2}
-            ]
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
-      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
     {
-      "id": 5,
+      "id": 6,
       "type": "timeseries",
-      "title": "Erreurs HTTP (par status_code)",
-      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Erreurs HTTP (par endpoint)",
+      "description": "Taux de réponses non-2xx par endpoint. Un graphe vide signifie aucune erreur (état nominal).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
       "targets": [
         {
-          "expr": "sum(rate(champy_http_errors_total[1m])) by (status_code)",
-          "legendFormat": "{{status_code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(bentoml_service_request_total{http_response_code!~\"2..\"}[5m])) by (endpoint, http_response_code)",
+          "legendFormat": "{{endpoint}} {{http_response_code}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 30}
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
     {
-      "id": 6,
+      "id": 7,
       "type": "table",
-      "title": "Top 5 endpoints (par volume)",
-      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Top endpoints (par volume cumulé)",
+      "description": "Routes les plus sollicitées depuis le démarrage (healthchecks exclus), triées par nombre total de requêtes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "targets": [
         {
-          "expr": "topk(5, sum by (method, endpoint) (champy_requests_total))",
-          "legendFormat": "{{method}} {{endpoint}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(5, sum by (endpoint) (bentoml_service_request_total{endpoint!~\"/health.*\"}))",
+          "legendFormat": "",
           "refId": "A",
           "format": "table",
           "instant": true
         }
       ],
-      "options": {"showHeader": true}
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "service": true
+            },
+            "renameByName": {
+              "endpoint": "Endpoint",
+              "Value": "Requetes (cumul)"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Requetes (cumul)",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
     }
   ]
 }

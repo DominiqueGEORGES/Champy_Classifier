@@ -1,24 +1,43 @@
 {
   "uid": "champy-predictions",
-  "title": "Champy - Predictions",
-  "description": "Distribution des especes predites, confiance moyenne, et histogramme des confidences. Utile pour detecter une derive de distribution (proxy drift) ou une chute de confiance globale.",
-  "tags": ["champy", "predictions", "drift"],
+  "title": "Champy - Prédictions",
+  "description": "Distribution des espèces prédites, confiance moyenne, et histogramme des confiances. Utile pour détecter une dérive de distribution (proxy drift) ou une chute de confiance globale.",
+  "tags": [
+    "champy",
+    "predictions",
+    "drift"
+  ],
   "schemaVersion": 38,
   "version": 1,
   "refresh": "15s",
-  "time": {"from": "now-6h", "to": "now"},
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
-  "templating": {"list": []},
-  "annotations": {"list": []},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 0,
   "panels": [
     {
       "id": 1,
       "type": "barchart",
-      "title": "Top-10 especes predites (cumulatif)",
-      "gridPos": {"h": 10, "w": 16, "x": 0, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Top-10 espèces prédites (cumulatif)",
+      "gridPos": {
+        "h": 10,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "topk(10, sum by (species) (champy_predictions_total))",
@@ -31,7 +50,9 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": {"mode": "palette-classic"}
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
@@ -40,15 +61,26 @@
         "showValue": "auto",
         "stacking": "none",
         "xTickLabelRotation": 0,
-        "legend": {"showLegend": false}
-      }
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "description": "Les dix espèces de champignons les plus fréquemment prédites par le modèle depuis le démarrage. Une distribution très déséquilibrée peut révéler un biais du modèle ou une dérive des images entrantes (proxy drift)."
     },
     {
       "id": 2,
       "type": "stat",
       "title": "Confiance moyenne (top-1)",
-      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 0},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "champy_prediction_confidence_sum / champy_prediction_confidence_count",
@@ -60,26 +92,50 @@
         "defaults": {
           "unit": "percentunit",
           "decimals": 2,
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "red", "value": null},
-              {"color": "yellow", "value": 0.7},
-              {"color": "green", "value": 0.85}
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "green",
+                "value": 0.85
+              }
             ]
           }
         },
         "overrides": []
       },
-      "options": {"colorMode": "background", "graphMode": "area", "textMode": "auto"}
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "description": "Score de confiance moyen de la classe la plus probable (top-1) sur l'ensemble des prédictions. Une baisse durable peut signaler des images hors-distribution ou une dégradation du modèle."
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Especes uniques observees",
-      "gridPos": {"h": 5, "w": 8, "x": 16, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Espèces uniques observées",
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "count(count by (species) (champy_predictions_total))",
@@ -90,19 +146,42 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": {"mode": "thresholds"},
-          "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": []
       },
-      "options": {"colorMode": "background", "graphMode": "none", "textMode": "auto"}
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Nombre d'espèces distinctes prédites au moins une fois. Donne une idée de la diversité des entrées réellement traitées par l'API."
     },
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Predictions par seconde (par espece, top-5)",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Prédictions par seconde (par espèce, top-5)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "topk(5, sum by (species) (rate(champy_predictions_total[1m])))",
@@ -113,19 +192,44 @@
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 20, "stacking": {"mode": "normal"}}
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
         },
         "overrides": []
       },
-      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "multi"}}
+      "options": {
+        "legend": {
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Débit de prédictions pour les cinq espèces les plus actives, calculé en temps réel. Met en évidence les classes les plus sollicitées."
     },
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Latence par espece (p95, top 5)",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "title": "Latence par espèce (p95, top 5)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum by (le) (rate(champy_prediction_latency_seconds_bucket[5m])))",
@@ -136,12 +240,26 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10}
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         },
         "overrides": []
       },
-      "options": {"legend": {"showLegend": true}, "tooltip": {"mode": "single"}}
+      "options": {
+        "legend": {
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "description": "Latence au 95e percentile pour les cinq espèces les plus prédites. Permet de repérer une classe dont le traitement serait anormalement lent."
     }
   ]
 }
