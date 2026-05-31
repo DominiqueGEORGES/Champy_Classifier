@@ -66,11 +66,13 @@ dvc pull
 docker compose up -d --build
 ```
 
-Onze conteneurs démarrent (API, démo, MLflow, MinIO, Airflow et la surveillance de base). Comptez 5 à 15 minutes au premier lancement. Une fois la stack opérationnelle, ouvrez **http://localhost:8088** dans votre navigateur.
+Treize conteneurs démarrent : l'API, la démo, MLflow, MinIO, Airflow, et la surveillance (Prometheus, Grafana, Alertmanager, plus deux exporters qui mesurent l'hôte et les conteneurs). Comptez 5 à 15 minutes au premier lancement. Une fois la stack opérationnelle, ouvrez **http://localhost:8088** dans votre navigateur.
 
 > 🛠️ **Prérequis** : Docker Desktop 4.30+ (Windows / macOS) ou Docker Engine 24.0+ avec le plugin Compose v2 (Linux). Python 3.11 et un accès au remote DVC (identifiants DagsHub) pour le `dvc pull`. 16 Go de RAM. 20 Go de disque libre.
 
 > ℹ️ Sans le `dvc pull`, les dossiers `data/` et `models/` restent vides après le clone (ils sont hors git) : la démo démarrerait sans modèle ni images d'exemple. C'est l'étape à ne pas sauter pour une installation propre.
+
+> 📦 **Registre d'images local (optionnel)** : un second fichier `docker-compose.registry.yml` fournit un registre Docker privé pour le déploiement continu. Il n'est pas nécessaire à la démonstration et se lance à part : `docker compose -f docker-compose.registry.yml up -d` (registre sur `localhost:5000`, interface web sur `localhost:5001`). Voir `docker-compose.registry.yml` pour le prérequis `insecure-registries` côté Docker Desktop.
 
 ---
 
@@ -113,6 +115,8 @@ flowchart TD
 ```
 
 Tous les services passent par un point d'entrée unique (`nginx` sur le port hôte `8088`), avec routage par sous-chemin. Le schéma montre les **services**, pas les ports : à l'intérieur du réseau Docker, chaque service garde son port standard (Streamlit 8501, API 8000, Grafana 3000, etc.), tandis que les ports exposés sur l'hôte ont un offset `+10` pour cohabiter avec d'autres projets (voir `docker-compose.yml`).
+
+Quatre conteneurs n'apparaissent pas sur ce schéma parce qu'ils ne sont pas routés par nginx : la base Postgres d'Airflow, le relais d'alertes vers Discord, et les deux exporters de métriques (hôte et conteneurs), que Prometheus interroge directement. Avec le proxy `nginx`, cela porte la stack à treize conteneurs.
 
 En production, l'ensemble est exposé derrière **Cloudflare Tunnel** (le démon `cloudflared` tourne sur l'hôte, hors stack Docker) et filtré par **Cloudflare Access** : une seule authentification SSO par e-mail (magic-link) donne accès à tous les sous-chemins sous `https://champy.sbdg-ia.fr/`. Aucun port n'est ouvert directement vers Internet.
 
