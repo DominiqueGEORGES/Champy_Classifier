@@ -42,3 +42,18 @@ scrape_configs:
       - targets: ["api:8000"]
         labels:
           service: "champy-classifier"
+
+  # Metriques de ressources par container (CPU, RAM, IO) fournies par
+  # l'exporter base sur l'API Docker. Resolu via le DNS interne du compose.
+  - job_name: "docker-containers"
+    static_configs:
+      - targets: ["docker_exporter:9417"]
+        labels:
+          service: "container-metrics"
+
+  # Metriques de l'hote (environnement WSL2 qui heberge Docker).
+  - job_name: "node"
+    static_configs:
+      - targets: ["node_exporter:9100"]
+        labels:
+          service: "host-metrics"

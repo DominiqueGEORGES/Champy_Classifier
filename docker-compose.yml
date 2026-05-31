@@ -74,6 +74,8 @@ services:
       - CHAMPY_GITHUB_OWNER=${CHAMPY_GITHUB_OWNER:-LoicFocraud}
       - CHAMPY_GITHUB_REPO=${CHAMPY_GITHUB_REPO:-Champy_Classifier}
       - CHAMPY_GITHUB_BRANCH=${CHAMPY_GITHUB_BRANCH:-dev-dominique}
+      - CHAMPY_REGISTRY_URL=${CHAMPY_REGISTRY_URL:-http://host.docker.internal:5000}
+      - CHAMPY_REGISTRY_UI_URL=${CHAMPY_REGISTRY_UI_URL:-http://localhost:5001}
     depends_on:
       api:
         condition: service_healthy
@@ -136,6 +138,51 @@ services:
 
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  # Exporter de metriques par container via l'API Docker.
+  # Contourne l'incompatibilite de cAdvisor avec le containerd image store
+  # (snapshotter) : cAdvisor lit la structure overlay2 du filesystem, absente
+  # avec containerd, alors que l'API Docker reste accessible quel que soit le
+  # storage driver. Expose CPU/RAM/IO par container sur /metrics (port 9417).
+  docker_exporter:
+    build: ./monitoring/docker_exporter
+    container_name: champy_docker_exporter
+    environment:
+      - EXPORTER_PORT=9417
+      - COLLECT_INTERVAL=15          # secondes entre deux collectes
+      # Filtre des containers exposes (regex). Pilote depuis .env.
+      # champy_ => uniquement les containers du projet (la vue globale du NUC3
+      # est deja couverte par la stack sbdg-mon). Vide => tous les containers.
+      - CONTAINER_FILTER=${CHAMPY_CONTAINER_FILTER:-champy_}
+      - TZ=Europe/Paris
+    ports:
+      - "9417:9417"                  # acces direct optionnel ; scrape interne via docker_exporter:9417
+    volumes:
+      # Socket Docker monte en LECTURE SEULE : acces minimal pour lister les
+      # containers et lire leurs stats, aucune capacite de modification.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  # Node Exporter : metriques de l'hote qui execute Docker (CPU, RAM, disque,
+  # charge, reseau). En WSL2, il mesure la distro WSL2 (ressources allouees a
+  # WSL via .wslconfig), c'est-a-dire les ressources reellement disponibles
+  # pour les containers. Embarque dans le compose => portable : se redeploie
+  # tel quel sur toute machine Docker (NUC3, XPS2...) sans installation native.
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: champy_node_exporter
+    command:
+      # --path.rootfs=/host indique a node-exporter de lire /proc, /sys et les
+      # filesystems sous /host (le rootfs de l'hote monte ci-dessous), et non
+      # ceux du container lui-meme.
+      - '--path.rootfs=/host'
+    volumes:
+      # Rootfs de l'hote en lecture seule. rslave propage les montages sans
+      # permettre au container de les modifier.
+      - '/:/host:ro'
+    ports:
+      - "9101:9100"   # 9100 interne (scrape) ; 9101 cote hote pour eviter un conflit eventuel
     restart: unless-stopped
 
 # =====================================================================
@@ -286,6 +333,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       AWS_DEFAULT_REGION: us-east-1
       PYTHONPATH: /opt/champy:/opt/airflow
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
     ports:
       - "8081:8080"
     volumes:

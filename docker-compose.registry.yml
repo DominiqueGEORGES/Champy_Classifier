@@ -1,0 +1,64 @@
+# Docker Registry local pour le workflow CD.
+#
+# Demarrage :
+#   docker compose -f docker-compose.registry.yml up -d
+#
+# Acces :
+#   - API Registry v2 : http://localhost:5000/v2/
+#   - UI web           : http://localhost:5001
+#
+# Workflow type :
+#   docker build -t localhost:5000/champy-api:v1.0.0 -f docker/Dockerfile.api .
+#   docker push localhost:5000/champy-api:v1.0.0
+#   docker pull localhost:5000/champy-api:v1.0.0  (depuis une autre machine du reseau)
+#
+# Prerequis Docker Desktop (Windows) : ajouter au daemon.json
+#   { "insecure-registries": ["localhost:5000", "nuc3.tailscale.ts.net:5000"] }
+# puis Apply & Restart.
+
+services:
+  registry:
+    image: registry:2
+    container_name: champy_registry
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/registry:/var/lib/registry
+    environment:
+      # Permet DELETE /v2/<name>/manifests/<reference> pour gerer la retention
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      # CORS : autorise l'UI a appeler le registry depuis le navigateur
+      REGISTRY_HTTP_HEADERS_Access-Control-Allow-Origin: "[http://localhost:5001]"
+      REGISTRY_HTTP_HEADERS_Access-Control-Allow-Methods: "[HEAD,GET,OPTIONS,DELETE]"
+      REGISTRY_HTTP_HEADERS_Access-Control-Allow-Credentials: "[true]"
+      REGISTRY_HTTP_HEADERS_Access-Control-Allow-Headers: "[Authorization,Accept,Cache-Control]"
+      REGISTRY_HTTP_HEADERS_Access-Control-Expose-Headers: "[Docker-Content-Digest]"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5000/v2/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  registry-ui:
+    image: joxit/docker-registry-ui:main
+    container_name: champy_registry_ui
+    restart: unless-stopped
+    ports:
+      - "5001:80"
+    environment:
+      SINGLE_REGISTRY: "true"
+      REGISTRY_TITLE: "Champy Registry"
+      NGINX_PROXY_PASS_URL: "http://registry:5000"
+      DELETE_IMAGES: "true"
+      SHOW_CONTENT_DIGEST: "true"
+      SHOW_CATALOG_NB_TAGS: "true"
+      THEME: "auto"
+    depends_on:
+      registry:
+        condition: service_healthy
+
+networks:
+  default:
+    name: champy_registry
