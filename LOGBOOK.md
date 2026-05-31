@@ -1526,3 +1526,53 @@ Pour les variables d'env uniquement, `--force-recreate` seul peut suffire.
 - Dette test : `test_run_phase_early_stopping_breaks_loop` skip en CI (assert
   non-deterministe selon le backend Windows/Linux). Refactor : mocker `val_loss`
   pour forcer le declenchement de EarlyStopping de maniere reproductible.
+
+## Etape 11 - Cloture du perimetre v1 : prediction OOD, drift vulgarise, infra reproductible, docs alignees - 2026-05-31
+
+**Date** : 2026-05-31
+**Objectif** : Figer le perimetre code avant la deadline. Finaliser la page de prediction avec detection hors-distribution, vulgariser la page drift, integrer l'infra de surveillance et le registre depuis la branche `feature/v1.1-cd-workflow`, et aligner les quatre documents (README, ARCHITECTURE, PLAYBOOK, ci-cd) sur l'etat reel de la stack passee a treize conteneurs.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Integration de l'infra v1.1 | Apport selectif des seuls fichiers d'infra (registry, exporters, compose, scrape) via `git checkout` | Merge complet de `feature/v1.1-cd-workflow` | La veille de la deadline, un merge complet levait des conflits sur la page prediction et les dashboards recents. L'apport selectif ramene l'infra sans toucher au travail recent, zero conflit |
+| Registre Docker | Compose dedie `docker-compose.registry.yml`, lance a part, optionnel | Service dans le compose principal | Isole l'outillage CI/CD du cycle de vie de la stack applicative ; pas impose a chaque `docker compose up` |
+| Surveillance par conteneur | `node_exporter` (hote) + `docker_exporter` maison via API Docker | cAdvisor | cAdvisor lit la structure overlay2, absente avec le containerd image store ; l'API Docker reste accessible quel que soit le storage driver |
+| CD automatise | Laisse sur `feature/v1.1-cd-workflow`, non integre ce soir | Importer aussi `deploy.yml` + runner self-hosted | Non bloquant pour la defense (la stack tourne, le monitoring aussi) ; `deploy.yml` virerait le CI au rouge tant que le runner self-hosted n'est pas cable. A integrer a froid, en coordination |
+| Page prediction | Galerie avec marquage 30 (vert) / hors-30 (rouge) + alerte "prediction non fiable" sur image hors-distribution | Bouton de lancement classique sans signalisation OOD | Pedagogie defense : le modele est contraint de repondre une des 30 especes meme hors perimetre, la page le rend explicite |
+| Page drift | Verdict francais + deux chiffres + garde-fou sous 200 predictions, rapport Evidently en telechargement | Iframe Evidently brut | Le "drift a 100%" affiche etait un artefact d'echantillon (30 predictions de prod contre 2872 en reference) ; la version vulgarisee est lisible par le jury |
+
+### Realisations et commits
+
+Quatre commits pousses sur le fork et sur le depot de Loic (`eecb863..4fab5b9`).
+
+| Commit | Contenu |
+|--------|---------|
+| `eecb863` | `feat(demo)` : galerie 30/hors-30 + alerte detection non fiable (page prediction) |
+| `02886e6` | `feat(monitoring)` : page drift vulgarisee, `drift_utils.py`, JSON compagnon, dashboards, README a jour |
+| `c9a6cf3` | `feat(infra)` : registre local + exporters de surveillance importes de v1.1 |
+| `4fab5b9` | `docs(readme)` : treize conteneurs, architecture multi-compose, registre optionnel |
+
+### Stack passee a treize conteneurs
+
+Le compose principal declarait onze services ; l'import a ajoute `docker_exporter` et `node_exporter`, soit treize. Constat de reproductibilite : un `docker compose up` depuis `dev-dominique` demarre desormais les treize, surveillance comprise. Le registre s'ajoute a la demande via `docker compose -f docker-compose.registry.yml up -d`. Les quatre conteneurs qui n'apparaissaient pas dans le compose (exporters residuels, registre) etaient des vestiges d'un lancement depuis la branche v1.1 ; ils sont maintenant soit declares dans le compose principal (exporters), soit dans leur Compose dedie (registre).
+
+### Documents alignes
+
+- **README** : treize conteneurs, architecture multi-compose, note sur le registre optionnel, schema reconcilie (huit services routes par nginx, quatre non routes, plus le proxy).
+- **ARCHITECTURE v2.1** : Airflow reintegre au compose principal (fin de la fiction du Compose Airflow separe), tableau complet (hub nginx 8088, MLflow local 5050 plus DagsHub, MinIO, Alertmanager, exporters, registre), brut corrige en "nombreuses especes" contre 30 apres curation, instrumentation metier inscrite comme faite, six tableaux de bord fonctionnels, note de pied corrigee vers la racine.
+- **PLAYBOOK** : ajout des ports exporters et registre au tableau, ajout de la lecon `docker_exporter` maison plutot que cAdvisor.
+- **ci-cd** : total reel a 112 tests (rapport pytest-html du 29 mai), tableau de couverture actualise (`test_serving_bentoml.py` a 26 tests, `test_dataset.py` a 19), section "Deploiement continu" precisant que le CD est en cours d'integration sur v1.1.
+
+### Tests
+
+112 tests executes au 29 mai (rapport pytest-html v4.2.0), zero echec, ~28 s. Soit +34 depuis le 25 mai, principalement `test_serving_bentoml.py` (26 tests). Restent sans tests : monitoring (Evidently, alertes), helpers Streamlit, YAML Prometheus/Alertmanager, routage nginx.
+
+### Restant pour cloturer cette etape
+
+- Merge `feature/v1.1-cd-workflow` vers `dev-dominique` (CD automatise : `deploy.yml`, runner, page registre, instrumentation `app_metrics`), a coordonner avec Loic, post-deadline.
+- Test d'installation depuis un clone neuf (`git clone` + `dvc pull` + les deux Compose) pour valider la reproductibilite complete, exporters et registre inclus.
+- Regenerer le token DagsHub (colle en clair pendant la session de travail ; `.env` non suivi par git, donc pas de fuite depot, mais hygiene).
+- Confirmer le port hote de `node_exporter` dans le compose (suppose 9101 dans la doc).
+- Mettre a jour le recapitulatif visuel en tete de ce LOGBOOK (encore a 86 tests et 3 dashboards, contre 112 tests et 6 dashboards aujourd'hui).

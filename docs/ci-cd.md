@@ -156,6 +156,17 @@ Si on ajoute plus tard :
 
 ---
 
+## Deploiement continu (CD)
+
+Le CD automatise n'est pas encore actif sur cette branche. Le workflow de
+deploiement (`deploy.yml`), le runner self-hosted et le push d'image vers le
+registre Docker local sont developpes sur la branche `feature/v1.1-cd-workflow`
+et seront integres apres la cloture du perimetre courant. La presente
+documentation couvre donc l'integration continue (CI) ; la partie CD sera
+completee lors de ce merge.
+
+---
+
 ## Reproduction locale
 
 Pour reproduire les 5 jobs en local avant un push :
@@ -208,18 +219,18 @@ gh run view <run_id> --log-failed
 |---|---|---|---:|
 | FastAPI (legacy) | ✅ | `tests/unit/test_api.py` | 9 |
 | Training pipeline | ✅ | `tests/unit/test_train.py` | 19 |
-| Dataset PyTorch | ✅ | `tests/unit/test_dataset.py` | 14 |
+| Dataset PyTorch | ✅ | `tests/unit/test_dataset.py` | 19 |
 | DataLoader factory | ✅ | `tests/unit/test_dataloader.py` | 8 |
 | Callbacks (EarlyStopping, Checkpoint) | ✅ | `tests/unit/test_callbacks.py` | 9 |
 | Evaluation (matrices, courbes) | ✅ | `tests/unit/test_evaluate.py` | 6 |
 | Export ONNX | ✅ | `tests/unit/test_export_onnx.py` | 4 |
 | PredictionStore SQLite WAL | ✅ | `tests/unit/test_prediction_store.py` | 9 |
-| **BentoML service** | ❌ | manque | 0 |
+| BentoML service | ✅ | `tests/unit/test_serving_bentoml.py` | 26 |
 | **Monitoring (Evidently, alertes)** | ❌ | manque | 0 |
 | **Demo helpers (lib/)** | ❌ | manque | 0 |
 | **Config Prometheus / Alertmanager YAML** | ❌ | manque | 0 |
 | **nginx routing** | ❌ | manque | 0 |
-| **Total actuel** | | | **86** |
+| **Total exécuté** | | | **112** |
 
 ---
 

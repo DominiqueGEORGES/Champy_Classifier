@@ -1,8 +1,8 @@
-# Champy Classifier — Architecture du projet
+# Champy Classifier : architecture du projet
 
-**Version 2.0 — 14 mai 2026**
+**Version 2.1, 31 mai 2026**
 **Auteur : Dominique GEORGES**
-**Statut : document de référence pour la clôture du projet (fin mai 2026)**
+**Statut : document de référence pour la clôture du projet (soutenance du 16 juin 2026)**
 
 ---
 
@@ -22,15 +22,15 @@
 
 Champy Classifier est un système de classification automatique de champignons sur trente espèces, construit autour d'un pipeline MLOps complet. Le projet répond à un travail de fin d'études du Master IA DataScientest / Mines Paris PSL (RNCP niveau 7, promotion 2026), avec une exigence forte de reproductibilité, de traçabilité et de séparation des préoccupations.
 
-L'architecture repose sur une dizaine de composants qui couvrent l'ensemble du cycle de vie d'un modèle de Deep Learning : ingestion et curation des données, entraînement, suivi des expériences, mise en registre, exposition par API, monitoring, orchestration et intégration continue. Chaque composant a un rôle précis et reste découplé des autres, ce qui autorise les évolutions futures sans réécriture globale.
+La stack de production réunit treize conteneurs qui couvrent l'ensemble du cycle de vie d'un modèle de Deep Learning : ingestion et curation des données, entraînement, suivi des expériences, mise en registre, exposition par API, surveillance, orchestration et intégration continue. Chaque composant a un rôle précis et reste découplé des autres, ce qui autorise les évolutions futures sans réécriture globale.
 
 ```mermaid
-flowchart LR
-    A["Données brutes<br/>CSV + 647k images"] --> B["DVC<br/>versioning"]
+flowchart TD
+    A["Données brutes<br/>CSV + ~647k images"] --> B["DVC<br/>versioning"]
     B --> C["Curation<br/>GBIF, dedup, CLIP"]
     C --> D["Dataset PyTorch<br/>19138 images, 30 classes"]
     D --> E["Entraînement<br/>ConvNeXt-Tiny"]
-    E --> F["MLflow tracking<br/>DagsHub"]
+    E --> F["MLflow tracking<br/>local + DagsHub"]
     E --> G["Export ONNX"]
     G --> H["BentoML<br/>Model Registry"]
     H --> I["FastAPI<br/>inference"]
@@ -56,35 +56,30 @@ flowchart LR
 
 ## 2. Topologie matérielle
 
-Le projet est conçu pour fonctionner sur deux machines aux rôles distincts. L'une est dédiée à l'entraînement (GPU, calcul intensif et ponctuel), l'autre au serving et au monitoring (CPU, fonctionnement continu).
+Le projet est conçu pour fonctionner sur deux machines aux rôles distincts. L'une est dédiée à l'entraînement (GPU, calcul intensif et ponctuel), l'autre au serving et à la surveillance (CPU, fonctionnement continu). Les deux ne se synchronisent que par DagsHub.
 
 ```mermaid
-flowchart LR
-    subgraph XPS["XPS 15 9520 — entraînement"]
-        T1["dvc pull"]
-        T2["python train.py"]
-        T3["export ONNX"]
-        T4["dvc push model"]
-        T1 --> T2 --> T3 --> T4
+flowchart TD
+    subgraph XPS["XPS 15 9520 : entraînement (GPU)"]
+        T1["dvc pull"] --> T2["python train.py"] --> T3["export ONNX"] --> T4["dvc push model"]
     end
 
-    subgraph NUC3["NUC3 — serving et monitoring"]
-        D1["Docker Desktop"]
-        D2["api (FastAPI + ONNX)"]
-        D3["demo (Streamlit)"]
-        D4["prometheus"]
-        D5["grafana"]
-        D6["bentoml (registry local)"]
-        D1 --> D2
-        D1 --> D3
-        D1 --> D4
-        D1 --> D5
-        D1 --> D6
-    end
-
-    subgraph CLOUD["DagsHub"]
+    subgraph CLOUD["DagsHub (distant)"]
         C1["DVC remote"]
-        C2["MLflow tracking"]
+        C2["MLflow tracking (historique)"]
+    end
+
+    subgraph NUC3["NUC3 : serving et surveillance (CPU, continu)"]
+        N0["nginx (hub :8088)"]
+        N1["api (FastAPI + ONNX)"]
+        N2["demo (Streamlit)"]
+        N3["mlflow local + minio"]
+        N4["airflow + postgres"]
+        N5["prometheus + grafana + alertmanager"]
+        N6["docker_exporter + node_exporter"]
+        N7["registry local (Compose dédié, optionnel)"]
+        N0 --> N1
+        N0 --> N2
     end
 
     XPS -. push .-> CLOUD
@@ -95,33 +90,43 @@ flowchart LR
     classDef cloud fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
 
     class T1,T2,T3,T4 train
-    class D1,D2,D3,D4,D5,D6 serve
+    class N0,N1,N2,N3,N4,N5,N6,N7 serve
     class C1,C2 cloud
 ```
 
-L'entraînement n'est jamais réalisé sur NUC3 (CPU uniquement, irréaliste pour un ConvNeXt). Le serving n'est jamais réalisé sur XPS (machine de travail, non dédiée). Les deux machines se synchronisent uniquement via DagsHub : modèles et données par DVC, métriques d'entraînement par MLflow.
+L'entraînement n'est jamais réalisé sur NUC3 (CPU uniquement, irréaliste pour un ConvNeXt). Le serving n'est jamais réalisé sur XPS (machine de travail, non dédiée). Les deux machines se synchronisent uniquement via DagsHub : modèles et données par DVC, historique des métriques d'entraînement par MLflow. Sur NUC3, un serveur MLflow local sert par ailleurs de cible au pipeline orchestré (voir section 3).
 
 ---
 
 ## 3. Composants logiciels et rôles
 
-Le projet vit dans deux Docker Compose distincts sur NUC3. Le premier regroupe la stack de serving et de monitoring (API, portfolio, Prometheus, Grafana). Le second isole Airflow (scheduler, webserver, base PostgreSQL de métadonnées). Cette séparation évite les redémarrages mutuels et facilite le développement indépendant des DAGs.
+La stack de production tient dans un seul Docker Compose principal (`docker-compose.yml`, treize services) qui réunit le serving, la surveillance et l'orchestration Airflow. Un second Compose dédié et optionnel (`docker-compose.registry.yml`) fournit un registre d'images Docker privé pour le déploiement continu ; il se lance à part et n'est pas nécessaire à la démonstration. Cette séparation isole l'outillage CI/CD du cycle de vie de la stack applicative.
+
+Tous les services exposés passent par un point d'entrée unique, le reverse-proxy `nginx` sur le port hôte `8088`, avec routage par sous-chemin.
 
 | Couche | Composant | Port interne | Port hôte | Rôle |
 |---|---|---|---|---|
+| Entrée | nginx | 80 | **8088** | Reverse-proxy unique, routage par sous-chemin |
 | Stockage | DVC + DagsHub | n/a | distant | Versioning des datasets, modèles et artefacts lourds |
-| Tracking | MLflow (DagsHub) | n/a | distant | Suivi des expériences, métriques, hyperparamètres |
-| Registry | BentoML | n/a | local fichier | Catalogue des modèles servis, avec labels et lien MLflow |
+| Tracking | MLflow (local) | 5000 | **5050** | Suivi des expériences, cible du pipeline orchestré |
+| Tracking | MLflow (DagsHub) | n/a | distant | Historique de référence des entraînements |
+| Stockage S3 | MinIO | 9000 / 9001 | **9010** / **9011** | Stockage objet auto-hébergé (artefacts MLflow) |
+| Registry modèle | BentoML | n/a | local fichier | Catalogue des modèles servis, labels et lien MLflow |
 | Serving | FastAPI | 8000 | **8010** | API REST d'inférence à partir du modèle ONNX |
-| Frontend | Streamlit (demo) | 8501 | 8501 | Portfolio interactif sur 13 pages |
-| Monitoring | Prometheus | 9090 | 9090 | Collecte des métriques techniques et applicatives |
-| Monitoring | Grafana | 3000 | **3010** | Visualisation des métriques, tableaux de bord |
-| Orchestration | Airflow | 8080 | **8081** | Planification et exécution des DAGs |
-| CI/CD | GitHub Actions | n/a | n/a | Tests, linting, build, déploiement |
+| Frontend | Streamlit (demo) | 8501 | 8501 | Portfolio interactif, exploration du pipeline |
+| Surveillance | Prometheus | 9090 | 9090 | Collecte des métriques techniques et applicatives |
+| Surveillance | Grafana | 3000 | **3010** | Tableaux de bord de visualisation |
+| Surveillance | Alertmanager | 9093 | **9193** | Routage des alertes |
+| Surveillance | Relais Discord | n/a | n/a | Passerelle Alertmanager vers Discord |
+| Surveillance | docker_exporter | 9417 | 9417 | Métriques CPU/RAM/IO par conteneur (API Docker) |
+| Surveillance | node_exporter | 9100 | 9101 | Métriques de l'hôte (CPU, RAM, disque, réseau) |
+| Orchestration | Airflow + Postgres | 8080 | **8081** | Planification et exécution des DAGs |
+| CI/CD | GitHub Actions | n/a | n/a | Tests, linting, build |
+| CI/CD | Registre Docker (optionnel) | 5000 / 80 | 5000 / 5001 | Registre d'images privé, via Compose dédié |
 
-Les ports hôtes ont été choisis au cas par cas pour éviter les conflits sur l'environnement de développement partagé. Les services arrivés en premier sur la machine (Streamlit et Prometheus) ont conservé leurs ports natifs ; les autres ont été décalés de +10 par rapport à leurs valeurs par défaut. Ce choix est documenté dans le PLAYBOOK et n'a pas d'incidence sur la production cible.
+Les ports hôtes ont été choisis au cas par cas pour éviter les conflits sur l'environnement de développement partagé. Les services arrivés en premier sur la machine (Streamlit et Prometheus) ont conservé leurs ports natifs ; les autres ont été décalés de +10 par rapport à leurs valeurs par défaut. Ce choix est documenté dans le PLAYBOOK et n'a pas d'incidence sur la production cible, où tout passe par le hub nginx.
 
-Le portfolio Streamlit comporte treize pages, présentées dans l'ordre du pipeline : `app`, `données brutes`, `nettoyage`, `augmentation`, `split`, `entraînement`, `évaluation`, `model registry`, `prédiction`, `api`, `monitoring`, `drift`, `infrastructure`, `analyse modèles`. L'ensemble est intégralement piloté par les données (zéro valeur codée en dur) et lit dynamiquement MLflow, le filesystem, l'API et Prometheus.
+Le portfolio Streamlit présente les étapes du pipeline dans l'ordre (données brutes, nettoyage, augmentation, split, entraînement, évaluation, registre de modèle, prédiction), complétées par des pages transverses (API, monitoring, drift, infrastructure, analyse des modèles, plateforme). L'ensemble est intégralement piloté par les données (zéro valeur codée en dur) et lit dynamiquement MLflow, le filesystem, l'API et Prometheus.
 
 ---
 
@@ -129,15 +134,15 @@ Le portfolio Streamlit comporte treize pages, présentées dans l'ordre du pipel
 
 Le cycle de vie d'une version de modèle suit cinq étapes.
 
-**Étape 1 — Ingestion et curation des données.** Le dataset brut provient de mushroomobserver.org (647 000 images, 30 espèces). Il est versionné dans DVC avec stockage distant sur DagsHub. Le pipeline de curation applique trois filtres successifs : filtrage de confiance GBIF, déduplication par hash perceptuel, et filtrage qualité par OpenCLIP ViT-B-32 à seuil 0.03. Le dataset curé final compte 19 138 images.
+**Étape 1. Ingestion et curation des données.** Le dataset brut réunit environ 647 000 images couvrant de nombreuses espèces, issues de Mushroom Observer et iNaturalist. Il est versionné dans DVC avec stockage distant sur DagsHub. Le pipeline de curation applique trois filtres successifs : filtrage de confiance GBIF, déduplication par hash perceptuel, et filtrage qualité par OpenCLIP ViT-B-32 à seuil 0.03. Le dataset curé final compte 19 138 images réparties sur les 30 espèces retenues.
 
-**Étape 2 — Entraînement.** Le Dataset PyTorch utilise un WeightedRandomSampler pour compenser le déséquilibre de classes (ratio naturel 61.7x). Trois configurations ont été entraînées en fine-tuning à deux phases : ResNet50 par défaut (84 %), ResNet50 agressif (88 %) et ConvNeXt-Tiny agressif (90 % d'accuracy, 81 % de F1 macro). Toutes les métriques, courbes et hyperparamètres sont loggés dans MLflow via DagsHub. ConvNeXt-Tiny est le modèle retenu pour la production.
+**Étape 2. Entraînement.** Le Dataset PyTorch utilise un WeightedRandomSampler pour compenser le déséquilibre de classes (ratio naturel 61.7x). Trois configurations ont été entraînées en fine-tuning à deux phases : ResNet50 par défaut (84 %), ResNet50 agressif (88 %) et ConvNeXt-Tiny agressif (90 % d'accuracy, 81 % de F1 macro). Toutes les métriques, courbes et hyperparamètres sont loggés dans MLflow via DagsHub. ConvNeXt-Tiny est le modèle retenu pour la production.
 
-**Étape 3 — Export et mise en registre.** Le modèle PyTorch est exporté en ONNX (106 MB, écart maximal PyTorch vs ONNX de 4e-6 validé sur dix échantillons). Il est ensuite importé dans BentoML avec un jeu de labels complet : version sémantique (`v2.0.0`), architecture (`convnext_tiny`), accuracy (`0.9000`), identifiant du run MLflow d'origine. Le lien entre registry et tracking est donc explicite et auditable.
+**Étape 3. Export et mise en registre.** Le modèle PyTorch est exporté en ONNX (106 MB, écart maximal PyTorch vs ONNX de 4e-6 validé sur dix échantillons). Il est ensuite importé dans BentoML avec un jeu de labels complet : version sémantique (`v2.0.0`), architecture (`convnext_tiny`), accuracy (`0.9000`), identifiant du run MLflow d'origine. Le lien entre registry et tracking est donc explicite et auditable.
 
-**Étape 4 — Serving.** L'API FastAPI charge le modèle depuis BentoML et expose un endpoint d'inférence. Elle instrumente actuellement les métriques système Python via le `prometheus_client` (GC, mémoire process). L'instrumentation métier (compteur de prédictions, histogramme de latence, distribution des classes, confiance moyenne) est en cours d'ajout et fera l'objet d'un dashboard Grafana dédié. Le portfolio Streamlit consomme l'API et présente la performance du modèle, l'historique des expériences (lu dynamiquement depuis MLflow), et une démo interactive de prédiction sur image utilisateur.
+**Étape 4. Serving et surveillance.** L'API FastAPI charge le modèle depuis BentoML et expose un endpoint d'inférence. Elle est instrumentée pour Prometheus via `prometheus_client`, à la fois sur les métriques système et sur les métriques métier (compteurs de prédictions, latence d'inférence, distribution et confiance des classes prédites). Côté infrastructure, deux exporters complètent la collecte : `node_exporter` pour les métriques de l'hôte et `docker_exporter` (interrogation directe de l'API Docker) pour les métriques par conteneur. L'ensemble alimente six tableaux de bord Grafana fonctionnels : performance de l'API, prédictions, santé système, conteneurs, hôte et impact écologique. Le portfolio Streamlit consomme l'API et présente la performance du modèle, l'historique des expériences lu dynamiquement depuis MLflow, une démo interactive de prédiction sur image utilisateur, et une page de détection de dérive (drift) appuyée sur Evidently.
 
-**Étape 5 — Orchestration et automatisation.** Airflow exécute deux DAGs. Le DAG `hello_world` valide l'environnement (accès Python, variables d'environnement, montage du code projet). Le DAG `champy_train_pipeline` régénère les analyses à la demande via la commande `python -m scripts.generate_analysis`. Les DAGs montent le code projet en volume sur `/opt/champy` et héritent des variables d'environnement MLflow du conteneur Airflow.
+**Étape 5. Orchestration et automatisation.** Airflow exécute deux DAGs. Le DAG `hello_world` valide l'environnement (accès Python, variables d'environnement, montage du code projet). Le DAG `champy_train_pipeline` régénère les analyses à la demande via la commande `python -m scripts.generate_analysis`. Les DAGs montent le code projet en volume sur `/opt/champy` et héritent des variables d'environnement MLflow du conteneur Airflow.
 
 ---
 
@@ -149,37 +154,36 @@ Le cycle de vie d'une version de modèle suit cinq étapes.
 
 **FastAPI conservé pour le serving plutôt que `bentoml serve`.** BentoML est utilisé comme Model Registry et bibliothèque de chargement, pas comme framework de serving. Cela permet de conserver le contrôle complet sur l'API (middlewares personnalisés, métriques Prometheus précises, validation Pydantic) sans dépendre du modèle de service intégré de BentoML.
 
-**Séparation physique entraînement / serving.** Le XPS (GPU RTX 3050 Ti) prend en charge l'entraînement, le NUC3 (CPU, fonctionnement continu) prend en charge le serving et le monitoring. Cette séparation reflète la pratique de production réelle : on n'entraîne pas sur sa machine de production, et inversement.
+**Séparation physique entraînement / serving.** Le XPS (GPU RTX 3050 Ti) prend en charge l'entraînement, le NUC3 (CPU, fonctionnement continu) prend en charge le serving et la surveillance. Cette séparation reflète la pratique de production réelle : on n'entraîne pas sur sa machine de production, et inversement.
 
-**Airflow dans un Compose séparé.** Sa stack interne (scheduler, webserver, métadonnées Postgres) est lourde et son cycle de vie diffère de celui du serving. Les deux Compose se rencontrent par volumes partagés et variables d'environnement, sans réseau Docker commun, ce qui isole les redémarrages.
+**Registre d'images dans un Compose séparé.** La stack applicative et le registre Docker privé ont des cycles de vie distincts : le registre sert au déploiement continu, pas à la démonstration. Il vit donc dans son propre `docker-compose.registry.yml`, lancé à la demande, ce qui évite de l'imposer à chaque démarrage de la stack et garde les redémarrages indépendants.
 
-**Mapping de ports au cas par cas.** Pas de convention uniforme imposée : les services arrivés en premier ont conservé leurs ports natifs (Streamlit 8501, Prometheus 9090), les autres ont été décalés de +10 (API 8010, Grafana 3010, Airflow 8081). Le mapping est documenté dans les `docker-compose.yml`.
+**Surveillance par exporters plutôt que par cAdvisor.** Les métriques par conteneur sont collectées via un exporter maison qui interroge l'API Docker, et non via cAdvisor. Ce dernier lit la structure overlay2 du filesystem, absente avec le stockage d'images containerd, alors que l'API Docker reste accessible quel que soit le storage driver. Le `node_exporter` couvre les métriques de l'hôte.
+
+**Mapping de ports au cas par cas.** Pas de convention uniforme imposée : les services arrivés en premier ont conservé leurs ports natifs (Streamlit 8501, Prometheus 9090), les autres ont été décalés de +10 (API 8010, Grafana 3010, MLflow 5050, Airflow 8081). Le mapping est documenté dans le `docker-compose.yml`. En production, ce détail s'efface derrière le hub nginx.
 
 ---
 
 ## 6. État d'avancement et reste à faire
 
-**Ce qui fonctionne aujourd'hui**
+**Ce qui fonctionne aujourd'hui (31 mai)**
 
 - Pipeline de curation des données, reproductible de bout en bout via DVC
 - Trois modèles entraînés, comparés et tracés dans MLflow
 - Modèle de production (ConvNeXt-Tiny v2.0.0) exporté en ONNX, validé, importé proprement dans BentoML avec traçabilité MLflow complète
-- API FastAPI opérationnelle, validée par quatre prédictions de test à 98–100 % de confiance
-- Portfolio Streamlit complet sur treize pages, zéro valeur codée en dur
-- Stack monitoring Prometheus + Grafana câblée et instrumentée sur métriques système
+- API FastAPI opérationnelle, validée par des prédictions de test à 98 à 100 % de confiance, instrumentée pour Prometheus sur les métriques système et métier (prédictions, latence, distribution des classes)
+- Portfolio Streamlit complet, zéro valeur codée en dur, avec une page de prédiction qui signale clairement les images hors des 30 espèces (alerte de prédiction non fiable)
+- Page de détection de dérive vulgarisée, appuyée sur Evidently, avec verdict en français et garde-fou sur les faibles volumes
+- Stack de surveillance complète : six tableaux de bord Grafana fonctionnels et alimentés en continu (performance de l'API, prédictions, santé système, conteneurs, hôte, impact écologique), avec `node_exporter` et `docker_exporter`
 - Airflow opérationnel, deux DAGs verts (`hello_world`, `champy_train_pipeline`)
-- GitHub Actions CI/CD à cinq jobs
+- GitHub Actions (CI) : lint, tests, build
+- Registre d'images Docker local disponible via un Compose dédié
+- README d'installation autosuffisant à la racine, treize conteneurs documentés, architecture multi-compose explicitée
 
-**Reste à faire avant le 31 mai**
+**En cours d'intégration (branche v1.1)**
 
-- Instrumentation métier de l'API FastAPI : compteurs de prédictions, histogramme de latence d'inférence, distribution des classes prédites, confiance moyenne
-- Dashboard Grafana dédié consommant ces nouvelles métriques
-- Migration du chargement du modèle dans l'API vers `bentoml.onnx.load_model("champy_classifier:latest")`
-- Correction du faux positif "Docker not in PATH" dans la page `infrastructure` du portfolio (le container Streamlit n'a pas accès au socket Docker hôte)
-- Rédaction du `README.md` d'installation, autosuffisant pour un installeur non technique, Windows et Linux
-- Production des scripts d'installation `install.ps1` (Windows) et `install.sh` (Linux/WSL)
-- Test de désempaquetage sur XPS Windows et sur WSL Ubuntu
-- Production du zip final auto-installable
+- Déploiement continu automatisé : workflow de déploiement, runner self-hosted, page registre dans le portfolio
+- Test d'installation depuis un clone neuf (reproductibilité complète, exporters et registre inclus)
 
 **Ce qui ne sera pas livré dans cette version**
 
@@ -207,24 +211,30 @@ cd Champy_Classifier
 docker compose up -d
 ```
 
-### Démarrage de la stack Airflow
+Treize conteneurs démarrent, dont Airflow et sa base Postgres (aucun Compose Airflow séparé à lancer). Une fois la stack opérationnelle, tout est accessible via le hub nginx sur `http://localhost:8088/`.
+
+### Registre d'images (optionnel, pour le déploiement continu)
 
 ```bash
-cd Champy_Classifier/airflow
-docker compose up -d
+docker compose -f docker-compose.registry.yml up -d
 ```
+
+Registre sur `localhost:5000`, interface web sur `localhost:5001`. Voir l'en-tête de `docker-compose.registry.yml` pour le prérequis `insecure-registries` côté Docker Desktop.
 
 ### URLs locales
 
 | Service | URL |
 |---|---|
+| Hub nginx (point d'entrée) | http://localhost:8088/ |
 | API FastAPI | http://localhost:8010 |
 | Documentation API (Swagger) | http://localhost:8010/docs |
 | Portfolio Streamlit | http://localhost:8501 |
 | Grafana | http://localhost:3010 |
 | Prometheus | http://localhost:9090 |
+| MLflow (local) | http://localhost:5050 |
+| MinIO (console) | http://localhost:9011 |
 | Airflow UI | http://localhost:8081 |
-| MLflow (distant) | https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow |
+| MLflow (historique distant) | https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow |
 
 ### Commandes utiles
 
@@ -239,9 +249,9 @@ bentoml models get champy_classifier:latest
 docker logs champy_airflow -f
 
 # Récupérer les données versionnées (nécessite credentials DagsHub)
-dvc pull -r origin_https
+dvc pull
 ```
 
 ---
 
-*Ce document est versionné dans le repo Champy_Classifier sous `docs/ARCHITECTURE.md`. Toute évolution de l'architecture doit être reportée ici avant d'être considérée comme actée. Le `README.md` à la racine du repo couvre la procédure d'installation pas à pas, distincte de la présente documentation d'architecture.*
+*Ce document est versionné à la racine du repo Champy_Classifier sous `ARCHITECTURE.md`. Toute évolution de l'architecture doit être reportée ici avant d'être considérée comme actée. Le `README.md`, également à la racine, couvre la procédure d'installation pas à pas, distincte de la présente documentation d'architecture.*

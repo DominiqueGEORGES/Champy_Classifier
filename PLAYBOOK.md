@@ -472,7 +472,8 @@ explorer.exe monitoring\reports\drift_*.html  # Windows
   Get-NetTCPConnection -State Listen | Where-Object {$_.LocalPort -lt 10000} `
     | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique
   ```
-- **`prometheus_client` expose `process_*` et `python_*` automatiquement** : pas besoin d'ajouter cAdvisor ou node_exporter pour observer la sante du process API. RAM (`process_resident_memory_bytes`), CPU (`rate(process_cpu_seconds_total[1m])`), file descriptors, uptime (`time() - process_start_time_seconds`), GC Python (`python_gc_collections_total`). cAdvisor reste utile uniquement pour les metriques host (disque, reseau, memoire totale).
+- **`prometheus_client` expose `process_*` et `python_*` automatiquement** : pas besoin d'ajouter cAdvisor ou node_exporter pour observer la sante du process API. RAM (`process_resident_memory_bytes`), CPU (`rate(process_cpu_seconds_total[1m])`), file descriptors, uptime (`time() - process_start_time_seconds`), GC Python (`python_gc_collections_total`). Pour les métriques de l'hôte et par conteneur, voir le piège dédié ci-dessous.
+Métriques par conteneur : docker_exporter maison plutôt que cAdvisor : cAdvisor calcule les stats par conteneur en lisant la structure overlay2 du filesystem. Avec le containerd image store de Docker (snapshotter), cette structure n'existe pas et cAdvisor renvoie des métriques vides ou partielles. Un petit exporter qui interroge directement l'API Docker (endpoint stats par conteneur) contourne le problème : il expose CPU, RAM et IO par conteneur quel que soit le storage driver, via un montage en lecture seule du socket Docker (/var/run/docker.sock:ro). Filtrer les conteneurs exposés par une regex (CONTAINER_FILTER=champy_) évite de polluer les dashboards avec ceux des autres projets. Pour les métriques de l'hôte (CPU, RAM, disque, réseau), node_exporter complète le dispositif ; en WSL2, il mesure la distro WSL2, donc les ressources réellement allouées aux conteneurs.
 - **Choix des metriques pour les dashboards** : si on a une couche de serving qui peut changer (FastAPI -> BentoML), referencer les metriques **applicatives custom** (`champy_*`) plutot que les metriques natives du framework (`bentoml_service_*`). Les premieres survivent au changement de framework, les secondes pas. Ajouter les metriques natives en complement, pas en source primaire.
 
 **Commandes clés** :
@@ -789,6 +790,10 @@ invoke clean           # Nettoyage
 | Alertmanager Discord adapter | 9094 | — | (interne uniquement) |
 | MinIO S3 API | 9000 | 9010 | (via console) |
 | MinIO console web | 9001 | 9011 | `/minio/` |
+| docker_exporter | 9417 | 9417 | (interne, scrapé par Prometheus) |
+| node_exporter | 9100 | 9101 | (interne, scrapé par Prometheus) |
+| Registre Docker (Compose dédié) | 5000 | 5000 | (optionnel, CI/CD) |
+| Registre Docker UI (Compose dédié) | 80 | 5001 | (optionnel, CI/CD) |
 
 **Point d'entrée public** : `https://champy.sbdg-ia.fr/<sous-path>/` (protégé par Cloudflare Access SSO).
 
