@@ -16,8 +16,8 @@ RUN python -m pip install --no-cache-dir \
 RUN python -m pip install --no-cache-dir opencv-python-headless==4.10.0.84
 # 2. Installer torch CPU + torchvision
 RUN python -m pip install --no-cache-dir \
-    torch==2.4.0+cpu \
-    torchvision==0.19.0+cpu \
+    torch==2.4.0 \
+    torchvision==0.19.0 \
     --index-url https://download.pytorch.org/whl/cpu
 # 3. Installer les dependances de grad-cam, puis grad-cam sans tirer opencv-python
 RUN python -m pip install --no-cache-dir matplotlib scikit-learn ttach tqdm
