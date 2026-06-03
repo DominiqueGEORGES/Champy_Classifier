@@ -358,5 +358,4 @@ volumes:
   minio_data:
   mlflow_data:
   postgres_airflow_data:
-    external: true
     name: champy_airflow_postgres_data
