@@ -88,3 +88,4 @@ reports/
 # Artefacts runtime (non versionnes)
 data/registry/
 last_deployed_api.txt
+/models
