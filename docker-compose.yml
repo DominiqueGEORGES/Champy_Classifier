@@ -134,7 +134,6 @@ services:
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
       - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://champy.sbdg-ia.fr/grafana}
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
-      - GF_SECURITY_ALLOW_EMBEDDING=true
 
     depends_on:
       - prometheus
