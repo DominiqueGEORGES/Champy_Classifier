@@ -30,7 +30,7 @@ import streamlit as st
 
 PUBLIC_BASE_URL = os.getenv(
     "CHAMPY_PUBLIC_BASE_URL",
-    "https://champy.sbdg-ia.fr",
+    "http://localhost:8088",
 )
 
 # Délai max pour un ping de health (s). 1.5s suffit largement en réseau Docker
