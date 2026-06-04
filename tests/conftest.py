@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
 import pytest
 from PIL import Image
+
+# MLflow recent refuse le file store par defaut (maintenance mode) ; les
+# tests pointent un tracking_uri file:// en tmp_path. On opt-out de
+# l'exception, le service MLflow reste en v2.18 cote compose.
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 
 
 @pytest.fixture()
