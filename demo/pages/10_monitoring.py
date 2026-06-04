@@ -4,8 +4,8 @@ Quatre sections :
 
 1. Metriques live depuis Prometheus (RPS, latence p50/p95/p99, taux
    d'erreur, total predictions). Refresh manuel + cache TTL=15s.
-2. Dashboards Grafana embarques en iframe (3 dashboards : performance,
-   predictions, system health) avec fallback vers des liens si l'iframe
+2. Dashboards Grafana embarques en iframe (6 dashboards : performance,
+   predictions, system health, containers, hote, eco) avec fallback vers des liens si l'iframe
    ne charge pas (Grafana down ou auth bloquante).
 3. Top-10 especes predites : barchart Plotly construit depuis Prometheus
    (cumul global) et tendance temporelle depuis le PredictionStore SQLite
@@ -130,9 +130,12 @@ st.divider()
 st.header("2. Dashboards Grafana")
 
 DASHBOARDS = [
-    ("API Performance", "champy-api-performance"),
-    ("Predictions", "champy-predictions"),
-    ("System Health", "champy-system-health"),
+    ("Performance API", "champy-api-performance"),
+    ("Prédictions", "champy-predictions"),
+    ("Santé système", "champy-system-health"),
+    ("Ressources containers", "champy-containers"),
+    ("Hôte serveur", "champy-host"),
+    ("Impact écologique", "champy-eco-impact"),
 ]
 
 # Detection rapide : Grafana repond-il sur /api/health ? Si non, on
