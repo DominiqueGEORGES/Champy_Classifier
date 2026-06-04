@@ -56,14 +56,14 @@ services:
     environment:
       # La demo Streamlit tape sur l'API via le network interne du compose.
       - CHAMPY_API_URL=http://api:8000
-      - CHAMPY_API_PUBLIC_URL=https://champy.sbdg-ia.fr/api
+      - CHAMPY_PUBLIC_BASE_URL=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}
+      - CHAMPY_API_PUBLIC_URL=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/api
       # Prometheus et Grafana : URLs internes pour les requetes serveur,
       # URL externe pour les iframes et liens cliquables cote navigateur.
       - CHAMPY_PROMETHEUS_URL=http://prometheus:9090/prometheus
       - CHAMPY_GRAFANA_URL=http://grafana:3000
-      - CHAMPY_GRAFANA_URL_EXTERNAL=https://champy.sbdg-ia.fr/grafana
+      - CHAMPY_GRAFANA_URL_EXTERNAL=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/grafana
       - TZ=Europe/Paris
-      - GRAFANA_PUBLIC_URL=https://grafana.sbdg-ia.fr
       - AIRFLOW_ADMIN_USERNAME=${AIRFLOW_ADMIN_USERNAME:-admin}
       - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
       - GRAFANA_USER=${GRAFANA_USER:-admin}
@@ -100,7 +100,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--web.enable-lifecycle'   # <- AJOUT pour autoriser POST /-/reload
-      - '--web.external-url=https://champy.sbdg-ia.fr/prometheus'
+      - '--web.external-url=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/prometheus'
       - '--web.route-prefix=/prometheus'
     container_name: champy_prometheus
     image: prom/prometheus:latest
@@ -132,7 +132,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
-      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-https://champy.sbdg-ia.fr/grafana}
+      - GF_SERVER_ROOT_URL=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/grafana
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
 
     depends_on:
@@ -200,7 +200,7 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
-      - '--web.external-url=${ALERTMANAGER_EXTERNAL_URL:-http://localhost:8088/alertmanager}'
+      - '--web.external-url=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/alertmanager'
       - '--web.route-prefix=/alertmanager'
 
   alertmanager-discord:
