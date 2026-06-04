@@ -16,6 +16,7 @@ from __future__ import annotations
 # =====================================================================
 # Imports standards
 # =====================================================================
+import os
 import sys
 import time
 from pathlib import Path
@@ -284,6 +285,13 @@ def check_http_health(url: str, timeout: float = 2.0) -> tuple[str, str]:
         return f"Erreur ({type(exc).__name__})", "—"
 
 
+# =====================================================================
+# URLs publiques parametrables (defaut local)
+# =====================================================================
+_PUBLIC_BASE_URL = os.getenv("CHAMPY_PUBLIC_BASE_URL", "http://localhost:8088").rstrip("/")
+_API_PUBLIC_URL = os.getenv("CHAMPY_API_PUBLIC_URL", "").rstrip("/") or (f"{_PUBLIC_BASE_URL}/api")
+
+
 SERVICES_CONFIG: list[dict[str, str | None]] = [
     # {
     #     "name": "API FastAPI",
@@ -294,37 +302,37 @@ SERVICES_CONFIG: list[dict[str, str | None]] = [
     {
         "name": "API BentoML",
         "internal_url": "http://api:8000/healthz",
-        "external_url": "https://champy-api.sbdg-ia.fr/",
+        "external_url": _API_PUBLIC_URL,
         "kind": "internal",
     },
     {
         "name": "Streamlit demo (cette page)",
         "internal_url": None,
-        "external_url": "https://champy.sbdg-ia.fr",
+        "external_url": _PUBLIC_BASE_URL,
         "kind": "self",
     },
     {
         "name": "Prometheus",
         "internal_url": "http://prometheus:9090/prometheus/-/healthy",
-        "external_url": "https://champy.sbdg-ia.fr/prometheus",
+        "external_url": f"{_PUBLIC_BASE_URL}/prometheus",
         "kind": "internal",
     },
     {
         "name": "Grafana",
         "internal_url": "http://grafana:3000/api/health",
-        "external_url": "https://champy.sbdg-ia.fr/grafana",
+        "external_url": f"{_PUBLIC_BASE_URL}/grafana",
         "kind": "internal",
     },
     {
         "name": "MinIO (stockage objet)",
         "internal_url": "http://minio:9000/minio/health/live",
-        "external_url": "https://champy.sbdg-ia.fr/minio/",
+        "external_url": f"{_PUBLIC_BASE_URL}/minio/",
         "kind": "internal",
     },
     {
         "name": "Alertmanager",
         "internal_url": "http://alertmanager:9093/alertmanager/-/healthy",
-        "external_url": "https://champy.sbdg-ia.fr/alertmanager/",
+        "external_url": f"{_PUBLIC_BASE_URL}/alertmanager/",
         "kind": "internal",
     },
     {
@@ -336,7 +344,7 @@ SERVICES_CONFIG: list[dict[str, str | None]] = [
     {
         "name": "Airflow webserver",
         "internal_url": "http://airflow:8080/airflow/health",
-        "external_url": "https://champy.sbdg-ia.fr/airflow/",
+        "external_url": f"{_PUBLIC_BASE_URL}/airflow/",
         "kind": "internal",
     },
     # {
@@ -350,7 +358,7 @@ SERVICES_CONFIG: list[dict[str, str | None]] = [
     {
         "name": "MLflow (local)",
         "internal_url": "http://mlflow:5000/health",
-        "external_url": "https://champy.sbdg-ia.fr/mlflow/",
+        "external_url": f"{_PUBLIC_BASE_URL}/mlflow/",
         "kind": "internal",
     },
     {
