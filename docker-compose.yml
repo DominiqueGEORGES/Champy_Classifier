@@ -271,6 +271,7 @@ services:
         - "8088:80"
       volumes:
         - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+        - ./configs/nginx/favicon.ico:/etc/nginx/favicon.ico:ro
       depends_on:
         - demo
       healthcheck:
