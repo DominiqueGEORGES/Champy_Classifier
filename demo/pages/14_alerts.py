@@ -73,6 +73,15 @@ PROMETHEUS_RELOAD_URL = os.environ.get(
 # Durées proposées dans les selectbox "for"
 DURATION_OPTIONS = ["30s", "1m", "2m", "5m", "10m", "15m", "30m", "1h"]
 
+# =====================================================================
+# URL de l'API des alertes Prometheus (etat pending / firing). Meme
+# service et meme route prefix que l'URL de reload.
+# =====================================================================
+
+PROMETHEUS_ALERTS_URL = os.environ.get(
+    "CHAMPY_PROMETHEUS_ALERTS_URL",
+    "http://prometheus:9090/prometheus/api/v1/alerts",
+)
 
 # =====================================================================
 # Authentification (lit access_policy.yaml)
@@ -195,6 +204,54 @@ reset_clicked = col_reset.button(
 )
 
 
+def _fetch_active_alerts() -> tuple[list[dict], str | None]:
+    """Récupère les alertes en cours depuis l'API Prometheus.
+
+    Returns:
+        Tuple ``(alertes, erreur)``. ``alertes`` est la liste des alertes
+        actives (état ``pending`` ou ``firing``). ``erreur`` vaut ``None``
+        en cas de succès, sinon un message destiné à l'utilisateur.
+    """
+    try:
+        response = httpx.get(PROMETHEUS_ALERTS_URL, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        alerts = payload.get("data", {}).get("alerts", [])
+        # Tri : les alertes déclenchées (firing) en premier.
+        alerts.sort(key=lambda a: a.get("state") != "firing")
+        return alerts, None
+    except Exception as exc:
+        return [], f"Impossible de lire les alertes Prometheus : {exc}"
+
+
+def _format_active_since(raw: str) -> str:
+    """Convertit un horodatage ISO 8601 UTC en heure locale lisible.
+
+    Args:
+        raw: Horodatage renvoyé par Prometheus (ex. ``2026-06-04T19:34:17.39Z``).
+
+    Returns:
+        Heure locale au format ``HH:MM:SS``, ou la chaine brute si le
+        parsing échoue.
+    """
+    if not raw:
+        return ""
+    try:
+        cleaned = raw.replace("Z", "+00:00")
+        if "." in cleaned:
+            base, frac_tz = cleaned.split(".", 1)
+            fraction, offset = frac_tz, ""
+            for index, char in enumerate(frac_tz):
+                if char in "+-":
+                    fraction, offset = frac_tz[:index], frac_tz[index:]
+                    break
+            cleaned = f"{base}.{fraction[:6]}{offset}"
+        moment = datetime.fromisoformat(cleaned)
+        return moment.astimezone().strftime("%H:%M:%S")
+    except Exception:
+        return raw
+
+
 def _reload_prometheus() -> tuple[bool, str]:
     """Appelle l'endpoint /-/reload de Prometheus.
 
@@ -270,14 +327,60 @@ if reset_clicked:
             st.error(f"Erreur durant le reset : {exc}")
 
 
+# =====================================================================
+# Section 3 : Alertes actives (live)
+# =====================================================================
+
 st.divider()
 
+st.header("3. Alertes actives (live)")
+st.caption(
+    "Lecture directe de Prometheus. Après un changement de seuil, l'alerte "
+    "apparaît d'abord en `pending`, puis passe en `firing` une fois la durée "
+    "minimale écoulée. Les alertes `firing` sont celles transmises à "
+    "Alertmanager, et donc à Discord."
+)
+
+
+@st.fragment(run_every="5s")
+def _render_active_alerts() -> None:
+    """Affiche les alertes actives, rafraîchies automatiquement toutes les 5 s."""
+    alerts, error = _fetch_active_alerts()
+
+    st.caption(f"Dernière actualisation : {datetime.now():%H:%M:%S}")
+
+    if error:
+        st.error(error)
+        return
+
+    if not alerts:
+        st.success("Aucune alerte active pour le moment.")
+        return
+
+    for alert in alerts:
+        labels = alert.get("labels", {})
+        name = labels.get("alertname", "inconnue")
+        state = alert.get("state", "?")
+        severity = labels.get("severity", "?")
+        since = _format_active_since(alert.get("activeAt", ""))
+
+        ligne = f"**{name}** (severity `{severity}`)"
+        if since:
+            ligne += f", active depuis {since}"
+
+        if state == "firing":
+            st.error(f"FIRING : {ligne}")
+        else:
+            st.warning(f"PENDING : {ligne}")
+
+
+_render_active_alerts()
 
 # =====================================================================
-# Section 3 : état des fichiers générés
+# Section 4 : état des fichiers générés
 # =====================================================================
 
-st.header("3. Etat des fichiers")
+st.header("4. Etat des fichiers")
 
 col_a, col_b = st.columns(2)
 
@@ -300,3 +403,5 @@ with col_b:
             st.code(f.read(), language="yaml")
     else:
         st.info("Fichier inexistant, sera cree au premier 'Appliquer'.")
+
+st.divider()
