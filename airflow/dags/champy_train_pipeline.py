@@ -2,7 +2,7 @@
 
 Ce DAG enchaîne quatre tâches autour du pipeline analysis-as-code :
 
-1. ``check_mlflow_health``      : ping MLflow DagsHub pour valider l'accès
+1. ``check_mlflow_health``      : vérifie que le MLflow configuré (local) répond
 2. ``regenerate_analysis``      : exécute ``scripts.generate_analysis``
 3. ``list_generated_snapshots`` : inventorie les fichiers JSON présents
 4. ``notify_completion``        : log final récapitulatif
@@ -36,12 +36,11 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import requests
 from airflow.decorators import dag, task
 from airflow.operators.bash import BashOperator
 
 DEFAULT_ARGS = {
-    "owner": "Dominique GEORGES",
+    "owner": "Champy Team",
     "depends_on_past": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
@@ -67,49 +66,36 @@ def champy_train_pipeline() -> None:
 
     @task
     def check_mlflow_health() -> dict:
-        """Vérifie que MLflow DagsHub répond et que l'auth fonctionne."""
-        tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
-        username = os.environ.get("MLFLOW_TRACKING_USERNAME")
-        password = os.environ.get("MLFLOW_TRACKING_PASSWORD")
+        """Vérifie que le MLflow configuré (MLFLOW_TRACKING_URI) répond.
 
+        Le client MLflow lit l'URI et les identifiants éventuels dans
+        l'environnement, sans aucune URL codée en dur : il valide donc le
+        MLflow local du projet (et resterait correct si l'environnement
+        pointait vers un MLflow distant protégé par identifiants).
+        """
+        from mlflow.tracking import MlflowClient
+
+        tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
         if not tracking_uri:
             raise ValueError("MLFLOW_TRACKING_URI non définie dans l'environnement.")
-        if not username or not password:
-            raise ValueError(
-                "Credentials MLflow incomplètes "
-                "(MLFLOW_TRACKING_USERNAME ou MLFLOW_TRACKING_PASSWORD manquante).",
-            )
 
-        # On interroge l'API DagsHub /api/v1/user qui valide l'auth basic
-        # sans dépendre de la disponibilité de l'endpoint MLflow spécifique.
-        response = requests.get(
-            "https://dagshub.com/api/v1/user",
-            auth=(username, password),
-            timeout=15,
-        )
-
-        if response.status_code != 200:
+        # search_experiments interroge l'API MLflow standard : elle échoue si le
+        # serveur est injoignable ou si une authentification requise n'aboutit pas.
+        try:
+            MlflowClient().search_experiments(max_results=1)
+        except Exception as exc:
             raise RuntimeError(
-                f"Auth DagsHub échouée (status {response.status_code}). "
-                "Vérifier le token et les credentials transmis à Airflow.",
-            )
+                f"MLflow injoignable à {tracking_uri} : {exc}",
+            ) from exc
 
-        user_data = response.json()
-        login = user_data.get("login", "?")
-        print(f"Auth DagsHub OK pour l'utilisateur : {login}")
-        print(f"Tracking URI : {tracking_uri}")
-
-        return {
-            "tracking_uri": tracking_uri,
-            "authenticated_user": login,
-            "status": "healthy",
-        }
+        print(f"MLflow OK : {tracking_uri}")
+        return {"tracking_uri": tracking_uri, "status": "healthy"}
 
     # La régénération elle-même utilise un BashOperator pour rester proche
     # de la commande qu'un développeur taperait à la main. Le BashOperator
     # hérite par défaut de toutes les variables d'environnement du conteneur
-    # Airflow, donc les credentials MLflow / DagsHub sont transmis sans
-    # configuration explicite.
+    # Airflow, dont MLFLOW_TRACKING_URI (qui pointe vers le MLflow local),
+    # transmise sans configuration explicite.
     regenerate_analysis = BashOperator(
         task_id="regenerate_analysis",
         bash_command=(
@@ -162,8 +148,7 @@ def champy_train_pipeline() -> None:
 
         summary = (
             f"Pipeline Champy terminé avec succès.\n"
-            f"  - Auth MLflow : OK ({mlflow_status['authenticated_user']})\n"
-            f"  - Tracking URI : {mlflow_status['tracking_uri']}\n"
+            f"  - MLflow : OK ({mlflow_status['tracking_uri']})\n"
             f"  - Snapshots totaux : {len(snapshots)}\n"
             f"  - Dernier snapshot : {latest_name}"
         )

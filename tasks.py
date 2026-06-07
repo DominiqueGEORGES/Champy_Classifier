@@ -12,7 +12,7 @@ Usage (PowerShell):
 import shutil
 from pathlib import Path
 
-from invoke import task
+from invoke import Exit, task
 
 PROJECT_ROOT = Path(__file__).parent
 
@@ -130,6 +130,61 @@ def format(c):
 def export_onnx(c):
     """Export model to ONNX format."""
     c.run("python -m src.models.export_onnx")
+
+
+@task
+def smoke(c, epochs=1):
+    """Smoke test de la chaîne d'entraînement, rapide et de bout en bout.
+
+    Dérive un profil court depuis configs/training/default.yaml (epochs réduits,
+    pas de phase de backbone gelé), lance un entraînement, puis vérifie qu'une
+    version 'champy-classifier' est bien apparue en Staging dans le registre
+    MLflow. Ne mesure pas la performance : valide que la chaîne tourne, de
+    l'entraînement jusqu'à l'enregistrement au registre. Réutilisable par tout
+    repreneur du projet pour contrôler son installation.
+
+    Args:
+        epochs: Nombre d'epochs du smoke (1 par défaut).
+    """
+    # Imports différés : yaml et mlflow ne sont chargés que pour cette tâche,
+    # pour ne pas alourdir chaque appel d'invoke (même logique que l'import
+    # différé de bentoml dans scripts/import_model_to_bentoml.py).
+    import yaml
+    from mlflow import MlflowClient
+
+    default_cfg = PROJECT_ROOT / "configs" / "training" / "default.yaml"
+    smoke_cfg = PROJECT_ROOT / "configs" / "training" / "smoke.yaml"
+
+    config = yaml.safe_load(default_cfg.read_text(encoding="utf-8"))
+    config["total_epochs"] = epochs
+    config["freeze_backbone_epochs"] = 0  # pas de phase 1 sur un smoke
+    smoke_cfg.write_text(
+        yaml.safe_dump(config, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    print(f"Profil smoke écrit : {smoke_cfg} ({epochs} epoch(s))")
+
+    c.run(f"python -m src.training.train --config {smoke_cfg}")
+
+    # Vérifie qu'une version vient bien d'atterrir en Staging dans le registre.
+    versions = MlflowClient().get_latest_versions("champy-classifier", stages=["Staging"])
+    if not versions:
+        raise Exit("Aucune version 'champy-classifier' en Staging : la chaîne a échoué.", code=1)
+    print(f"OK : champy-classifier v{versions[0].version} présent en Staging.")
+
+
+@task
+def deploy(c, stage="Staging"):
+    """Déploie la version du registre MLflow vers le Model Store BentoML.
+
+    Récupère la version du stage indiqué, l'exporte en ONNX et l'importe dans
+    BentoML (cf. scripts/deploy_from_registry.py). À lancer sur le NUC3, là où
+    vit le Model Store servi.
+
+    Args:
+        stage: Stage du registre à déployer (Staging par défaut, ou Production).
+    """
+    c.run(f"python -m scripts.deploy_from_registry --stage {stage}")
 
 
 @task

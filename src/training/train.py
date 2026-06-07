@@ -19,6 +19,10 @@ Autres options :
     - Tracking MLflow : hyperparamètres, métriques par epoch, artefacts,
       phase loggée à la fois comme tag et comme métrique par epoch pour
       visualiser la transition.
+    - Publication finale : le modèle est enregistré comme nouvelle version
+      du registre MLflow (``champy-classifier``), en Staging, avec ses
+      artefacts sur MinIO. Le modèle devient ainsi récupérable depuis
+      n'importe quelle machine, sans copie de fichier.
     - Seed global pour la reproductibilité.
 
 Usage:
@@ -34,10 +38,12 @@ import time
 from pathlib import Path
 
 import mlflow
+import mlflow.pytorch
 import numpy as np
 import torch
 import torch.nn as nn
 from loguru import logger
+from mlflow import MlflowClient
 from sklearn.metrics import f1_score
 from torch.amp import GradScaler, autocast
 
@@ -359,8 +365,8 @@ def train(
 
     Orchestration : chargement de la configuration, création du modèle
     et des DataLoaders, phase 1 avec backbone gelé, phase 2 avec
-    fine-tuning complet, évaluation finale, sauvegarde des artefacts
-    et tracking MLflow.
+    fine-tuning complet, évaluation finale, sauvegarde des artefacts,
+    tracking MLflow et publication du modèle au registre.
 
     Args:
         config_path: Chemin vers le fichier YAML de configuration. Si
@@ -543,6 +549,16 @@ def train(
         mlflow.log_artifact(str(metrics_path))
 
         logger.info(f"\n{test_metrics['report_text']}")
+
+        # -- Publication du modèle au registre MLflow (source de vérité) --
+        # Le modèle PyTorch part vers le store d'artefacts (MinIO en local),
+        # est enregistré comme nouvelle version de "champy-classifier", puis
+        # placé en Staging. Plus de copie de fichier : le modèle se récupère
+        # de n'importe quelle machine via le registre, par version ou par stage.
+        model_info = mlflow.pytorch.log_model(pytorch_model=model, artifact_path="model")
+        version = mlflow.register_model(model_info.model_uri, "champy-classifier").version
+        MlflowClient().transition_model_version_stage("champy-classifier", version, "Staging")
+        logger.info(f"Modèle enregistré au registre : champy-classifier v{version} (Staging)")
 
     return checkpoint_path
 
