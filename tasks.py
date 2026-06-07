@@ -16,6 +16,13 @@ from invoke import Exit, task
 
 PROJECT_ROOT = Path(__file__).parent
 
+# Force le mode UTF-8 de Python (PEP 540) dans les sous-processus. Sans cela,
+# sous Windows une console en cp1252 fait planter tout script qui ecrit un
+# caractere hors cp1252 sur la sortie standard, par exemple l'emoji que MLflow
+# affiche en fermant un run. On l'applique aux taches qui lancent un
+# entrainement ou un deploiement.
+UTF8_ENV = {"PYTHONUTF8": "1"}
+
 
 @task
 def setup(c):
@@ -40,7 +47,7 @@ def split_data(c):
 @task
 def train(c, config="configs/training/default.yaml"):
     """Launch training (native Python, for XPS with GPU)."""
-    c.run(f"python -m src.training.train --config {config}")
+    c.run(f"python -m src.training.train --config {config}", env=UTF8_ENV)
 
 
 @task
@@ -164,7 +171,7 @@ def smoke(c, epochs=1):
     )
     print(f"Profil smoke écrit : {smoke_cfg} ({epochs} epoch(s))")
 
-    c.run(f"python -m src.training.train --config {smoke_cfg}")
+    c.run(f"python -m src.training.train --config {smoke_cfg}", env=UTF8_ENV)
 
     # Vérifie qu'une version vient bien d'atterrir en Staging dans le registre.
     versions = MlflowClient().get_latest_versions("champy-classifier", stages=["Staging"])
@@ -184,7 +191,7 @@ def deploy(c, stage="Staging"):
     Args:
         stage: Stage du registre à déployer (Staging par défaut, ou Production).
     """
-    c.run(f"python -m scripts.deploy_from_registry --stage {stage}")
+    c.run(f"python -m scripts.deploy_from_registry --stage {stage}", env=UTF8_ENV)
 
 
 @task
