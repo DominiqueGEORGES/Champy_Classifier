@@ -10,11 +10,18 @@ Usage (PowerShell):
 """
 
 import shutil
+import sys
 from pathlib import Path
 
 from invoke import Exit, task
 
 PROJECT_ROOT = Path(__file__).parent
+
+# Interpreteur du venv courant : invoke.exe est lance depuis .venv, donc
+# sys.executable pointe le python du venv, avec ou sans activation. On l'utilise
+# au lieu de "python" nu, qui en session SSH non interactive retombe sur le
+# python global (Microsoft Store) ou mlflow/torch ne sont pas installes.
+PYTHON = f'"{sys.executable}"'
 
 # Force le mode UTF-8 de Python (PEP 540) dans les sous-processus. Sans cela,
 # sous Windows une console en cp1252 fait planter tout script qui ecrit un
@@ -41,13 +48,13 @@ def pull_data(c):
 @task
 def split_data(c):
     """Run data split script."""
-    c.run("python data/data_split.py")
+    c.run(f"{PYTHON} data/data_split.py")
 
 
 @task
 def train(c, config="configs/training/default.yaml"):
     """Launch training (native Python, for XPS with GPU)."""
-    c.run(f"python -m src.training.train --config {config}", env=UTF8_ENV)
+    c.run(f"{PYTHON} -m src.training.train --config {config}", env=UTF8_ENV)
 
 
 @task
@@ -136,7 +143,7 @@ def format(c):
 @task
 def export_onnx(c):
     """Export model to ONNX format."""
-    c.run("python -m src.models.export_onnx")
+    c.run(f"{PYTHON} -m src.models.export_onnx")
 
 
 @task
@@ -159,6 +166,8 @@ def smoke(c, epochs=1):
     import yaml
     from mlflow import MlflowClient
 
+    from src.config import get_mlflow_settings
+
     default_cfg = PROJECT_ROOT / "configs" / "training" / "default.yaml"
     smoke_cfg = PROJECT_ROOT / "configs" / "training" / "smoke.yaml"
 
@@ -171,10 +180,15 @@ def smoke(c, epochs=1):
     )
     print(f"Profil smoke écrit : {smoke_cfg} ({epochs} epoch(s))")
 
-    c.run(f"python -m src.training.train --config {smoke_cfg}", env=UTF8_ENV)
+    c.run(f"{PYTHON} -m src.training.train --config {smoke_cfg}", env=UTF8_ENV)
 
     # Vérifie qu'une version vient bien d'atterrir en Staging dans le registre.
-    versions = MlflowClient().get_latest_versions("champy-classifier", stages=["Staging"])
+    # On vise explicitement le serveur configuré (.env) : sans cela, MlflowClient
+    # retombe sur un store local vide et ne voit pas le modèle distant.
+    uri = get_mlflow_settings().mlflow_tracking_uri
+    versions = MlflowClient(tracking_uri=uri, registry_uri=uri).get_latest_versions(
+        "champy-classifier", stages=["Staging"]
+    )
     if not versions:
         raise Exit("Aucune version 'champy-classifier' en Staging : la chaîne a échoué.", code=1)
     print(f"OK : champy-classifier v{versions[0].version} présent en Staging.")
@@ -191,7 +205,7 @@ def deploy(c, stage="Staging"):
     Args:
         stage: Stage du registre à déployer (Staging par défaut, ou Production).
     """
-    c.run(f"python -m scripts.deploy_from_registry --stage {stage}", env=UTF8_ENV)
+    c.run(f"{PYTHON} -m scripts.deploy_from_registry --stage {stage}", env=UTF8_ENV)
 
 
 @task
