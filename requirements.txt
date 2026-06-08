@@ -53,3 +53,4 @@ pytest-cov>=5.0
 pre-commit>=3.7
 interrogate>=1.7
 pytest-html>=4.1
+boto3

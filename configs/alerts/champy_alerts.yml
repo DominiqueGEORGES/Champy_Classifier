@@ -16,23 +16,23 @@ groups:
       summary: API Champy hors ligne
       description: 'L''endpoint /metrics de l''API n''est plus scrape par Prometheus depuis plus de 1m. Verifier sur le NUC3 : ''docker compose ps api''.'
   - alert: HighLatencyP95
-    expr: histogram_quantile(0.95, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le)) > 0.55
+    expr: histogram_quantile(0.95, sum(rate(champy_prediction_latency_seconds_bucket[5m])) by (le)) > 0.05
     for: 30s
     labels:
       severity: warning
       project: champy
     annotations:
       summary: Latence p95 elevee sur les predictions
-      description: La latence p95 des predictions depasse 0.55s sur les 5 dernieres minutes (seuil ajustable).
+      description: La latence p95 des predictions depasse 0.05s sur les 5 dernieres minutes (seuil ajustable).
   - alert: HighLatencyMean
-    expr: (rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])) > 0.2
+    expr: (rate(champy_prediction_latency_seconds_sum[5m]) / rate(champy_prediction_latency_seconds_count[5m])) > 0.05
     for: 5m
     labels:
       severity: warning
       project: champy
     annotations:
       summary: Latence moyenne elevee sur les predictions
-      description: La latence moyenne des predictions depasse 0.2s sur les 5 dernieres minutes (seuil ajustable).
+      description: La latence moyenne des predictions depasse 0.05s sur les 5 dernieres minutes (seuil ajustable).
   - alert: LowMeanConfidence
     expr: (rate(champy_prediction_confidence_sum[10m]) / rate(champy_prediction_confidence_count[10m])) < 0.5
     for: 10m

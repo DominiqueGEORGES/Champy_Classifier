@@ -17,13 +17,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 
+import mlflow
 import mlflow.pytorch
 from loguru import logger
 from mlflow import MlflowClient
 from scripts.import_model_to_bentoml import import_model
 
-from src.config import MODELS_DIR, get_training_config
+from src.config import MODELS_DIR, get_mlflow_settings, get_training_config
 from src.models.export_onnx import compare_outputs, export_to_onnx, save_class_names, validate_onnx
 
 REGISTERED_MODEL = "champy-classifier"
@@ -51,6 +53,23 @@ def main() -> int:
     args = parser.parse_args()
 
     config = get_training_config()
+
+    # Configure le backend MLflow (serveur de tracking + artefacts S3/MinIO)
+    # depuis le .env, comme le fait l'entraînement. Le script devient autonome :
+    # aucune variable d'environnement à poser à la main, ce qui est indispensable
+    # en exécution non interactive (tâche Airflow).
+    settings = get_mlflow_settings()
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    if "dagshub.com" in settings.mlflow_tracking_uri:
+        if settings.dagshub_token:
+            os.environ["MLFLOW_TRACKING_USERNAME"] = settings.dagshub_user
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = settings.dagshub_token
+    else:
+        os.environ["MLFLOW_S3_ENDPOINT_URL"] = settings.mlflow_s3_endpoint_url
+        os.environ["AWS_ACCESS_KEY_ID"] = settings.aws_access_key_id
+        os.environ["AWS_SECRET_ACCESS_KEY"] = settings.aws_secret_access_key
+        os.environ["AWS_DEFAULT_REGION"] = settings.aws_default_region
+
     client = MlflowClient()
 
     # 1. Resoudre la version du registre pour le stage demande, et lire ses
@@ -71,7 +90,12 @@ def main() -> int:
 
     # 2. Charger le modele PyTorch directement depuis le registre (pas de fichier
     #    rapatrie : MLflow telecharge l'artefact depuis MinIO).
-    model = mlflow.pytorch.load_model(f"models:/{REGISTERED_MODEL}/{args.stage}")
+    #    map_location='cpu' : le modele peut avoir ete entraine sur GPU (XPS2) alors
+    #    que le NUC3 sert en CPU ; sans cela, torch refuse de deserialiser des
+    #    tensors CUDA sur une machine sans GPU.
+    model = mlflow.pytorch.load_model(
+        f"models:/{REGISTERED_MODEL}/{args.stage}", map_location="cpu"
+    )
     model.to("cpu").eval()
 
     # 3. Exporter en ONNX, valider, comparer PyTorch vs ONNX (fonctions existantes).

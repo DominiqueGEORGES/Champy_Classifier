@@ -6,11 +6,11 @@ api_down:
   for: 1m
   severity: critical
 high_latency_p95:
-  threshold_seconds: 0.55
+  threshold_seconds: 0.05
   for: 30s
   severity: warning
 high_latency_mean:
-  threshold_seconds: 0.2
+  threshold_seconds: 0.05
   for: 5m
   severity: warning
 low_mean_confidence:

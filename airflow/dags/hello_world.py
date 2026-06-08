@@ -21,7 +21,7 @@ from pathlib import Path
 from airflow.decorators import dag, task
 
 DEFAULT_ARGS = {
-    "owner": "Dominique GEORGES",
+    "owner": "Champy Team",
     "depends_on_past": False,
     "retries": 0,
     "retry_delay": timedelta(minutes=2),
