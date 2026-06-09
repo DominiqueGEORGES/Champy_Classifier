@@ -1,4 +1,4 @@
-"""Page Streamlit : statut et documentation de l'API FastAPI.
+"""Page Streamlit : statut et documentation de l'API BentoML.
 
 Affiche :
     - L'état de santé live de l'API (endpoint `/health`)
@@ -51,7 +51,7 @@ auth.setup_page()
 # =====================================================================
 
 st.set_page_config(page_title="09 - API", layout="wide")
-st.title(":electric_plug: API FastAPI")
+st.title(":electric_plug: API BentoML")
 
 # =====================================================================
 # Chargement des helpers
@@ -106,7 +106,7 @@ st.header("Documentation")
 api_public_url = os.environ.get("CHAMPY_API_PUBLIC_URL", "").rstrip("/")
 
 st.markdown(
-    "L'API REST FastAPI est interrogée en interne par les pages "
+    "L'API REST BentoML est interrogée en interne par les pages "
     "Streamlit (notamment **Prédiction**). Elle est également exposée "
     "via Cloudflare Tunnel pour permettre l'inspection directe de la "
     "documentation interactive."
