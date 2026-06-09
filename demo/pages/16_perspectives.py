@@ -400,15 +400,19 @@ Côté code, la vérification de l'appelant tient en quelques lignes :
 """
     )
     st.code(
-        """# Verification de l'appelant a chaque appel : cle d'API dans l'en-tete
-from fastapi import Header, HTTPException
+        """# Verification de l'appelant a chaque requete : middleware ASGI
+# (BentoML s'appuie sur Starlette, ce middleware s'y monte directement)
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 CLES_AUTORISEES = {"app-predict", "app-stats"}  # une cle par application tierce
 
-async def verifier_appelant(authorization: str = Header(...)):
-    cle = authorization.removeprefix("Bearer ").strip()
-    if cle not in CLES_AUTORISEES:
-        raise HTTPException(status_code=401, detail="appelant non autorise")
+class VerifierAppelant(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        cle = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if cle not in CLES_AUTORISEES:
+            return JSONResponse({"detail": "appelant non autorise"}, status_code=401)
+        return await call_next(request)
 """,
         language="python",
     )
