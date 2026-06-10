@@ -71,32 +71,30 @@ st.markdown(
 )
 
 MERMAID_DIAGRAM = """
-flowchart LR
-    subgraph DEV["💻 Dev (XPS 9520)"]
+flowchart TB
+    INTERNET((Internet))
+    subgraph EXPO["🌐 Exposition (en production)"]
         direction TB
-        TR["PyTorch<br/>ConvNeXt-Tiny"]
-        EXP["Export ONNX"]
-        TR --> EXP
+        CF["Cloudflare<br/>Tunnel + Access<br/>(TLS public, OTP email)"]
+        NGINX["nginx<br/>reverse proxy + rate limit<br/>répartition pondérée 90/10"]
+        CF --> NGINX
     end
-
-    subgraph CLOUD["☁️ DagsHub (alternative)"]
-        direction TB
-        DVC_REMOTE[("DVC remote")]
-        MLFLOW_SRV["MLflow<br/>Tracking"]
-        REPO["Git repo"]
-    end
-
     subgraph PROD["🖥️ Production NUC3 (Docker Compose)"]
         direction TB
-        API["API BentoML<br/>+ ONNX<br/>:8000"]
-        MINIO[("MinIO<br/>:9010")]
-        DEMO["Streamlit<br/>:8501"]
-        AIRFLOW["Airflow<br/>:8081"]
-        PROM["Prometheus<br/>:9090"]
-        GRAFANA["Grafana<br/>:3000"]
-        SQLITE[("SQLite<br/>predictions.db")]
+        subgraph SERVING["Serving & données"]
+            direction LR
+            API["API BentoML v1<br/>+ ONNX · :8000<br/>modèle actuel · 90%"]
+            APIC["API BentoML v2<br/>canari · 10%"]
+            STORE[("Stockage<br/>MinIO :9010<br/>SQLite predictions.db")]
+        end
+        subgraph PILOTAGE["Pilotage & interfaces"]
+            direction LR
+            DEMO["Streamlit<br/>:8501"]
+            AIRFLOW["Airflow<br/>:8081"]
+            OBS["Observabilité<br/>Prometheus :9090<br/>+ Grafana :3000"]
+            MLFLOW["MLflow<br/>tracking + registre<br/>:5050"]
+        end
     end
-
     subgraph ALERTS["🔔 Alerting"]
         direction TB
         ALERTM["Alertmanager<br/>:9093"]
@@ -104,57 +102,51 @@ flowchart LR
         DISCORD["Discord webhook<br/>#champy-alerts"]
         ALERTM --> ADAPT --> DISCORD
     end
-
-    subgraph EXPO["🌐 Exposition"]
+    subgraph DEV["💻 Dev (XPS 9520)"]
         direction TB
-        subgraph CURRENT["Démo (actuel)"]
-            CF["Cloudflare<br/>Tunnel + Access<br/>(OTP email)"]
-        end
-        subgraph TARGET["Prod entreprise (cible)"]
-            NGINX["nginx<br/>reverse-proxy<br/>+ rate limit"]
-            LE["Let's Encrypt<br/>SSL auto"]
-            AUTH["oauth2-proxy<br/>ou Authelia"]
-        end
+        TR["PyTorch<br/>ConvNeXt-Tiny"]
+        EXP["Export ONNX"]
+        TR --> EXP
     end
-
-    INTERNET((Internet))
-
-    TR -.->|"params"| MLFLOW_SRV
-    EXP -->|"dvc push"| MINIO
-    EXP -.->|"dvc push (alt)"| DVC_REMOTE
-    MINIO -->|"dvc pull"| API
-    DVC_REMOTE -.->|"dvc pull (alt)"| API
-
-    DEMO -->|"HTTP /predict"| API
-    API -->|"log"| SQLITE
-    API -->|"/metrics"| PROM
-    PROM --> GRAFANA
-    AIRFLOW -->|"drift Evidently"| SQLITE
-    PROM -->|"alertes"| ALERTM
-
+    subgraph TARGET["🔒 Cible full self-host (à venir)"]
+        direction TB
+        LE["Let's Encrypt<br/>TLS auto"]
+        SSO["SSO / annuaire AD<br/>fournisseur d'identité"]
+        AUTH["oauth2-proxy<br/>vérifie l'identité"]
+        SSO --> AUTH
+    end
+    EXP -->|"dvc push"| STORE
+    STORE -->|"dvc pull"| API
     INTERNET --> CF
-    INTERNET -.-> NGINX
+    NGINX -->|"90%"| API
+    NGINX -.->|"10% canari"| APIC
+    NGINX -->|"redirige"| DEMO
+    NGINX -->|"redirige"| OBS
+    NGINX -->|"redirige"| AIRFLOW
+    DEMO -->|"HTTP /predict"| API
+    API -->|"log"| STORE
+    API -->|"/metrics"| OBS
+    AIRFLOW -->|"drift Evidently"| STORE
+    AIRFLOW -.->|"réentraînement par SSH"| TR
+    OBS -->|"alertes"| ALERTM
     LE -.-> NGINX
     AUTH -.-> NGINX
-    CF -->|"HTTPS"| PROD
-    NGINX -.->|"HTTPS"| PROD
+    TR -.->|"runs + modèle"| MLFLOW
+    MLFLOW -->|"modèle Staging → ONNX"| API
 
     classDef devNode fill:#e8f4f8,stroke:#0288d1,stroke-width:2px,color:#01579b
-    classDef cloudNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100
     classDef prodNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,color:#1b5e20
-    classDef futureNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,stroke-dasharray:5 5,color:#1b5e20
+    classDef canaryNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,stroke-dasharray:5 5,color:#1b5e20
     classDef alertNode fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f
     classDef expoNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,color:#311b92
     classDef expoFutureNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,stroke-dasharray:5 5,color:#311b92
     classDef netNode fill:#fff,stroke:#555,stroke-width:2px,color:#000
-
     class TR,EXP devNode
-    class DVC_REMOTE,MLFLOW_SRV,REPO cloudNode
-    class API,DEMO,AIRFLOW,PROM,GRAFANA,SQLITE prodNode
-    class BENTO futureNode
+    class API,DEMO,AIRFLOW,OBS,STORE,MLFLOW prodNode
+    class APIC canaryNode
     class ALERTM,ADAPT,DISCORD alertNode
-    class CF expoNode
-    class NGINX,LE,AUTH expoFutureNode
+    class CF,NGINX expoNode
+    class LE,AUTH expoFutureNode
     class INTERNET netNode
 """
 
@@ -202,7 +194,7 @@ _MERMAID_HTML = f"""
 </html>
 """
 
-components.html(_MERMAID_HTML, height=720, scrolling=True)
+components.html(_MERMAID_HTML, height=920, scrolling=True)
 
 st.caption(
     "Le diagramme est interactif côté navigateur (zoom, déplacement). "

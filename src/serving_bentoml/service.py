@@ -28,6 +28,7 @@ import base64
 import hashlib
 import io
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,24 @@ _DEFAULT_DB_PATH = (
     Path(__file__).resolve().parent.parent.parent / "data" / "runtime" / "predictions.db"
 )
 PREDICTIONS_DB_PATH = Path(os.environ.get("CHAMPY_PREDICTIONS_DB", _DEFAULT_DB_PATH))
+
+# ---------------------------------------------------------------------------
+# Repertoire dedie aux images recues par /predict (audit, constitution de
+# dataset, analyse de derive). Configurable via l'env var CHAMPY_UPLOAD_DIR
+# (fixee au deploiement, jamais lue depuis une requete HTTP). Defaut local :
+# data/runtime/uploads, deja monte en volume par le compose.
+# Le nom de chaque fichier derive du hash SHA256 de l'image (cf. predict) :
+# 64 caracteres hexadecimaux, donc aucun separateur de chemin possible.
+# ---------------------------------------------------------------------------
+_DEFAULT_UPLOAD_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "runtime" / "uploads"
+)
+UPLOAD_DIR = Path(os.environ.get("CHAMPY_UPLOAD_DIR", _DEFAULT_UPLOAD_DIR))
+
+# Motif d'un hash SHA256 en hexadecimal (exactement 64 caracteres [0-9a-f]).
+# Garde-fou : on n'ecrit un fichier que si son nom respecte ce motif
+# (cf. predict, defense en profondeur contre la traversee de chemin).
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 # Modele PyTorch pour Grad-CAM (l'API serve ONNX en standard, mais Grad-CAM
 # necessite l'acces aux gradients d'ou un second chargement PyTorch).
@@ -160,6 +179,8 @@ class ChampyService:
                 "alimenter le Model Store."
             )
         self.store = PredictionStore(db_path=PREDICTIONS_DB_PATH)
+        # Cree le repertoire des images recues des le demarrage (idempotent).
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         self._store_init_lock = asyncio.Lock()
         # Reference forte vers les taches fire-and-forget de persistence.
         # Sans ca, le GC peut collecter la Task avant son completion et
@@ -406,13 +427,35 @@ class ChampyService:
             f"({predictions[0].confidence:.2%}) en {latency:.3f}s"
         )
 
+        # Empreinte de l'image : sert a la fois de nom de fichier pour la
+        # conservation ci-dessous et de cle pour la persistence SQLite.
+        image_hash = hashlib.sha256(image.tobytes()).hexdigest()
+
+        # Conservation de l'image recue dans le repertoire dedie (audit,
+        # dataset, analyse de derive). Le nom derive du hash : deterministe,
+        # sans collision, et jamais issu du client (donc pas de nom piege
+        # type "../../etc"). Defense en profondeur : on valide le format du
+        # nom, puis on confine le chemin resolu dans UPLOAD_DIR ; toute
+        # tentative de sortie est refusee et journalisee. Ecriture seulement
+        # si le fichier n'existe pas (deduplication naturelle par le hash).
+        if not _HEX64.match(image_hash):
+            logger.error("Empreinte image inattendue, conservation ignoree.")
+        else:
+            dest = (UPLOAD_DIR / f"{image_hash}.png").resolve()
+            if not dest.is_relative_to(UPLOAD_DIR.resolve()):
+                logger.error(f"Chemin hors du repertoire dedie, ignore : {dest}")
+            elif not dest.exists():
+                try:
+                    image.save(dest, format="PNG")
+                except Exception as exc:
+                    logger.error(f"Echec conservation image recue : {exc}")
+
         # Persistence asynchrone fire-and-forget : ne bloque pas la reponse.
         # Le store WAL serialise les ecritures en interne (busy_timeout=5000ms).
         # On garde une reference forte sur la Task pour eviter qu'elle soit
         # collectee par le GC avant la fin de l'ecriture (cf. RUF006).
         await self._ensure_store()
         if self.store.is_open:
-            image_hash = hashlib.sha256(image.tobytes()).hexdigest()
             top5_dump = [p.model_dump() for p in predictions[:5]]
             task = asyncio.create_task(
                 self._save_prediction_safe(

@@ -54,6 +54,7 @@ ANALYSIS_DIR_IN_CONTAINER = PROJECT_ROOT_IN_CONTAINER / "docs" / "analysis"
 
 @dag(
     dag_id="champy_train_pipeline",
+    dag_display_name="01_champy_train_pipeline",
     description="Orchestration de la régénération de l'analyse Champy depuis MLflow",
     default_args=DEFAULT_ARGS,
     start_date=datetime(2026, 5, 14),

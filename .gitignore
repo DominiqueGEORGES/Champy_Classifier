@@ -89,3 +89,4 @@ reports/
 data/registry/
 last_deployed_api.txt
 /models
+data/runtime/uploads/

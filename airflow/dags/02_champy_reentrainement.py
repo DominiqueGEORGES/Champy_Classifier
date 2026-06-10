@@ -29,6 +29,7 @@ from airflow.providers.ssh.operators.ssh import SSHOperator
 ENTRAINEMENT_CMD = (
     "$env:PYTHONUTF8='1'; "
     "Set-Location 'D:\\projets\\DataScientest\\Champy_Classifier'; "
+    "$env:MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING='true'; "
     "git pull; if ($LASTEXITCODE -ne 0) { throw 'echec git pull' }; "
     ".\\.venv\\Scripts\\invoke.exe {{ params.training_command }}"
 )
@@ -41,6 +42,7 @@ DEPLOIEMENT_CMD = (
 
 with DAG(
     dag_id="champy_reentrainement",
+    dag_display_name="02_champy_reentrainement",
     description="Boucle MLOps Champy : entrainement (XPS2) puis deploiement (NUC3), par SSH.",
     schedule=None,
     start_date=datetime(2026, 1, 1),
@@ -50,8 +52,11 @@ with DAG(
         "training_command": Param(
             "smoke",
             type="string",
-            enum=["smoke", "train"],
-            description="Tache Invoke lancee sur le XPS2 : smoke (court) ou train (complet).",
+            enum=[
+                "smoke",
+                "train --config configs/training/convnext.yaml",
+            ],
+            description="Tache Invoke sur le XPS2 : smoke (court) ou train complet (ConvNeXt-Tiny).",
         ),
     },
 ) as dag:

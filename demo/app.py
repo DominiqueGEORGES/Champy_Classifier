@@ -433,7 +433,53 @@ if SVG_PIPELINE_PATH.exists():
     )
 
     svg_content = SVG_PIPELINE_PATH.read_text(encoding="utf-8")
-    components.html(svg_content, height=740, scrolling=False)
+
+    ui = """
+<script>
+  // Au demarrage : fige. On memorise les minuteurs de l'autoplay
+  // sans les lancer tant qu'on reste en mode fige.
+  window.__champyAuto = false;
+  window.__champyTimers = [];
+  window.__si = window.setInterval.bind(window);
+  window.setInterval = function (fn, delay) {
+    var t = { fn: fn, delay: delay, id: null };
+    window.__champyTimers.push(t);
+    if (window.__champyAuto) { t.id = window.__si(fn, delay); return t.id; }
+    return 0;
+  };
+</script>
+<div style="position:relative;">
+  <button id="champy-mode"
+    style="position:absolute; top:8px; left:8px; z-index:30; padding:5px 12px;
+           font:13px sans-serif; cursor:pointer; border:1px solid #1F4E3D;
+           border-radius:6px; background:#1F4E3D; color:#fff;">
+    Lecture auto
+  </button>
+  __SVG__
+</div>
+<script>
+  (function () {
+    var btn = document.getElementById('champy-mode');
+    btn.onclick = function () {
+      if (window.__champyAuto) {
+        window.__champyAuto = false;
+        window.__champyTimers.forEach(function (t) {
+          if (t.id !== null) { window.clearInterval(t.id); t.id = null; }
+        });
+        btn.textContent = 'Lecture auto';
+      } else {
+        window.__champyAuto = true;
+        window.__champyTimers.forEach(function (t) {
+          if (t.id === null) { t.id = window.__si(t.fn, t.delay); }
+        });
+        btn.textContent = 'Figer';
+      }
+    };
+  })();
+</script>
+"""
+
+components.html(ui.replace("__SVG__", svg_content), height=740, scrolling=False)
 
 
 # =====================================================================

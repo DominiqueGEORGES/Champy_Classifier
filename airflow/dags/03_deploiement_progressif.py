@@ -64,6 +64,7 @@ def _taux_erreur(version: str) -> float:
 
 @dag(
     dag_id="deploiement_progressif",
+    dag_display_name="03_deploiement_progressif",
     schedule=None,
     start_date=datetime(2026, 1, 1),
     catchup=False,

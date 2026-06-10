@@ -8,7 +8,7 @@
     "performance"
   ],
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "editable": true,
   "refresh": "15s",
   "time": {
@@ -35,7 +35,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Performance de l'API d'inférence Champy.** Ce tableau de bord suit la rapidité et le volume des prédictions servies par l'API BentoML. Les latences proviennent des métriques métier `champy_prediction_*`, le trafic des métriques natives `bentoml_service_request_total`. Les endpoints de healthcheck (`/health`, `/healthz`) sont exclus des vues de trafic pour ne montrer que l'activité réelle.\n\n**Contenu :**\n- **Latence d'inférence (p50/p95/p99)** : temps de réponse aux percentiles clés ; le p99 révèle les pires cas.\n- **Latence moyenne (5 min)** : latence moyenne récente, repère rapide.\n- **Total prédictions** : nombre cumulé de prédictions depuis le démarrage de l'API.\n- **Requêtes par seconde (par endpoint)** : débit de trafic métier par route.\n- **Erreurs HTTP (par endpoint)** : taux de réponses non-2xx ; vide = aucune erreur (état nominal).\n- **Top endpoints (par volume)** : routes les plus sollicitées (hors healthchecks)."
+        "content": "**Performance de l'API d'inférence Champy.** Ce tableau de bord suit la rapidité et le volume des prédictions servies par l'API BentoML. Les latences proviennent des métriques métier `champy_prediction_*`, le trafic des métriques natives `bentoml_service_request_total`. Les endpoints de healthcheck (`/health`, `/healthz`) sont exclus des vues de trafic pour ne montrer que l'activité réelle.\n\n**Contenu :**\n- **Latence d'inférence (p50/p95/p99)** : temps de réponse aux percentiles clés ; le p99 révèle les pires cas.\n- **Latence moyenne (5 min)** : latence moyenne récente, repère rapide.\n- **Total prédictions** : nombre cumulé de prédictions depuis le démarrage de l'API.\n- **Requêtes par seconde (par endpoint)** : débit de trafic métier par route.\n- **Erreurs HTTP (par endpoint)** : taux de réponses non-2xx ; vide = aucune erreur (état nominal).\n- **Top endpoints (par volume)** : routes les plus sollicitées (hors healthchecks).\n- **Confiance moyenne / Prédictions par espèce** : qualité et activité métier du modèle."
       }
     },
     {
@@ -383,6 +383,109 @@
       },
       "options": {
         "showHeader": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Confiance moyenne top-1 (5 min)",
+      "description": "Confiance moyenne de la prédiction top-1 sur 5 min, calculée depuis le summary (sum / count). Une baisse durable peut signaler une dérive du modèle.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(champy_prediction_confidence_sum[5m]) / rate(champy_prediction_confidence_count[5m])",
+          "legendFormat": "confiance moyenne",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Prédictions par espèce",
+      "description": "Répartition cumulée des prédictions par espèce depuis le démarrage de l'API.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(champy_predictions_total) by (species)",
+          "legendFormat": "{{species}}",
+          "format": "time_series",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       }
     }
   ]
