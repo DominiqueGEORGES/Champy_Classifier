@@ -334,6 +334,7 @@ services:
       AWS_DEFAULT_REGION: us-east-1
       PYTHONPATH: /opt/champy:/opt/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+      DISCORD_WEBHOOK_URL: https://discord.com/api/webhooks/1507306844891119647/nzyJK53M-yX5EKTzZTrmEJCkvkS8IBN0kMrF7ZZM9sVA9UbNQh9gFASra-4946iXz__U
     ports:
       - "8081:8080"
     volumes:
