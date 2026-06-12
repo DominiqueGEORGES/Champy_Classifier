@@ -1,110 +1,112 @@
-"""DAG Airflow : deploiement progressif (canary) pilote.
+"""DAG Airflow : deploiement canari (canary) du modele candidat.
 
-Met le candidat en service a faible part (10%), compare les deux versions via
-Prometheus, puis promeut le candidat a 100% ou fait marche arriere vers l'ancien.
-Tout est decide sans intervention manuelle.
+Declenche par le DAG 02 a l'issue d'un reentrainement REUSSI (dont le F1 sur le
+jeu de test a franchi le seuil ; cette porte de qualite vit dans le 02, pas ici).
+Ce DAG bascule 10% du trafic vers le candidat (`api_v2`), laisse 90% sur le
+champion (`api`), puis alerte un humain sur Telegram pour qu'il decide de la suite.
 
-MLflow : aucune URL n'est codee en dur. Le client lit MLFLOW_TRACKING_URI dans
-l'environnement du conteneur Airflow, qui doit pointer vers le MLflow LOCAL du projet
-(et non DagsHub). Basculer local/distant se fait donc a un seul endroit.
+La decision de PROMOUVOIR (100%) ou de REVENIR EN ARRIERE (0%) n'est pas
+automatique : elle se prend a la main en declenchant le DAG 05 (full new model)
+ou le DAG 06 (restore old model). Le human-in-the-loop est assume : laisser une
+machine promouvoir seule sur quelques minutes de trafic serait imprudent.
 
-Note : les imports lourds (requests, docker, mlflow) sont faits a l'interieur des
-taches. Ainsi le DAG se charge et affiche son graphe dans l'interface Airflow meme si
-ces bibliotheques ne sont pas installees ; l'eventuelle erreur n'arrive qu'a l'execution.
+----------------------------------------------------------------------------
+SUITE CONCUE, NON BRANCHEE (V2) : promotion automatique apres observation.
+----------------------------------------------------------------------------
+Automatiser la decision suppose trois choses, volontairement laissees de cote
+pour cette V1 :
+
+1. Une fenetre d'observation entre la bascule a 10% et la mesure. Comparer
+   immediatement reviendrait a lire des series Prometheus vides (le candidat
+   vient de recevoir ses premieres requetes) : taux d'erreur a 0, donc promotion
+   a tous les coups. Il faut une attente de 15 a 30 min (TimeDeltaSensor).
+
+2. Des metriques par version. L'API expose aujourd'hui
+   `bentoml_service_request_total{http_response_code=...}` sans label de version.
+   Comparer champion et candidat demande soit un label `version` ajoute au
+   middleware, soit deux jobs Prometheus distincts.
+
+3. Une porte metier, deja couverte en amont : un modele peut repondre 200 avec
+   de mauvaises predictions. La qualite (F1 sur le jeu de test) se juge dans le
+   02 ; le 03 ne valide que la sante runtime (5xx, latence).
+
+Le squelette de cette logique est conserve en commentaire en bas de fichier,
+comme trace de conception.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 from airflow.decorators import dag, task
 
-# --- Reperes de la stack (a aligner sur les noms reels du projet) ---
-NGINX_CONF = "/etc/nginx/conf.d/upstream_champy.conf"  # fichier de conf monte cote NGINX
-NGINX_CONTAINER = "champy_nginx"  # conteneur a recharger
-PROM_URL = "http://champy_prometheus:9090/api/v1/query"  # API de Prometheus
-MODELE = "champy-classifier"  # nom du modele dans le registre
+# Les imports lourds (docker, requests) vivent dans le module champy_canary et
+# sont charges a l'interieur des taches : le DAG s'affiche dans l'interface meme
+# si ces bibliotheques manquent ; l'erreur eventuelle n'arrive qu'a l'execution.
 
-
-def _ligne_server(nom: str, poids: int) -> str:
-    # NGINX refuse un poids nul : on coupe alors le serveur avec la directive 'down'
-    if poids <= 0:
-        return f"    server {nom}:8000 down;"
-    return f"    server {nom}:8000 weight={poids};"
-
-
-def _appliquer_poids(part_candidat: int) -> None:
-    """Reecrit les poids NGINX (candidat = part_candidat %) puis recharge a chaud."""
-    import docker
-
-    bloc = (
-        "upstream champy_api {\n"
-        f"{_ligne_server('api_v1', 100 - part_candidat)}\n"
-        f"{_ligne_server('api_v2', part_candidat)}\n"
-        "}\n"
-    )
-    Path(NGINX_CONF).write_text(bloc, encoding="utf-8")
-    # reload gracieux : ne coupe pas les requetes en cours
-    docker.from_env().containers.get(NGINX_CONTAINER).exec_run("nginx -s reload")
-
-
-def _taux_erreur(version: str) -> float:
-    """Taux de reponses en erreur (5xx) d'une version, lu dans Prometheus."""
-    import requests
-
-    promql = (
-        f'sum(rate(api_requests_total{{version="{version}",status=~"5.."}}[5m]))'
-        f' / sum(rate(api_requests_total{{version="{version}"}}[5m]))'
-    )
-    reponse = requests.get(PROM_URL, params={"query": promql}, timeout=10).json()
-    points = reponse["data"]["result"]
-    return float(points[0]["value"][1]) if points else 0.0
+PART_CANARI = 10  # pourcentage de trafic envoye au candidat pendant le canari
 
 
 @dag(
     dag_id="deploiement_progressif",
     dag_display_name="03_deploiement_progressif",
-    schedule=None,
+    schedule=None,  # declenche par le 02, jamais sur planning
     start_date=datetime(2026, 1, 1),
     catchup=False,
-    tags=["champy", "deploiement"],
+    tags=["champy", "deploiement", "canary"],
 )
 def deploiement_progressif():
 
     @task
-    def regler_trafic_10() -> None:
-        _appliquer_poids(10)  # candidat a 10%, ancien a 90%
+    def regler_trafic_canari() -> None:
+        """Bascule PART_CANARI % du trafic vers le candidat, le reste au champion."""
+        from champy_canary import appliquer_poids
+
+        appliquer_poids(PART_CANARI)
 
     @task
-    def comparer() -> bool:
-        candidat = _taux_erreur("v2")
-        ancien = _taux_erreur("v1")
-        # le candidat tient s'il ne degrade pas le taux d'erreur de plus de 20%
-        return candidat <= max(ancien * 1.2, 0.01)
+    def alerter_humain() -> None:
+        """Previent l'equipe que le canari est actif et attend une decision."""
+        from champy_canary import alerter_telegram
 
-    @task.branch
-    def decider(candidat_ok: bool) -> str:
-        return "promouvoir" if candidat_ok else "marche_arriere"
+        alerter_telegram(
+            f"Canari actif : le candidat reçoit {PART_CANARI}% du trafic.\n"
+            "Le modèle a passé la porte de qualité du réentraînement.\n"
+            "Décision attendue : promouvoir (DAG 05) ou revenir en arrière (DAG 06)."
+        )
 
-    @task
-    def promouvoir() -> None:
-        from mlflow.tracking import MlflowClient
-
-        _appliquer_poids(100)  # le candidat prend tout le trafic, l'ancien est coupe
-        # MlflowClient() sans argument lit MLFLOW_TRACKING_URI dans l'environnement :
-        # il pointe donc vers le MLflow local configure au niveau du conteneur Airflow.
-        client = MlflowClient()
-        candidate = client.get_latest_versions(MODELE, stages=["Staging"])[0]
-        client.transition_model_version_stage(MODELE, candidate.version, "Production")
-
-    @task
-    def marche_arriere() -> None:
-        _appliquer_poids(0)  # candidat coupe : tout le trafic repart sur l'ancien (v1)
-
-    verdict = comparer()
-    regler_trafic_10() >> verdict
-    decider(verdict) >> [promouvoir(), marche_arriere()]
+    regler_trafic_canari() >> alerter_humain()
 
 
 deploiement_progressif()
+
+
+# ===========================================================================
+# V2 (concue, non branchee) : decision automatique apres fenetre d'observation.
+# Conservee en trace de conception ; voir le docstring du module pour le detail
+# des trois prerequis manquants (fenetre, metriques par version, seuils).
+#
+#   from datetime import timedelta
+#   from airflow.sensors.time_delta import TimeDeltaSensor
+#   from champy_canary import CHAMPION, CHALLENGER
+#
+#   @task
+#   def comparer() -> bool:
+#       # taux_5xx() interroge Prometheus sur les vraies metriques BentoML,
+#       # filtrees par version, sur une fenetre posterieure a l'observation.
+#       candidat = taux_5xx(CHALLENGER)
+#       champion = taux_5xx(CHAMPION)
+#       # le candidat tient s'il ne degrade pas le taux d'erreur de plus de 20%
+#       return candidat <= max(champion * 1.2, 0.01)
+#
+#   @task.branch
+#   def decider(candidat_ok: bool) -> str:
+#       # promouvoir  -> declenche la logique du DAG 05 (candidat a 100%)
+#       # marche_arriere -> declenche la logique du DAG 06 (champion a 100%)
+#       return "promouvoir" if candidat_ok else "marche_arriere"
+#
+#   observer = TimeDeltaSensor(task_id="observer", delta=timedelta(minutes=20))
+#   verdict = comparer()
+#   regler_trafic_canari() >> observer >> verdict
+#   decider(verdict) >> [promouvoir(), marche_arriere()]
+# ===========================================================================

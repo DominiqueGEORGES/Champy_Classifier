@@ -31,7 +31,8 @@ ENTRAINEMENT_CMD = (
     "Set-Location 'D:\\projets\\DataScientest\\Champy_Classifier'; "
     "$env:MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING='true'; "
     "git pull; if ($LASTEXITCODE -ne 0) { throw 'echec git pull' }; "
-    ".\\.venv\\Scripts\\invoke.exe {{ params.training_command }}"
+    ".\\.venv\\Scripts\\invoke.exe {{ (dag_run.conf or {}).get('training_command', params.training_command) }}"
+    # ".\\.venv\\Scripts\\invoke.exe {{ params.training_command }}"
 )
 
 DEPLOIEMENT_CMD = (
@@ -45,6 +46,7 @@ with DAG(
     dag_display_name="02_champy_reentrainement",
     description="Boucle MLOps Champy : entrainement (XPS2) puis deploiement (NUC3), par SSH.",
     schedule=None,
+    max_active_runs=1,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["champy", "mlops"],

@@ -132,7 +132,6 @@ st.header("2. Dashboards Grafana")
 DASHBOARDS = [
     ("Performance API", "champy-api-performance"),
     ("Prédictions", "champy-predictions"),
-    ("Santé système", "champy-system-health"),
     ("Ressources containers", "champy-containers"),
     ("Hôte serveur", "champy-host"),
     ("Impact écologique", "champy-eco-impact"),

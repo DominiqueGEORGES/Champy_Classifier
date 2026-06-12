@@ -77,7 +77,6 @@ flowchart TB
         direction TB
         CF["Cloudflare<br/>Tunnel + Access<br/>(TLS public, OTP email)"]
         NGINX["nginx<br/>reverse proxy + rate limit<br/>répartition pondérée 90/10"]
-        CF --> NGINX
     end
     subgraph PROD["🖥️ Production NUC3 (Docker Compose)"]
         direction TB
@@ -100,39 +99,52 @@ flowchart TB
         ALERTM["Alertmanager<br/>:9093"]
         ADAPT["Adapter Discord<br/>:9094"]
         DISCORD["Discord webhook<br/>#champy-alerts"]
-        ALERTM --> ADAPT --> DISCORD
     end
     subgraph DEV["💻 Dev (XPS 9520)"]
         direction TB
         TR["PyTorch<br/>ConvNeXt-Tiny"]
         EXP["Export ONNX"]
-        TR --> EXP
     end
     subgraph TARGET["🔒 Cible full self-host (à venir)"]
         direction TB
         LE["Let's Encrypt<br/>TLS auto"]
         SSO["SSO / annuaire AD<br/>fournisseur d'identité"]
         AUTH["oauth2-proxy<br/>vérifie l'identité"]
-        SSO --> AUTH
     end
-    EXP -->|"dvc push"| STORE
-    STORE -->|"dvc pull"| API
+    subgraph SCALE["☸️ Cible scalabilité (à venir)"]
+        direction TB
+        K8S["Kubernetes<br/>réplication horizontale<br/>API stateless · HPA"]
+    end
+
+    %% Flux nord-sud (trafic client via NGINX) : index 0 a 7
     INTERNET --> CF
+    CF --> NGINX
+    DEMO -->|"/api/predict"| NGINX
     NGINX -->|"90%"| API
     NGINX -.->|"10% canari"| APIC
     NGINX -->|"redirige"| DEMO
     NGINX -->|"redirige"| OBS
     NGINX -->|"redirige"| AIRFLOW
-    DEMO -->|"HTTP /predict"| API
+
+    %% Flux est-ouest (interne service a service) : style neutre
+    EXP -->|"dvc push"| STORE
+    STORE -->|"dvc pull"| API
     API -->|"log"| STORE
     API -->|"/metrics"| OBS
     AIRFLOW -->|"drift Evidently"| STORE
-    AIRFLOW -.->|"réentraînement par SSH"| TR
     OBS -->|"alertes"| ALERTM
+    ALERTM --> ADAPT
+    ADAPT --> DISCORD
+    TR --> EXP
+    MLFLOW -->|"modèle Staging → ONNX"| API
+    AIRFLOW -.->|"réentraînement par SSH"| TR
+    TR -.->|"runs + modèle"| MLFLOW
+
+    %% Cibles futures (pointilles)
+    SSO -.-> AUTH
     LE -.-> NGINX
     AUTH -.-> NGINX
-    TR -.->|"runs + modèle"| MLFLOW
-    MLFLOW -->|"modèle Staging → ONNX"| API
+    K8S -.->|"réplicable (stateless)"| API
 
     classDef devNode fill:#e8f4f8,stroke:#0288d1,stroke-width:2px,color:#01579b
     classDef prodNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,color:#1b5e20
@@ -140,14 +152,20 @@ flowchart TB
     classDef alertNode fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f
     classDef expoNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,color:#311b92
     classDef expoFutureNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,stroke-dasharray:5 5,color:#311b92
+    classDef scaleFutureNode fill:#e0f2f1,stroke:#00897b,stroke-width:2px,stroke-dasharray:5 5,color:#004d40
     classDef netNode fill:#fff,stroke:#555,stroke-width:2px,color:#000
     class TR,EXP devNode
     class API,DEMO,AIRFLOW,OBS,STORE,MLFLOW prodNode
     class APIC canaryNode
     class ALERTM,ADAPT,DISCORD alertNode
     class CF,NGINX expoNode
-    class LE,AUTH expoFutureNode
+    class LE,SSO,AUTH expoFutureNode
+    class K8S scaleFutureNode
     class INTERNET netNode
+
+    %% Coloration des flux nord-sud (violet = passe par NGINX)
+    linkStyle 0,1,2,3,5,6,7 stroke:#e65100 ,stroke-width:2.5px
+    linkStyle 4 stroke:#e65100 ,stroke-width:2.5px,stroke-dasharray:5 5
 """
 
 _MERMAID_HTML = f"""
