@@ -91,6 +91,15 @@
       .zone-bg { fill: none; stroke-width: 1; stroke-dasharray: 4 3; rx: 12; ry: 12; }
       .zone-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 
+      /* Briques CIBLE (non deployees) : pointilles violets, fond clair.
+         Distinction visuelle nette avec les modules en place (trait plein). */
+      .module-cible { fill: #f7f5fb; stroke: #5e35b1; stroke-width: 1.6; stroke-dasharray: 6 4; rx: 8; ry: 8; }
+      .module-cible-label { fill: #5e35b1; font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+      .module-cible-sub { fill: #8a7fb0; font-size: 10px; text-anchor: middle; }
+      .cluster-box { fill: none; stroke: #5e35b1; stroke-width: 1.6; stroke-dasharray: 2 4; rx: 10; ry: 10; }
+      .cluster-label { fill: #5e35b1; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+      .arrow-cible { fill: none; stroke: #5e35b1; stroke-width: 2; stroke-dasharray: 6 4; }
+
       /* Texte du bandeau de scene */
       .scene-title { font-size: 24px; font-weight: 800; fill: #1F4E3D; text-anchor: middle; }
       .scene-desc { font-size: 17px; font-weight: 600; fill: #333; text-anchor: middle; }
@@ -144,6 +153,14 @@
     Pipeline MLOps : entraînement, déploiement, inference, monitoring, drift, alerting
   </text>
 
+  <!-- Legende : trait plein = en place, pointille = cible non deployee -->
+  <g>
+    <rect x="888" y="22" width="16" height="11" fill="#f0efe9" stroke="#b8b8b0" stroke-width="1.5" rx="2" />
+    <text x="910" y="31" font-size="11" fill="#666">en place</text>
+    <rect x="978" y="22" width="16" height="11" fill="#f7f5fb" stroke="#5e35b1" stroke-width="1.5" stroke-dasharray="3 2" rx="2" />
+    <text x="1000" y="31" font-size="11" fill="#5e35b1">cible (réfléchie, non déployée)</text>
+  </g>
+
   <!-- ============================================================ -->
   <!-- Zones (decor) -->
   <!-- ============================================================ -->
@@ -161,8 +178,8 @@
   <text x="600" y="420" class="zone-label" fill="#c2185b">Alerting</text>
 
   <g class="anim-mod-s7">
-    <rect class="zone-bg" x="20" y="400" width="540" height="120" stroke="#5e35b1" />
-    <text x="40" y="420" class="zone-label" fill="#5e35b1">Exposition prod entreprise (cible)</text>
+    <rect class="zone-bg" x="20" y="386" width="548" height="202" stroke="#5e35b1" />
+    <text x="40" y="404" class="zone-label" fill="#5e35b1">Cible production entreprise (non déployée)</text>
   </g>
 
   <!-- Marker definitions pour les fleches -->
@@ -175,6 +192,9 @@
     </marker>
     <marker id="arrow-flow-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#B85C00" />
+    </marker>
+    <marker id="arrow-cible" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e35b1" />
     </marker>
   </defs>
 
@@ -195,7 +215,11 @@
   <!-- Inference path: Client → Internet → Cloudflare → Streamlit ← API -->
   <path d="M 76 290 L 128 290" class="arrow" marker-end="url(#arrow-grey)" />
   <path d="M 192 290 L 290 290" class="arrow" marker-end="url(#arrow-grey)" />
-  <path d="M 490 290 C 600 290, 700 200, 780 165" class="arrow" marker-end="url(#arrow-grey)" />
+  <!-- Cloudflare -> nginx (reverse-proxy) -> services (Streamlit, API, Grafana) -->
+  <path d="M 490 290 C 530 300, 560 316, 586 324" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 712 322 C 770 292, 822 215, 848 178" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 600 305 C 562 240, 580 175, 606 153" class="arrow" marker-end="url(#arrow-grey)" />
+  <path d="M 712 340 C 850 332, 948 300, 966 280" class="arrow" marker-end="url(#arrow-grey)" stroke-dasharray="3 3" />
   <path d="M 780 145 L 750 145" class="arrow" marker-end="url(#arrow-grey)" />
 
   <!-- API → SQLite + Prometheus → Grafana -->
@@ -346,26 +370,58 @@
     <text x="390" y="303" class="module-sub" fill="#6b6b65">+ Accèss (OTP email)</text>
   </g>
 
+  <!-- nginx reverse-proxy : point d'entree REEL de la prod, route tout le trafic.
+       Trait plein (deploye), highlight pendant la scene 3 (exposition / inference). -->
+  <g class="hi-s3">
+    <rect class="module" x="588" y="305" width="124" height="54" />
+    <text x="650" y="325" class="module-label">nginx</text>
+    <text x="650" y="341" class="module-sub" fill="#6b6b65">reverse-proxy</text>
+    <text x="650" y="353" class="module-sub" fill="#6b6b65">:80 / :443</text>
+  </g>
+
   <!-- ============================================================ -->
   <!-- Modules : Cible prod entreprise (scene 7 uniquement) -->
   <!-- ============================================================ -->
 
+  <!-- Rangee CI/CD cible : GitLab -> Harbor, cert-manager pour le TLS -->
   <g class="anim-mod-s7">
-    <rect class="module" x="40" y="450" width="150" height="50" />
-    <text x="115" y="470" class="module-label" fill="#5e35b1">nginx</text>
-    <text x="115" y="486" class="module-sub">reverse-proxy</text>
+    <rect class="module-cible" x="32" y="414" width="118" height="40" />
+    <text x="91" y="432" class="module-cible-label">GitLab</text>
+    <text x="91" y="446" class="module-cible-sub">SCM + CI/CD</text>
   </g>
 
   <g class="anim-mod-s7">
-    <rect class="module" x="210" y="450" width="150" height="50" />
-    <text x="285" y="470" class="module-label" fill="#5e35b1">Let's Encrypt</text>
-    <text x="285" y="486" class="module-sub">SSL auto</text>
+    <rect class="module-cible" x="166" y="414" width="112" height="40" />
+    <text x="222" y="432" class="module-cible-label">Harbor</text>
+    <text x="222" y="446" class="module-cible-sub">registry images</text>
   </g>
 
   <g class="anim-mod-s7">
-    <rect class="module" x="380" y="450" width="160" height="50" />
-    <text x="460" y="470" class="module-label" fill="#5e35b1">oauth2-proxy</text>
-    <text x="460" y="486" class="module-sub">SSO LDAP / OIDC</text>
+    <rect class="module-cible" x="294" y="414" width="130" height="40" />
+    <text x="359" y="432" class="module-cible-label">cert-manager</text>
+    <text x="359" y="446" class="module-cible-sub">TLS Let's Encrypt</text>
+  </g>
+
+  <!-- Cluster Kubernetes cible : Ingress nginx + oauth2-proxy SSO + pods -->
+  <g class="anim-mod-s7">
+    <rect class="cluster-box" x="32" y="466" width="520" height="112" />
+    <text x="360" y="482" class="cluster-label">KUBERNETES</text>
+
+    <rect class="module-cible" x="42" y="494" width="108" height="42" />
+    <text x="96" y="512" class="module-cible-label">Ingress nginx</text>
+    <text x="96" y="526" class="module-cible-sub">reverse-proxy</text>
+
+    <rect class="module-cible" x="166" y="494" width="116" height="42" />
+    <text x="224" y="512" class="module-cible-label">oauth2-proxy</text>
+    <text x="224" y="526" class="module-cible-sub">SSO OIDC / LDAP</text>
+
+    <rect class="module-cible" x="298" y="494" width="104" height="42" />
+    <text x="350" y="512" class="module-cible-label">pod API</text>
+    <text x="350" y="526" class="module-cible-sub">BentoML</text>
+
+    <rect class="module-cible" x="418" y="494" width="120" height="42" />
+    <text x="478" y="512" class="module-cible-label">pod Streamlit</text>
+    <text x="478" y="526" class="module-cible-sub">demo</text>
   </g>
 
   <!-- ============================================================ -->
@@ -417,7 +473,8 @@
   <g class="anim-flow-s3">
     <path d="M 82 290 L 128 290" class="arrow-flow-human" marker-end="url(#arrow-flow-human)" />
     <path d="M 192 290 L 290 290" class="arrow-flow" marker-end="url(#arrow-flow)" />
-    <path d="M 490 290 C 600 290, 700 200, 780 165" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 490 290 C 530 300, 560 316, 586 324" class="arrow-flow" marker-end="url(#arrow-flow)" />
+    <path d="M 712 322 C 770 292, 822 215, 848 178" class="arrow-flow" marker-end="url(#arrow-flow)" />
     <path d="M 780 145 L 750 145" class="arrow-flow" marker-end="url(#arrow-flow)" />
   </g>
 
@@ -441,11 +498,20 @@
     <path d="M 1140 482 L 1130 495" class="arrow-flow-human" marker-end="url(#arrow-flow-human)" />
   </g>
 
-  <!-- Scene 7 : Internet → nginx → API (alternative au tunnel) -->
+  <!-- Scene 7 : flux de l'archi CIBLE (pointilles violets, non actifs) -->
   <g class="anim-flow-s7">
-    <path d="M 130 322 C 150 380, 130 430, 115 448" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
-    <path d="M 190 475 L 210 475" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
-    <path d="M 540 475 C 580 475, 620 350, 680 250" class="arrow-flow" marker-end="url(#arrow-flow)" stroke="#5e35b1" />
+    <!-- Trafic externe -> Ingress nginx -->
+    <path d="M 150 318 C 116 400, 92 472, 94 492" class="arrow-cible" marker-end="url(#arrow-cible)" />
+    <!-- cert-manager fournit le TLS a l'Ingress -->
+    <path d="M 332 454 C 190 470, 108 482, 100 492" class="arrow-cible" marker-end="url(#arrow-cible)" />
+    <!-- Ingress -> oauth2-proxy (SSO) -->
+    <path d="M 150 515 L 163 515" class="arrow-cible" marker-end="url(#arrow-cible)" />
+    <!-- oauth2-proxy -> pod API -->
+    <path d="M 282 515 L 295 515" class="arrow-cible" marker-end="url(#arrow-cible)" />
+    <!-- Pipeline : GitLab -> Harbor -->
+    <path d="M 150 434 L 163 434" class="arrow-cible" marker-end="url(#arrow-cible)" />
+    <!-- Harbor -> deploiement des pods dans le cluster -->
+    <path d="M 240 454 C 290 466, 326 480, 346 492" class="arrow-cible" marker-end="url(#arrow-cible)" />
   </g>
 
   <!-- ============================================================ -->
@@ -481,10 +547,10 @@
   <g class="anim-text-s3">
     <text x="600" y="638" class="scene-title">Scène 3/7 — Inférence live</text>
     <text x="600" y="665" class="scene-desc">
-      Le Client uploade une photo sur Streamlit via Internet et Cloudflare Tunnel (auth OTP par email).
+      Le Client passe par Internet et Cloudflare Tunnel ; nginx, reverse-proxy en façade, route la requête vers Streamlit.
     </text>
     <text x="600" y="690" class="scene-desc">
-      Streamlit appelle l'API BentoML qui renvoie la prédiction top-5 en moins de 100 ms.
+      Streamlit appelle l'API BentoML, qui renvoie la prédiction top-5 en moins de 100 ms.
     </text>
   </g>
 
@@ -519,12 +585,12 @@
   </g>
 
   <g class="anim-text-s7">
-    <text x="600" y="638" class="scene-title">Scène 7/7 — Cible production entreprise</text>
+    <text x="600" y="638" class="scene-title">Scène 7/7 — Cible production entreprise (non déployée)</text>
     <text x="600" y="665" class="scene-desc">
-      En production entreprise, Cloudflare Tunnel serait remplacé par nginx (reverse-proxy + rate limiting),
+      Pensé hors périmètre du TFE : GitLab CI/CD livre les images dans Harbor, Kubernetes orchestre les pods.
     </text>
     <text x="600" y="690" class="scene-desc">
-      Let's Encrypt pour le SSL, oauth2-proxy pour l'auth SSO LDAP/OIDC. Code applicatif inchangé.
+      Ingress nginx + cert-manager (TLS) en façade, oauth2-proxy en SSO OIDC. Pointillés = pensé, non déployé.
     </text>
   </g>
 
@@ -614,9 +680,8 @@
 
 
       function userJump(n) {
-        // Action utilisateur : changement de scene + reset visuel + arret auto
+        // Action utilisateur : changement de scene + arret de l'auto-defilement
         applyScene(n);
-        resetProgressRing();
         stopAuto();
       }
 

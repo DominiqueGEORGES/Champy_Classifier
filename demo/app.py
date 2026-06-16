@@ -479,8 +479,17 @@ if SVG_PIPELINE_PATH.exists():
 </script>
 """
 
-components.html(ui.replace("__SVG__", svg_content), height=740, scrolling=False)
+# components.html(ui.replace("__SVG__", svg_content), height=900, scrolling=False)
+W = 1100
+H = round(W * 720 / 1200)  # 660
 
+html = f"""
+<div style="width:{W}px;max-width:100%;margin:0 auto;">
+  <style>#champy-svg-root{{width:100%;height:auto;display:block;}}</style>
+  {svg_content}
+</div>
+"""
+components.html(html, height=H + 12, scrolling=False)
 
 # =====================================================================
 # Section 5 : Les trois personae adresses

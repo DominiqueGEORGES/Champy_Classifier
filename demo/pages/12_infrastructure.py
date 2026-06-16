@@ -69,64 +69,77 @@ st.markdown(
     "scénarios d'exposition (démo Cloudflare actuel vs cible prod "
     "entreprise nginx)."
 )
-
 MERMAID_DIAGRAM = """
 flowchart TB
     INTERNET((Internet))
-    subgraph EXPO["🌐 Exposition (en production)"]
+
+    subgraph EXPO["Exposition actuelle"]
         direction TB
         CF["Cloudflare<br/>Tunnel + Access<br/>(TLS public, OTP email)"]
-        NGINX["nginx<br/>reverse proxy + rate limit<br/>répartition pondérée 90/10"]
+        NGINX["nginx<br/>reverse proxy + rate limit<br/>canari 90/10"]
     end
-    subgraph PROD["🖥️ Production NUC3 (Docker Compose)"]
+
+    subgraph PROD["Production NUC3 - Docker Compose"]
         direction TB
-        subgraph SERVING["Serving & données"]
+
+        subgraph SERVING["Serving & donnees"]
             direction LR
-            API["API BentoML v1<br/>+ ONNX · :8000<br/>modèle actuel · 90%"]
+            API["API BentoML v1<br/>ONNX · :8000<br/>stable · 90%"]
             APIC["API BentoML v2<br/>canari · 10%"]
-            STORE[("Stockage<br/>MinIO :9010<br/>SQLite predictions.db")]
+            STORE[("Stockage<br/>MinIO :9010<br/>SQLite predictions.db<br/>(MVP local)")]
         end
+
         subgraph PILOTAGE["Pilotage & interfaces"]
             direction LR
-            DEMO["Streamlit<br/>:8501"]
-            AIRFLOW["Airflow<br/>:8081"]
-            OBS["Observabilité<br/>Prometheus :9090<br/>+ Grafana :3000"]
+            DEMO["Streamlit<br/>:8501<br/>demo / interface data"]
+            STREAMRULES["Granularite Streamlit<br/>1. acces par groupe via proxy<br/>2. droits codes dans l'app"]
+            AIRFLOW["Airflow<br/>:8081<br/>RBAC interne"]
+            OBS["Observabilite<br/>Prometheus :9090<br/>Grafana :3000"]
             MLFLOW["MLflow<br/>tracking + registre<br/>:5050"]
         end
     end
-    subgraph ALERTS["🔔 Alerting"]
+
+    subgraph ALERTS["Alerting"]
         direction TB
         ALERTM["Alertmanager<br/>:9093"]
         ADAPT["Adapter Discord<br/>:9094"]
         DISCORD["Discord webhook<br/>#champy-alerts"]
     end
-    subgraph DEV["💻 Dev (XPS 9520)"]
+
+    subgraph DEV["Dev - XPS 9520"]
         direction TB
         TR["PyTorch<br/>ConvNeXt-Tiny"]
         EXP["Export ONNX"]
     end
-    subgraph TARGET["🔒 Cible full self-host (à venir)"]
+
+    subgraph TARGET["Cible securite entreprise - a venir"]
         direction TB
-        LE["Let's Encrypt<br/>TLS auto"]
-        SSO["SSO / annuaire AD<br/>fournisseur d'identité"]
-        AUTH["oauth2-proxy<br/>vérifie l'identité"]
-    end
-    subgraph SCALE["☸️ Cible scalabilité (à venir)"]
-        direction TB
-        K8S["Kubernetes<br/>réplication horizontale<br/>API stateless · HPA"]
+        TLS["TLS<br/>CA interne<br/>ou certificat local"]
+        IDP["Keycloak / AD<br/>SSO OIDC<br/>users + groupes"]
+        AUTH["oauth2-proxy<br/>auth_request<br/>X-User / X-Groups"]
     end
 
-    %% Flux nord-sud (trafic client via NGINX) : index 0 a 7
+    subgraph SCALE["Cible scalabilite - a venir"]
+        direction TB
+        K8S["Kubernetes<br/>HPA<br/>API stateless"]
+        DB["Stockage persistant INTERNE<br/>PostgreSQL / MinIO on-prem<br/>(hors pod, pas externe)"]
+    end
+
+    %% Flux nord-sud
     INTERNET --> CF
     CF --> NGINX
     DEMO -->|"/api/predict"| NGINX
-    NGINX -->|"90%"| API
+    NGINX -->|"90% stable"| API
     NGINX -.->|"10% canari"| APIC
-    NGINX -->|"redirige"| DEMO
-    NGINX -->|"redirige"| OBS
-    NGINX -->|"redirige"| AIRFLOW
+    NGINX -->|"reverse proxy"| DEMO
+    NGINX -->|"reverse proxy"| OBS
+    NGINX -->|"reverse proxy"| AIRFLOW
+    NGINX -->|"reverse proxy"| MLFLOW
 
-    %% Flux est-ouest (interne service a service) : style neutre
+    %% Streamlit : pas de RBAC fin natif
+    DEMO -.->|"droits fins"| STREAMRULES
+
+    %% Flux internes
     EXP -->|"dvc push"| STORE
     STORE -->|"dvc pull"| API
     API -->|"log"| STORE
@@ -136,81 +149,93 @@ flowchart TB
     ALERTM --> ADAPT
     ADAPT --> DISCORD
     TR --> EXP
-    MLFLOW -->|"modèle Staging → ONNX"| API
-    AIRFLOW -.->|"réentraînement par SSH"| TR
-    TR -.->|"runs + modèle"| MLFLOW
+    MLFLOW -->|"modele Staging -> ONNX"| API
+    AIRFLOW -.->|"reentrainement SSH"| TR
+    TR -.->|"runs + modele"| MLFLOW
 
-    %% Cibles futures (pointilles)
-    SSO -.-> AUTH
-    LE -.-> NGINX
+    %% Cibles futures
+    IDP -.-> AUTH
     AUTH -.-> NGINX
-    K8S -.->|"réplicable (stateless)"| API
+    TLS -.-> NGINX
+    K8S -.->|"pods API"| API
+    API -.->|"etat hors pod<br/>mais en interne"| DB
 
     classDef devNode fill:#e8f4f8,stroke:#0288d1,stroke-width:2px,color:#01579b
     classDef prodNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,color:#1b5e20
     classDef canaryNode fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,stroke-dasharray:5 5,color:#1b5e20
     classDef alertNode fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f
     classDef expoNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,color:#311b92
-    classDef expoFutureNode fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,stroke-dasharray:5 5,color:#311b92
+    classDef futureNode fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,stroke-dasharray:5 5,color:#e65100
     classDef scaleFutureNode fill:#e0f2f1,stroke:#00897b,stroke-width:2px,stroke-dasharray:5 5,color:#004d40
     classDef netNode fill:#fff,stroke:#555,stroke-width:2px,color:#000
+
     class TR,EXP devNode
-    class API,DEMO,AIRFLOW,OBS,STORE,MLFLOW prodNode
+    class API,DEMO,AIRFLOW,OBS,STORE,MLFLOW,STREAMRULES prodNode
     class APIC canaryNode
     class ALERTM,ADAPT,DISCORD alertNode
     class CF,NGINX expoNode
-    class LE,SSO,AUTH expoFutureNode
-    class K8S scaleFutureNode
+    class TLS,IDP,AUTH futureNode
+    class K8S,DB scaleFutureNode
     class INTERNET netNode
 
-    %% Coloration des flux nord-sud (violet = passe par NGINX)
-    linkStyle 0,1,2,3,5,6,7 stroke:#e65100 ,stroke-width:2.5px
-    linkStyle 4 stroke:#e65100 ,stroke-width:2.5px,stroke-dasharray:5 5
+
 """
 
-_MERMAID_HTML = f"""
+_MERMAID_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
   <style>
-    body {{
-      margin: 0;
-      padding: 8px;
-      background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }}
-    .mermaid {{
-      display: flex;
-      justify-content: center;
-    }}
+    <style>
+  body {
+    margin: 0;
+    padding: 8px;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .mermaid {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>
   </style>
 </head>
+
 <body>
-  <div class="mermaid">
-{MERMAID_DIAGRAM}
-  </div>
+  <pre class="mermaid">
+__MERMAID_DIAGRAM__
+  </pre>
+
   <script>
-    mermaid.initialize({{
+    mermaid.initialize({
       startOnLoad: true,
-      theme: 'default',
-      flowchart: {{
+      theme: "default",
+      flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
         curve: 'basis',
         nodeSpacing: 30,
         rankSpacing: 50
-      }},
-      themeVariables: {{
-        fontSize: '13px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
-      }}
-    }});
+        },
+      themeVariables: {
+        fontSize: "13px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+      }
+    });
   </script>
 </body>
 </html>
-"""
+""".replace("__MERMAID_DIAGRAM__", MERMAID_DIAGRAM)
 
 components.html(_MERMAID_HTML, height=920, scrolling=True)
 

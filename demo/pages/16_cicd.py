@@ -321,11 +321,24 @@ st.divider()
 st.header("Rapport de tests local")
 
 if PYTEST_HTML.exists():
-    rel_path = PYTEST_HTML.relative_to(REPO_ROOT)
-    mtime = datetime.fromtimestamp(PYTEST_HTML.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-    st.caption(f"Source : `{rel_path}` (genere le {mtime}). Regenerer avec `invoke test`.")
-    with PYTEST_HTML.open(encoding="utf-8") as f:
-        st.components.v1.html(f.read(), height=700, scrolling=True)
+    html = PYTEST_HTML.read_text(encoding="utf-8")
+    # Dans l'iframe (origine about:srcdoc), history.pushState leve une
+    # SecurityError qui stoppe le script construisant le tableau : cadre vide.
+    # On neutralise pushState/replaceState, et on force les liens a s'ouvrir
+    # hors de l'iframe (sinon le lien pypi du pied tente de charger dans le
+    # cadre, ce que pypi refuse).
+    patch = (
+        "<script>"
+        "history.pushState=function(){};history.replaceState=function(){};"
+        "document.addEventListener('click',function(e){"
+        "var a=e.target.closest&&e.target.closest('a');"
+        "if(a&&a.href&&a.href.lastIndexOf('about:srcdoc',0)!==0){"
+        "e.preventDefault();window.open(a.href,'_blank');}"
+        "},true);"
+        "</script>"
+    )
+    html = html.replace("<head>", "<head>" + patch, 1)
+    st.components.v1.html(html, height=800, scrolling=True)
 else:
     st.warning(
         f"Aucun rapport de tests local trouve a `{PYTEST_HTML.relative_to(REPO_ROOT)}`. "
