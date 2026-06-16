@@ -406,7 +406,7 @@ with col_drift:
 with col_arch:
     if is_logged_in:
         st.page_link(
-            "pages/13_analyse_modèles.py",
+            "pages/14_analyse_modèles.py",
             label=":mag: **Analyse modèles**",
             help="Comparaison ResNet vs ConvNeXt, choix architecturaux",
         )

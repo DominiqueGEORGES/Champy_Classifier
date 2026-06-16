@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 import requests
 from airflow import DAG
 from airflow.models import DagRun
-from airflow.operators.python import ShortCircuitOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils import timezone
 from airflow.utils.session import create_session
@@ -196,6 +196,16 @@ def _should_retrain() -> bool:
     return _is_degraded()
 
 
+def _alerter_reentrainement() -> None:
+    """Previent sur Discord qu'un reentrainement automatique vient d'etre declenche."""
+    from champy_canary import alerter_discord
+
+    alerter_discord(
+        f"Qualité dégradée : la confiance moyenne est passée sous {DEGRADED_THRESHOLD}. "
+        "Un réentraînement automatique a été déclenché."
+    )
+
+
 # =====================================================================
 # Definition du DAG
 # =====================================================================
@@ -222,4 +232,9 @@ with DAG(
         reset_dag_run=True,
     )
 
-    verifier_qualite >> declencher_reentrainement
+    notifier = PythonOperator(
+        task_id="notifier_discord",
+        python_callable=_alerter_reentrainement,
+    )
+
+    verifier_qualite >> declencher_reentrainement >> notifier
