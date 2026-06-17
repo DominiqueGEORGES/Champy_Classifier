@@ -66,6 +66,13 @@ filter = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Champy est une APPLICATION (stack Docker ~15 conteneurs), pas un package pip
+# distribuable. `package = false` indique a uv de ne jamais builder/installer le
+# projet lui-meme : `uv sync` n'installe que les dependances. Les images Docker
+# copient le code (`COPY src/`, WORKDIR /app) et n'executent aucun `pip install .`.
+[tool.uv]
+package = false
+
 # ---------- Ruff ----------
 [tool.ruff]
 target-version = "py311"
