@@ -24,9 +24,12 @@ dependencies = [
     "python-multipart>=0.0.9",
     "bentoml>=1.2,<2.0",
     "aiosqlite>=0.19",
+    # -- Explainability (Grad-CAM, utilise par le serving et la validation) --
+    "grad-cam>=1.5",
     # -- Demo --
     "streamlit>=1.35",
     "plotly>=5.20",
+    "bcrypt>=4.0",
     # -- Monitoring --
     "prometheus-client>=0.20",
     "evidently>=0.4",
@@ -61,7 +64,7 @@ filter = [
 
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.backends"
+build-backend = "hatchling.build"
 
 # ---------- Ruff ----------
 [tool.ruff]
@@ -111,7 +114,6 @@ module = [
     "cv2.*",
     "bentoml.*",
     "aiosqlite.*",
-    "prefect.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
@@ -137,8 +139,3 @@ ignore-nested-functions = false
 fail-under = 100
 exclude = ["tests", "notebooks", "demo/pages"]
 verbose = 1
-
-[tool.uv.dependencies.demo]
-torch = "^2.4.0"
-torchvision = "^0.19.0"
-grad-cam = "^1.5.0"
