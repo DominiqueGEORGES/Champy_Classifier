@@ -58,3 +58,8 @@ Makefile    text eol=lf
 *.joblib    binary
 *.h5        binary
 *.parquet   binary
+
+# === Statistiques de langage GitHub (Linguist) ===
+# Les notebooks sont de l'exploration, pas le coeur du projet (Python industrialise) :
+# on les retire du calcul des langages affiches sur la page du depot.
+*.ipynb     linguist-documentation
