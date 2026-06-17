@@ -1,12 +1,13 @@
 ---
 name: champy-mlops
 description: >
-  Skill MLOps pour le projet Champy Classifier (classification champignons, 30 espèces, 700K images).
+  Skill MLOps pour le projet Champy Classifier (classification champignons, 30 espèces,
+  ~647K images brutes, 19 138 retenues après curation).
   Environnement : Windows 11 Pro, PowerShell, Docker Desktop, pas de WSL.
-  Utiliser pour toute tâche liée à : entraînement PyTorch, pipeline DVC, tracking MLflow (DagsHub),
-  serving FastAPI, export ONNX, monitoring Prometheus/Grafana, drift detection Evidently,
-  Dockerisation des services, CI/CD GitHub Actions, demo Streamlit.
-  Aussi utiliser quand le user mentionne : mushroom, champignon, ResNet, training, inference,
+  Utiliser pour toute tâche liée à : entraînement PyTorch, pipeline DVC, tracking MLflow,
+  serving BentoML et FastAPI, export ONNX, monitoring Prometheus/Grafana, drift detection Evidently,
+  orchestration Airflow, Dockerisation des services, CI/CD GitHub Actions, demo Streamlit.
+  Aussi utiliser quand le user mentionne : mushroom, champignon, ConvNeXt, ResNet, training, inference,
   model registry, data pipeline, batch size, VRAM, mixed precision, GradCAM.
 ---
 
@@ -32,13 +33,14 @@ Ce logbook sert au mémoire de Master. La qualité de la documentation compte au
 
 ## Contexte projet
 
-- Classification 30 espèces de champignons, ~700K images
-- Modèle : ResNet50 fine-tuned (transfer learning ImageNet)
+- Classification 30 espèces de champignons, ~647K images brutes, 19 138 retenues après curation
+- Modèle de production : ConvNeXt-Tiny fine-tuned (transfer learning ImageNet), 90% test acc / 81% F1 macro ; ResNet50 conservé en baseline
+- Serving : BentoML (production) + FastAPI (POC initial conservé pour comparaison), inference ONNX
 - **Environnement : Windows 11 Pro, PowerShell, Docker Desktop (pas de WSL)**
 - Contrainte GPU : RTX 3050 Ti (4GB VRAM) sur XPS, training natif Windows (pas Docker GPU)
 - Hub MLOps : NUC3 (Ryzen AI 9, 96GB RAM, CPU only, Docker Desktop) - serving, monitoring, dev
-- Remote DVC + MLflow : DagsHub (LoicFocraud/Champy_Classifier)
-- Tout est dockerisé (sauf le training qui tourne nativement sur XPS)
+- MLflow auto-hébergé dans le compose (+ MinIO) ; historique DagsHub côté développement (remote DVC privé retiré pour le public)
+- Tout est dockerisé (sauf le training qui tourne nativement sur XPS) ; orchestration via Airflow
 
 ## Contraintes Windows - Rappels
 
@@ -141,11 +143,11 @@ scaler.update()
 ```python
 import mlflow
 
-mlflow.set_tracking_uri("https://dagshub.com/LoicFocraud/Champy_Classifier.mlflow")
+mlflow.set_tracking_uri(settings.mlflow_tracking_uri)  # local (compose) ou DagsHub selon .env
 
-with mlflow.start_run(run_name="resnet50_v2"):
+with mlflow.start_run(run_name=f"{config.model_name}_2phase_{seed}"):
     mlflow.log_params({
-        "model": "resnet50",
+        "model": "convnext_tiny",
         "lr": lr,
         "batch_size": batch_size,
         "epochs": max_epochs,
@@ -159,7 +161,13 @@ with mlflow.start_run(run_name="resnet50_v2"):
     mlflow.pytorch.log_model(model, "model")
 ```
 
-### FastAPI serving pattern
+### Serving pattern (BentoML en prod, FastAPI en POC)
+
+En production, le serving est assuré par **BentoML** (`src/serving_bentoml/`, batching
+adaptatif, Model Store, voir les pièges BentoML 1.4 dans `PLAYBOOK.md`). L'exemple FastAPI
+ci-dessous (`src/serving/`) reste le POC de référence ; les deux exposent le même modèle ONNX.
+
+#### FastAPI serving pattern (POC)
 
 ```python
 from fastapi import FastAPI, UploadFile
@@ -327,7 +335,7 @@ def gradcam(model, image_tensor, target_class):
     features = {}
     def hook(module, input, output):
         features["last_conv"] = output
-    handle = model.layer4[-1].register_forward_hook(hook)
+    handle = model.features[-1].register_forward_hook(hook)  # ConvNeXt-Tiny (ResNet50 : model.layer4[-1])
 
     output = model(image_tensor)
     model.zero_grad()
@@ -346,12 +354,15 @@ def gradcam(model, image_tensor, target_class):
 ### Evidently drift report
 
 ```python
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, ClassificationPreset
+# API moderne Evidently 0.7+ (l'API legacy evidently.report.Report a casse en 0.7)
+from evidently import DataDefinition, Dataset, Report
+from evidently.presets import DataDriftPreset
 
-report = Report(metrics=[DataDriftPreset(), ClassificationPreset()])
-report.run(reference_data=ref_df, current_data=curr_df)
-report.save_html("drift_report.html")
+definition = DataDefinition(...)  # declarer colonnes categorielles / numeriques
+ref = Dataset.from_pandas(ref_df, data_definition=definition)
+cur = Dataset.from_pandas(curr_df, data_definition=definition)
+snapshot = Report([DataDriftPreset()]).run(ref, cur)  # .run() retourne un Snapshot
+snapshot.save_html("drift_report.html")  # save_html est sur le Snapshot, pas le Report
 ```
 
 ## Checklist de livraison MLOps
@@ -362,8 +373,8 @@ report.save_html("drift_report.html")
 - [ ] Export ONNX validé
 - [ ] API FastAPI avec /predict, /health, /metrics
 - [ ] Tests unitaires + intégration (>80% coverage)
-- [ ] Streamlit portfolio 13 pages (zéro hardcoded, sources dynamiques)
-- [ ] Docker Compose (api + demo + prometheus + grafana)
+- [ ] Streamlit portfolio 18 pages (zéro hardcoded, sources dynamiques)
+- [ ] Docker Compose (13 conteneurs : nginx, demo, api BentoML, mlflow, minio, airflow+postgres, prometheus, grafana, alertmanager, exporters)
 - [ ] CI/CD GitHub Actions (lint + test + build)
 - [ ] Monitoring (latence, throughput, distribution classes)
 - [ ] Drift detection (Evidently)

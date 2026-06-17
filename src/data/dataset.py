@@ -1,7 +1,7 @@
 """Dataset PyTorch pour la classification de champignons.
 
 Lit le manifest CSV produit par data/data_split.py et charge les images
-depuis data/processed/. Les transforms sont configurables selon le split
+depuis data/raw/Mushrooms_images/. Les transforms sont configurables selon le split
 (augmentation pour train, simple resize+crop pour val/test).
 """
 
@@ -143,7 +143,7 @@ def build_label_map(labels: list[str]) -> dict[str, int]:
 class MushroomDataset(Dataset):  # type: ignore[misc]
     """Dataset PyTorch pour les images de champignons.
 
-    Charge les images depuis data/processed/ en suivant le manifest CSV.
+    Charge les images depuis data/raw/Mushrooms_images/ en suivant le manifest CSV.
     Applique les transforms specifiees (augmentation ou evaluation).
 
     Attributes:
@@ -168,7 +168,7 @@ class MushroomDataset(Dataset):  # type: ignore[misc]
         Args:
             manifest_path: Chemin vers split_manifest.csv.
             split: Nom du split ('train', 'val', 'test').
-            data_dir: Repertoire contenant les images (data/processed/).
+            data_dir: Repertoire contenant les images (data/raw/Mushrooms_images/).
             transform: Transforms a appliquer. Si None, utilise les
                 transforms d'evaluation par defaut.
             label_map: Mapping classe->index. Si None, construit

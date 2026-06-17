@@ -29,7 +29,7 @@
 | 5 | CI/CD | Termine | 2026-03-30 / 04-24 | Pre-commit + GitHub Actions 5 jobs | **86 tests, CI vert sur dev-dominique** |
 | 6 | Serving (API + Registry) | En cours | 2026-03-30 / 05-08 | FastAPI + **BentoML 1.4 (migration Bloc 1-3)** | Latence p95 < 50 ms, parite 4/4 OK delta 1.21e-07 |
 | 7 | Docker et Monitoring | En cours | 2026-03-30 / 05-08 | Compose 4 services + **Grafana 3 dashboards** + Evidently | 86% Prometheus scrapes, 3 dashboards live |
-| 8 | Demo et Tests | En cours | 2026-03-28 / 05-08 | Streamlit 12 pages + **monitoring page complete (Bloc M4)** | 12/12 pages, alerting visuel sur seuils config |
+| 8 | Demo et Tests | En cours | 2026-03-28 / 05-08 | Streamlit 18 pages + **monitoring page complete (Bloc M4)** | 18/18 pages, alerting visuel sur seuils config |
 
 ### Etapes 1-3 - Donnees
 
@@ -103,7 +103,7 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 | M3 | Drift detection Evidently (baseline + rapport HTML) | Baseline 2872 imgs 89.9% acc, rapport 3.8 MB |
 | M4 | Page Streamlit monitoring 4 sections (live + iframe + alerting) | 3/3 alertes evaluees, resilient si Grafana down |
 
-### Etape 8 - Demo Streamlit (12 pages)
+### Etape 8 - Demo Streamlit (18 pages)
 
 | # | Page | Statut | Source |
 |---|------|--------|--------|
@@ -116,7 +116,7 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 | 11 | **Drift Evidently** | OK (Bloc M3) | Baseline + Evidently |
 | 12 | Infrastructure | A finaliser | Docker + GitHub API |
 
-**Principe `zero hardcoded`** respecte sur les 12 pages : aucune valeur (accuracy, RPS, seuils) ecrite en dur, tout lu depuis les sources (MLflow, Prometheus, SQLite, JSON, YAML).
+**Principe `zero hardcoded`** respecte sur les 18 pages : aucune valeur (accuracy, RPS, seuils) ecrite en dur, tout lu depuis les sources (MLflow, Prometheus, SQLite, JSON, YAML).
 
 ### Roadmap equipe (statut detaille)
 
@@ -1140,7 +1140,7 @@ Scrape via le network interne docker-compose : `targets: ["api:8000"]` (pas `hos
 ## Etape 8 - Demo et Tests - EN COURS
 
 **Date** : 2026-03-28 a 2026-04-24 (construction incrementale)
-**Objectif** : Portfolio Streamlit 12 pages (zero hardcoded, sources dynamiques) + suite de tests.
+**Objectif** : Portfolio Streamlit 18 pages (zero hardcoded, sources dynamiques) + suite de tests.
 
 ### Pages Streamlit implementees
 
@@ -1179,7 +1179,7 @@ Voir Etape 5 (CI/CD) pour le detail des 51 tests unitaires. En complement :
 
 ### Artefacts produits
 - `demo/app.py` - page d'accueil
-- `demo/pages/01_*.py` a `12_*.py` - 12 pages portfolio
+- `demo/pages/00_*.py` a `17_*.py` - 18 pages portfolio (00-12 initiales, 13-17 ajoutees ensuite : canari, analyse modeles, alertes, CI/CD, perspectives)
 - `demo/lib/{data_utils,mlflow_utils,api_utils,viz}.py` - helpers partages
 - `tests/unit/` - 51 tests couvrant dataset, dataloader, callbacks, evaluate, export_onnx, api
 - `tests/integration/` - squelette (a etoffer)

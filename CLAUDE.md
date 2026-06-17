@@ -2,11 +2,11 @@
 
 ## Projet
 
-Classification de champignons (30 espèces, ~700K images) dans le cadre d'un Master AI (DataScientest, RNCP niveau 7). L'objectif est de démontrer une maîtrise complète de la chaîne MLOps, pas juste du ML.
+Classification de champignons (30 espèces, ~647K images brutes, 19 138 retenues après curation) dans le cadre d'un Master AI (DataScientest, RNCP niveau 7). L'objectif est de démontrer une maîtrise complète de la chaîne MLOps, pas juste du ML.
 
-Repo : DagsHub `LoicFocraud/Champy_Classifier`
-DVC remote : DagsHub (S3-compatible)
-Tracking : MLflow (DagsHub intégré)
+Repo : DagsHub `LoicFocraud/Champy_Classifier` (développement)
+Data/modèle : versionnés par DVC (le remote privé est retiré pour la version publique - voir README)
+Tracking : MLflow auto-hébergé dans le compose (historique DagsHub côté développement)
 
 ## Environnement de développement
 
@@ -26,97 +26,61 @@ Conséquences :
 
 ```
 Champy_Classifier/
-├── CLAUDE.md                    # Ce fichier
+├── CLAUDE.md                    # Ce fichier (gouvernance Claude Code)
 ├── LOGBOOK.md                   # Cahier de bord MLOps (pour le mémoire)
 ├── PLAYBOOK.md                  # Référentiel MLOps réutilisable
-├── .claude/
-│   └── skills/
-│       └── champy-mlops/
-│           └── SKILL.md         # Patterns MLOps pour Claude Code
+├── README.md                    # Présentation publique
+├── ARCHITECTURE.md              # Architecture détaillée et choix techniques
+├── .claude/skills/champy-mlops/SKILL.md   # Patterns MLOps pour Claude Code
 ├── .env.example                 # Variables d'environnement (template)
-├── .env                         # Variables réelles (JAMAIS committé)
-├── .gitignore
-├── .gitattributes               # Line endings LF
-├── .dvc/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml               # Lint, tests, build images
-│       └── cd.yml               # Deploy (optionnel)
+├── .gitattributes (LF)  .gitignore  .pre-commit-config.yaml
+├── .dvc/                        # Pointeurs DVC (remote privé retiré pour le public)
+├── .github/workflows/ci.yml     # CI : lint, typecheck, docstrings, tests, build
 ├── data/
-│   ├── raw/                     # Géré par DVC (700K images)
-│   ├── processed/               # Splits train/val/test (DVC)
-│   └── data_split.py            # Script de split reproductible
+│   ├── raw/Mushrooms_images/    # Images brutes à plat (DVC, hors git)
+│   ├── sample/                  # Quelques images d'exemple (dans git)
+│   ├── runtime/                 # Base SQLite des prédictions (générée, hors git)
+│   ├── curate.py                # Curation reproductible (top30 + GBIF + dedup + conflits)
+│   ├── quality_filter.py        # Filtre qualité OpenCLIP (--apply)
+│   ├── data_split.py            # Split stratifié 70/15/15
+│   └── *.csv / *.json           # Manifestes et rapports (curated, split, quality, ...)
 ├── src/
-│   ├── __init__.py
 │   ├── config.py                # Pydantic Settings, chemins, hyperparams
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── dataset.py           # PyTorch Dataset + transforms
-│   │   └── dataloader.py        # DataLoader factory
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── resnet.py            # ResNet50 fine-tuning
-│   │   └── registry.py          # Model registry helpers (MLflow)
-│   ├── training/
-│   │   ├── __init__.py
-│   │   ├── train.py             # Boucle d'entraînement
-│   │   ├── evaluate.py          # Métriques, confusion matrix
-│   │   └── callbacks.py         # Early stopping, checkpointing
-│   ├── serving/
-│   │   ├── __init__.py
-│   │   ├── app.py               # FastAPI inference server
-│   │   ├── schemas.py           # Pydantic request/response models
-│   │   └── middleware.py        # Logging, metrics Prometheus
-│   └── monitoring/
-│       ├── __init__.py
-│       ├── drift.py             # Data/concept drift detection
-│       └── metrics.py           # Custom Prometheus metrics
+│   ├── data/{dataset,dataloader}.py        # Dataset PyTorch + DataLoader factory
+│   ├── models/{backbone,resnet,convnext,export_onnx}.py   # factory + backbones + export ONNX
+│   ├── training/{train,evaluate,callbacks}.py
+│   ├── serving/{app,schemas,middleware}.py        # API FastAPI (POC initial)
+│   └── serving_bentoml/{service,runner,preprocessing,schemas,storage}.py  # API BentoML (prod)
 ├── demo/
-│   ├── app.py                   # Streamlit - page d'accueil (vue pipeline)
-│   ├── lib/
-│   │   ├── data_utils.py        # Helpers : scan disque, stats images
-│   │   ├── mlflow_utils.py      # Helpers : search_runs, artifacts, registry
-│   │   ├── api_utils.py         # Helpers : appels FastAPI, Prometheus
-│   │   └── viz.py               # Helpers : plots Plotly/Matplotlib réutilisables
-│   ├── pages/
-│   │   ├── 01_données_brutes.py      # EDA, distribution classes, qualité
-│   │   ├── 02_nettoyage.py           # Avant/après, doublons, corruptions
-│   │   ├── 03_augmentation.py        # Exemples visuels des transforms
-│   │   ├── 04_split.py               # Stratification, stats par split
-│   │   ├── 05_entraînement.py        # Courbes live depuis MLflow
-│   │   ├── 06_évaluation.py          # Confusion matrix, F1, GradCAM
-│   │   ├── 07_model_registry.py      # Versions, staging/prod, ONNX benchmark
-│   │   ├── 08_prédiction.py          # Upload image, top-5, confiance live
-│   │   ├── 09_api.py                 # Swagger embed, latence, throughput
-│   │   ├── 10_monitoring.py          # Métriques Prometheus, Grafana embed
-│   │   ├── 11_drift.py               # Rapports Evidently on-demand
-│   │   └── 12_infrastructure.py      # Docker, CI/CD, architecture
+│   ├── app.py                   # Landing Streamlit (vue pipeline + auth)
+│   ├── auth.py                  # Authentification bcrypt + RBAC + rate-limiting
+│   ├── access_policy.yaml  users.yaml      # Matrice rôles/pages + comptes
+│   ├── lib/                     # Helpers : api_utils, data_utils, mlflow_utils, drift_utils, monitoring_utils
+│   ├── pages/00_*.py .. 17_*.py # 18 pages (00 Plateforme à 17 Perspectives)
 │   └── assets/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── conftest.py
-├── docker/
-│   ├── Dockerfile.train         # Image entraînement (GPU)
-│   ├── Dockerfile.api           # Image API inference
-│   ├── Dockerfile.demo          # Image Streamlit
-│   └── Dockerfile.monitoring    # Prometheus + Grafana (ou all-in-one)
-├── docker-compose.yml           # Orchestration complète (NUC3)
-├── docker-compose.dev.yml       # Override dev (volumes, ports debug)
-├── docker-compose.train.yml     # Compose training (XPS GPU)
+├── airflow/
+│   ├── Dockerfile  .env.airflow.template
+│   └── dags/                    # 01 train, 02 réentraînement, 03 déploiement progressif,
+│                                #   04 watchdog qualité, 05/06 bascule/rollback, champy_canary
+├── monitoring/                  # Monitoring applicatif (hors src/)
+│   ├── baseline_snapshot.py  run_drift_report.py  alert_generator.py
+│   └── docker_exporter/         # Exporter Prometheus de métriques par conteneur
+├── tests/{conftest.py, unit/test_*.py}
+├── docker/{Dockerfile.api, Dockerfile.demo}
+├── mlflow/Dockerfile            # Serveur MLflow auto-hébergé
 ├── configs/
-│   ├── prometheus.yml
-│   ├── grafana/
-│   │   └── dashboards/
-│   │       └── champy.json      # Dashboard pré-configuré
-│   └── training/
-│       └── default.yaml         # Hyperparams par défaut
-├── notebooks/
-│   └── eda.ipynb                # Exploration data (optionnel)
+│   ├── prometheus.yml  alertmanager.yml  alerts/  monitoring/
+│   ├── grafana/                 # Dashboards + provisioning datasource/dashboards
+│   ├── nginx/                   # Reverse-proxy (façade hôte :8088)
+│   └── training/{default,aggressive,convnext,test_cpu}.yaml
+├── notebooks/legacy/            # 5 notebooks DataScientest archivés (référence audit)
+├── scripts/                     # Utilitaires (export, deploy, seed_grafana, validation, ...)
+├── docker-compose.yml           # Orchestration complète (13 conteneurs)
+├── docker-compose.registry.yml  # Registre Docker privé optionnel (CD)
+├── bentofile.yaml               # Packaging du bento BentoML
 ├── tasks.py                     # Task runner (invoke, remplace Makefile)
-├── pyproject.toml               # Dependencies + config Ruff/Mypy
-├── requirements.txt             # Fallback pip
-└── README.md
+├── pyproject.toml  requirements.txt  uv.lock
+└── ...
 ```
 
 ## INVARIANTS -- NE JAMAIS VIOLER
@@ -140,10 +104,13 @@ Champy_Classifier/
 | Composant | Techno | Justification |
 |-----------|--------|---------------|
 | ML Framework | PyTorch + torchvision | Standard industrie, GPU support |
-| Modèle | ResNet50 (transfer learning) | Prouvé sur le projet (95.4% accuracy) |
-| Data versioning | DVC (DagsHub remote) | Déjà en place |
-| Experiment tracking | MLflow (DagsHub) | Intégré DagsHub, gratuit |
-| API serving | FastAPI | Async, Pydantic natif, OpenAPI auto |
+| Modèle | ConvNeXt-Tiny (transfer learning) | 90% test acc / 81% F1 macro ; ResNet50 en baseline |
+| Data versioning | DVC (remote privé retiré pour le public) | Déjà en place en développement |
+| Experiment tracking | MLflow (auto-hébergé + DagsHub) | Intégré, gratuit |
+| API serving | BentoML (prod) + FastAPI (POC) | Batching adaptatif, Model Store ; FastAPI conservé en comparaison |
+| Orchestration | Apache Airflow | Pipelines train / réentraînement / déploiement canari |
+| Artifact store | MinIO (S3 local) | Stockage auto-hébergé des artefacts MLflow |
+| Reverse proxy | nginx + Cloudflare Tunnel/Access | Façade unique :8088, SSO public |
 | Demo UI | Streamlit (multi-page) | Rapide, Python natif |
 | Monitoring | Prometheus + Grafana | Standard industrie |
 | Drift detection | Evidently AI | Rapports data/model drift |
@@ -161,19 +128,20 @@ Champy_Classifier/
 ### NUC3 - Hub MLOps (Windows 11 Pro, Ryzen AI 9, 96GB RAM, pas de GPU dédié)
 Rôle : héberge TOUT sauf l'entraînement GPU.
 - Développement principal (VS Code + Claude Code)
-- API FastAPI (inference ONNX sur CPU - largement suffisant pour du serving)
-- Streamlit demo
-- Prometheus + Grafana (via Docker Desktop)
-- MLflow (si instance locale, sinon DagsHub)
-- Docker Compose principal (`docker-compose.yml`)
+- API BentoML (+ FastAPI POC) : inference ONNX sur CPU - largement suffisant pour du serving
+- Streamlit demo (derrière nginx)
+- Prometheus + Grafana + Alertmanager (via Docker Desktop)
+- MLflow auto-hébergé + MinIO
+- Airflow (orchestration des pipelines)
+- Docker Compose principal (`docker-compose.yml`, 13 conteneurs)
 
 Le Ryzen AI 9 a un NPU (XDNA) mais celui-ci n'est PAS exploitable par PyTorch.
-L'inference ONNX sur CPU avec 96GB RAM est très performante pour du ResNet50 (< 50ms/image).
+L'inference ONNX sur CPU avec 96GB RAM est très performante pour du ConvNeXt-Tiny (< 50ms/image).
 
 ### XPS 15 9520 (x1 ou x2) - Training GPU
 Specs : i7-12700H, RTX 3050 Ti (4GB VRAM), Windows 11
 Rôle : entraînement uniquement.
-- Batch size max ~16-32 en mixed precision (fp16) pour ResNet50
+- Batch size max ~16-32 en mixed precision (fp16) pour ResNet50 / ConvNeXt-Tiny
 - Utiliser `torch.cuda.amp` systématiquement
 - Si 4GB VRAM insuffisant : gradient accumulation (accumulate_steps=2 ou 4)
 - Le training pousse les métriques vers MLflow (DagsHub) automatiquement
@@ -206,7 +174,7 @@ Le NUC3 PEUT entraîner sur CPU (96GB RAM = pas de contrainte mémoire), mais c'
 - Fine-tuning léger (quelques epochs)
 - Tests de pipeline complets
 
-Pour un run complet (700K images, 15-20 epochs), préférer le XPS avec GPU.
+Pour un run complet (19 138 images, 30-40 epochs), préférer le XPS avec GPU.
 
 ### Estimations de temps (un XPS, RTX 3050 Ti, batch=16, fp16)
 
@@ -327,7 +295,7 @@ MLflow register -> Stage (Staging/Production) -> Export ONNX -> Version tag
 
 ### 4. Serving Pipeline (sur NUC3, Docker Desktop)
 ```
-Load ONNX model -> FastAPI endpoints -> Prometheus metrics -> Health checks
+Load ONNX model -> BentoML endpoints (FastAPI en POC) -> Prometheus metrics -> Health checks
 ```
 Endpoints :
 - `POST /predict` : image -> top-5 prédictions avec scores
@@ -390,26 +358,27 @@ except Exception as e:
 
 ## Docker Compose - Services (NUC3, Docker Desktop)
 
-```yaml
-services:
-  api:           # FastAPI inference ONNX (port 8000)
-  demo:          # Streamlit (port 8501)
-  prometheus:    # Scraping metrics (port 9090)
-  grafana:       # Dashboards (port 3000)
+```text
+13 conteneurs (port hôte entre parenthèses, offset +10 sur l'hôte partagé) :
+  nginx              # Reverse-proxy, façade unique (8088)
+  demo               # Streamlit (8501)
+  api                # BentoML inference ONNX (8010)
+  mlflow             # MLflow auto-hébergé (5050)
+  minio              # Stockage S3 des artefacts (console 9011)
+  airflow + postgres # Orchestration des pipelines (8081)
+  prometheus (9090)  grafana (3010)  alertmanager
+  discord-relay  +  2 exporters (hôte, conteneurs)
 ```
 
-Sur XPS, le training peut se lancer :
-- **Nativement** (recommandé, accès direct au GPU CUDA) :
-  ```powershell
-  python -m src.training.train --config configs/training/default.yaml
-  ```
-- Via Docker (nécessite NVIDIA Container Toolkit pour Windows) :
-  ```powershell
-  docker compose -f docker-compose.train.yml run --rm --gpus all train
-  ```
+Le mapping complet des ports est dans `docker-compose.yml` (et résumé dans le README).
 
-Note : Docker GPU sur Windows nécessite Docker Desktop + WSL2 backend + NVIDIA drivers.
-Si pas de WSL2, le training se fait nativement sur le XPS (plus simple, même résultat).
+Sur XPS, le training se lance **nativement** (accès direct au GPU CUDA, pas de Docker GPU) :
+```powershell
+python -m src.training.train --config configs/training/convnext.yaml
+```
+
+Il peut aussi être orchestré par Airflow (DAG `01_champy_train_pipeline`). Pas d'image
+GPU dockerisée : sur Windows, le training natif est plus simple et donne le même résultat.
 
 ## Règles pour Claude Code
 
