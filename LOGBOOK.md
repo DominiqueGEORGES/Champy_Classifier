@@ -1576,3 +1576,48 @@ Le compose principal declarait onze services ; l'import a ajoute `docker_exporte
 - Regenerer le token DagsHub (colle en clair pendant la session de travail ; `.env` non suivi par git, donc pas de fuite depot, mais hygiene).
 - Confirmer le port hote de `node_exporter` dans le compose (suppose 9101 dans la doc).
 - Mettre a jour le recapitulatif visuel en tete de ce LOGBOOK (encore a 86 tests et 3 dashboards, contre 112 tests et 6 dashboards aujourd'hui).
+
+---
+
+## Passe de finalisation pre-publication - 2026-06-17
+
+**Date** : 2026-06-17
+**Objectif** : Figer le depot avant publication publique (portfolio). Corrections de
+reproductibilite, neutralisation du DVC prive, redaction des identifiants personnels,
+alignement de la doc de gouvernance sur le code reel, rangement des fichiers superflus.
+Base sur l'inventaire `docs/INVENTAIRE_PRE_PUBLIC.md`. Travail en worktree isole
+(branche `prepub-finalization`), un commit par poste, sans push (revue d'equipe ensuite).
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Niveau de retrait DVC | Retirer le remote prive `origin` (DagsHub de Loic), garder la structure DVC | Retrait complet de DVC ; tout laisser | Le `pull` public est de toute facon impossible (donnees non distribuees) ; garder `.dvc`/`data.dvc`/`models.dvc` documente l'usage de DVC sans exposer le stockage prive |
+| settings.local.json | Desindexer (`git rm --cached`) + gitignore | Le laisser suivi | Allowlist de permissions locale a la machine, sans valeur publique |
+| Fichiers obsoletes / one-off | Ranger en `attic/` (reversible) | Suppression seche | Garde la trace de reproductibilite ; la suppression definitive reste une decision humaine ulterieure |
+| home.py et helpers morts | attic, sans refactor des 18 pages | Brancher `_path_setup` dans les pages | Risque sur 18 pages non justifie pour une passe de gel ; verifie qu'aucun Dockerfile/compose ne lance home.py |
+| Notebooks legacy lourds | Purger les sorties embarquees (`nbconvert --clear-output`) | Ranger en attic ; laisser | Reduit ~26 Mo a ~42 Ko sans perdre le code, garde la valeur d'audit |
+| grad-cam / bcrypt | Declarer dans pyproject + requirements | Laisser en transitif | Etaient importees (serving, auth) mais non declarees : fragile pour un clone neuf |
+
+### Postes traites (un commit chacun)
+
+1. `fix(deps)` : `build-backend` -> hatchling.build, declaration grad-cam + bcrypt, retrait de la table uv non standard et de l'override mypy `prefect`.
+2. `docs(readme)` : remplacement du workflow `dvc pull` par la trame de reconstruction du jeu de donnees, ajout de diagrammes Mermaid (pipeline data, cycle de vie MLOps).
+3. `chore(dvc)` : retrait du remote prive `origin`, nettoyage des mentions token/DVC dans `.env.example`.
+4. `chore` : redaction des identifiants personnels dans `airflow/.env.airflow.template`, desindexation de `.claude/settings.local.json`.
+5. `fix(demo)` : alignement de `access_policy.yaml` sur les noms de fichiers reels (accents, 13->14), ajout des pages manquantes, correction du `page_title` de 15_alerts.
+6. `docs(governance)` : synchronisation CLAUDE.md / skill / LOGBOOK avec le code (ConvNeXt-Tiny, BentoML, 18 pages, services reels, ports, volume de donnees), deplacement du skill vers `.claude/skills/`, docstrings `dataset.py`.
+7. `chore` : rangement des fichiers one-off/obsoletes en `attic/`, purge des sorties de notebooks lourds.
+
+### Decisions laissees a l'humain (hors perimetre de cette passe)
+
+- **Harmonisation de l'encodage** des commentaires (couche ancienne ASCII desaccentue vs francais accentue) : decision editoriale, volontairement non traitee.
+- **Suppression definitive** des fichiers de `attic/` : a trancher apres revue.
+- **Retrait complet de DVC** (pointeurs `data.dvc`/`models.dvc`) : non fait, structure conservee.
+- **`demo/assets/champy_pipeline_animated_old.svg`** : fichier non suivi par git (absent du worktree), donc non publie ; a supprimer dans la copie de travail principale si souhaite.
+- **Rotation des secrets** (token DagsHub, mots de passe par defaut) : la demo sera demantelee, pas d'enjeu de securite residuel.
+
+### Artefacts produits
+
+- `attic/` + `attic/README.md` (10 fichiers archives).
+- Branche `prepub-finalization` (7 commits + ce recap, non poussee).
