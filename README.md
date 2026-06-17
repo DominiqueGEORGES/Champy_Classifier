@@ -59,18 +59,14 @@ git clone https://github.com/<votre-org>/Champy_Classifier.git
 cd Champy_Classifier
 cp .env.example .env
 
-# Données et modèle : gérés par DVC, stockés sur le remote DagsHub
-pip install "dvc[s3]"
-dvc pull
-
 docker compose up -d --build
 ```
 
 Treize conteneurs démarrent : l'API, la démo, MLflow, MinIO, Airflow, et la surveillance (Prometheus, Grafana, Alertmanager, plus deux exporters qui mesurent l'hôte et les conteneurs). Comptez 5 à 15 minutes au premier lancement. Une fois la stack opérationnelle, ouvrez **http://localhost:8088** dans votre navigateur.
 
-> 🛠️ **Prérequis** : Docker Desktop 4.30+ (Windows / macOS) ou Docker Engine 24.0+ avec le plugin Compose v2 (Linux). Python 3.11 et un accès au remote DVC (identifiants DagsHub) pour le `dvc pull`. 16 Go de RAM. 20 Go de disque libre.
+> 🛠️ **Prérequis** : Docker Desktop 4.30+ (Windows / macOS) ou Docker Engine 24.0+ avec le plugin Compose v2 (Linux). Python 3.11. 16 Go de RAM. 20 Go de disque libre.
 
-> ℹ️ Sans le `dvc pull`, les dossiers `data/` et `models/` restent vides après le clone (ils sont hors git) : la démo démarrerait sans modèle ni images d'exemple. C'est l'étape à ne pas sauter pour une installation propre.
+> ℹ️ **Les données et le modèle ne sont pas distribués avec ce dépôt.** Le jeu d'images (≈ 16 Go) et le modèle entraîné sont hors git. Après le clone, `data/` (hors quelques images d'exemple dans `data/sample/`) et `models/` sont vides : la démo démarre alors sans modèle. Pour reconstituer le jeu de données à partir de vos propres photos, voir [Reconstruire le jeu de données](#reconstruire-le-jeu-de-données) plus bas ; le modèle se régénère ensuite via le pipeline d'entraînement (orchestré par Airflow ou lancé à la main, cf. [`PLAYBOOK.md`](PLAYBOOK.md)).
 
 > 📦 **Registre d'images local (optionnel)** : un second fichier `docker-compose.registry.yml` fournit un registre Docker privé pour le déploiement continu. Il n'est pas nécessaire à la démonstration et se lance à part : `docker compose -f docker-compose.registry.yml up -d` (registre sur `localhost:5000`, interface web sur `localhost:5001`). Voir `docker-compose.registry.yml` pour le prérequis `insecure-registries` côté Docker Desktop.
 
@@ -121,6 +117,97 @@ Quatre conteneurs n'apparaissent pas sur ce schéma parce qu'ils ne sont pas rou
 En production, l'ensemble est exposé derrière **Cloudflare Tunnel** (le démon `cloudflared` tourne sur l'hôte, hors stack Docker) et filtré par **Cloudflare Access** : une seule authentification SSO par e-mail (magic-link) donne accès à tous les sous-chemins sous `https://champy.sbdg-ia.fr/`. Aucun port n'est ouvert directement vers Internet.
 
 Documentation détaillée : [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+---
+
+## Cycle de vie MLOps
+
+De la donnée brute au réentraînement automatique, en boucle fermée :
+
+```mermaid
+flowchart LR
+    D[Données<br/>curation + split] --> T[Entraînement<br/>ConvNeXt-Tiny + MLflow]
+    T --> R[Registre MLflow<br/>+ export ONNX]
+    R --> S[Serving BentoML<br/>ONNX sur CPU]
+    S --> M[Monitoring<br/>Prometheus + Grafana + Evidently]
+    M -->|drift / baisse de qualité| W[Watchdog Airflow]
+    W -->|réentraînement| T
+
+    classDef stage fill:#1F4E3D,stroke:#000,color:#fff
+    class D,T,R,S,M,W stage
+```
+
+---
+
+## Reconstruire le jeu de données
+
+Les images ne sont pas distribuées avec ce dépôt (≈ 16 Go, hors git). Voici comment
+reconstruire le jeu d'entraînement à partir de vos propres photos. La séquence ci-dessous
+est reproductible et tirée directement du code (`data/curate.py`, `data/quality_filter.py`,
+`data/data_split.py`).
+
+```mermaid
+flowchart TD
+    OBS[observations_mushroom.csv<br/>~647K observations] --> CUR
+    TOP[champignons_france_top30.csv<br/>30 espèces cibles] --> CUR
+    CUR[data/curate.py<br/>top30 + GBIF≥92 + dédup + conflits] --> CM[curated_manifest.csv<br/>image_lien, species]
+    CM --> QF[data/quality_filter.py --apply<br/>OpenCLIP ViT-B-32, seuil 0.03]
+    QF --> CMF[curated_manifest_filtered.csv<br/>image_lien, species]
+    CMF --> SP[data/data_split.py<br/>stratifié 70/15/15, seed 42]
+    SP --> SM[split_manifest.csv<br/>split, path, label]
+    SM --> DL[Dataset + DataLoader PyTorch<br/>images résolues dans data/raw/Mushrooms_images]
+
+    classDef src fill:#5A3E1B,stroke:#000,color:#fff
+    classDef step fill:#1F4E3D,stroke:#000,color:#fff
+    classDef out fill:#2B4C7E,stroke:#000,color:#fff
+    class OBS,TOP src
+    class CUR,QF,SP,DL step
+    class CM,CMF,SM out
+```
+
+### Format et emplacement des images
+
+- **Format** : JPEG (`.jpg`), converti en RGB au chargement.
+- **Arborescence** : les images ne sont **pas** rangées par dossier de classe. Elles sont
+  stockées **à plat** dans un dossier unique et référencées par un CSV.
+- **Emplacement attendu** : `data/raw/Mushrooms_images/`. Le nom de fichier de chaque image
+  correspond à la colonne `image_lien` des CSV (par exemple `120020.jpg`).
+- **Dimensions** : aucune contrainte en entrée. Au chargement, le pipeline applique
+  `Resize(256)` + `CenterCrop(224)` en validation/test, `RandomResizedCrop(224)` en
+  entraînement, puis une normalisation ImageNet.
+
+### CSV source attendus (dans `data/`)
+
+- `observations_mushroom.csv` : observations communautaires (colonnes utilisées :
+  `image_lien`, `gbif_info/species`, `gbif_info/confidence`).
+- `champignons_france_top30.csv` : référentiel des 30 espèces cibles (séparateur `;`,
+  encodage `latin-1`, colonne `Nom scientifique`).
+
+### Séquence de construction
+
+```bash
+# 1. Curation : top 30 espèces, confiance GBIF >= 92, dédup, retrait des conflits de label.
+#    Sortie : data/curated_manifest.csv (colonnes image_lien, species)
+python data/curate.py
+
+# 2. Filtre qualité visuelle (OpenCLIP ViT-B-32). Le seuil de production est 0.03.
+#    Sortie : data/curated_manifest_filtered.csv (+ quality_scores.csv, excluded.json)
+python data/quality_filter.py --threshold 0.03 --apply
+
+# 3. Split stratifié 70/15/15 reproductible.
+#    Sortie : data/split_manifest.csv (colonnes split, path, label)
+python data/data_split.py --seed 42 --train-ratio 0.70 --val-ratio 0.15
+```
+
+Le CSV final consommé par l'entraînement est `data/split_manifest.csv` (colonnes
+`split, path, label`) : `split` ∈ {train, val, test}, `path` = nom de fichier image (résolu
+dans `data/raw/Mushrooms_images`), `label` = espèce. Le `label_map` est construit sur le
+split train (classes triées alphabétiquement) et partagé à val/test ; le DataLoader
+d'entraînement utilise un `WeightedRandomSampler` pour compenser le déséquilibre des classes.
+
+> ⚠️ Ordre strict : `curate` → `quality_filter --apply` → `data_split`. Relancer `curate.py`
+> après le filtre écrase `excluded.json`. Le filtre OpenCLIP nécessite l'extra optionnel
+> `pip install ".[filter]"`.
 
 ---
 
@@ -242,9 +329,7 @@ docker compose up -d --force-recreate airflow grafana minio
 
 <br>
 
-La stack inclut un serveur **MLflow auto-hébergé** (`/mlflow/`), avec une base SQLite pour les métadonnées et MinIO comme stockage des artefacts. C'est lui que vise le pipeline d'entraînement orchestré par Airflow.
-
-L'historique de référence des entraînements du projet (comparaison ConvNeXt vs ResNet, modèle retenu) est par ailleurs tracé sur une instance **DagsHub** distante. Les deux ne contiennent donc pas forcément les mêmes runs : pensez à regarder la bonne instance selon ce que vous cherchez.
+La stack inclut un serveur **MLflow auto-hébergé** (`/mlflow/`), avec une base SQLite pour les métadonnées et MinIO comme stockage des artefacts. C'est lui que vise le pipeline d'entraînement orchestré par Airflow. La comparaison des architectures entraînées (ConvNeXt vs ResNet, modèle retenu) y est tracée à mesure des runs ; le détail figure dans [`ARCHITECTURE.md`](ARCHITECTURE.md) et [`LOGBOOK.md`](LOGBOOK.md).
 
 </details>
 
