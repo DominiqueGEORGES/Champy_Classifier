@@ -44,7 +44,7 @@ pages:
     description: Demonstration interactive de prediction (upload d'image).
 
   # ----- Pages reservees aux utilisateurs identifies (lecture seule) -----
-  "01_donnees_brutes.py":
+  "01_données_brutes.py":
     min_role: user
     description: Exploration et statistiques sur les 647K images brutes.
 
@@ -60,7 +60,7 @@ pages:
     min_role: user
     description: Strategie de split stratifie 70/15/15.
 
-  "05_entrainement.py":
+  "05_entraînement.py":
     min_role: user
     description: Metriques et historique de l'entrainement ConvNeXt-Tiny.
 
@@ -88,6 +88,29 @@ pages:
     min_role: user
     description: Architecture Docker, CI/CD GitHub Actions.
 
-  "13_analyse_modèles.py":
+  "14_analyse_modèles.py":
     min_role: user
     description: Comparaison des architectures testees (ResNet, EfficientNet, ConvNeXt).
+
+  # ----- Pages d'action et supports (ajoutees pour completer la matrice) -----
+  # Note : 00, 13, 16, 17 sont rendues sans appel a auth.setup_page() dans le
+  # code (acces de fait public) ; leur min_role ici documente l'intention.
+  "00_plateforme.py":
+    min_role: guest
+    description: Panneau d'acces unifie aux services de la plateforme.
+
+  "13_deploiement_canari.py":
+    min_role: user
+    description: Support de presentation du deploiement canari.
+
+  "15_alerts.py":
+    min_role: admin
+    description: Gestion dynamique des seuils d'alerte.
+
+  "16_cicd.py":
+    min_role: user
+    description: Etat des workflows CI/CD GitHub Actions.
+
+  "17_perspectives.py":
+    min_role: guest
+    description: Perspectives de mise en production en entreprise.

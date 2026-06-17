@@ -93,7 +93,7 @@ auth.setup_page()
 # Configuration de la page
 # =====================================================================
 
-st.set_page_config(page_title="14 - Alertes", layout="wide")
+st.set_page_config(page_title="15 - Alertes", layout="wide")
 st.title(":rotating_light: Gestion dynamique des alertes")
 
 st.markdown(
