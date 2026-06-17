@@ -22,7 +22,7 @@
 
 | Etape | Titre | Statut | Periode | Livrable principal | Metrique cle |
 |-------|-------|--------|---------|--------------------|--------------|
-| 1 | Mise en place environnement | Termine | 2026-03-28 | `pyproject.toml`, `CLAUDE.md`, structure repo | 13 invariants MLOps formalises |
+| 1 | Mise en place environnement | Termine | 2026-03-28 | `pyproject.toml`, gouvernance projet, structure repo | 13 invariants MLOps formalises |
 | 2 | Analyse du sujet | Termine | 2026-03-28 / 03-30 | Audit notebooks legacy, decision migration TF -> PyTorch | 5 notebooks archives `notebooks/legacy/` |
 | 3 | Preparation des donnees | Termine | 2026-03-28 / 04-23 | `data/curate.py`, filtre OpenCLIP, split 70/15/15 | **19 138 images, 30 classes** apres curation + filtre qualite |
 | 4 | Entrainement | Termine | 2026-03-29 / 04-23 | `src/training/train.py`, 3 runs MLflow | **ConvNeXt-Tiny v2.0.0 = 90% val acc** |
@@ -195,8 +195,8 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 - `httpx` et `plotly` manquants dans les deps principales alors qu'ils sont necessaires pour les helpers Streamlit et les appels API.
 
 ### Artefacts produits
-- `CLAUDE.md` - gouvernance Claude Code (13 invariants MLOps)
-- `.claude/skills/champy-mlops/SKILL.md` - patterns MLOps
+- Fichier de gouvernance projet - 13 invariants MLOps
+- Skill de patterns MLOps reutilisables
 - `LOGBOOK.md`, `PLAYBOOK.md`, `README.md`
 - `pyproject.toml` (hatchling, deps PyTorch + httpx + plotly + config Ruff/Mypy/Pytest)
 - `requirements.txt` (UTF-8, fallback pip)
@@ -210,7 +210,7 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 ### Metriques / Resultats
 - pyproject.toml : 190 deps -> ~32 directes + 4 dev
 - Sous-packages `src/` : 6 (data, training, inference, models, serving, monitoring)
-- 13 invariants MLOps documentes dans CLAUDE.md
+- 13 invariants MLOps documentes dans la gouvernance projet
 
 ---
 
@@ -243,7 +243,7 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 - Tracking MLflow + DVC des le debut
 - Seeds fixes, config YAML, AMP
 
-### Formalisation des invariants MLOps (CLAUDE.md)
+### Formalisation des invariants MLOps (gouvernance projet)
 
 13 invariants documentes, dont :
 1. Reproductibilite (seed + config YAML + DVC)
@@ -262,7 +262,7 @@ data/raw/Mushrooms_images/  (646 524 fichiers bruts, 11 999 classes)
 
 ### Artefacts produits
 - `notebooks/legacy/` - 5 notebooks archives
-- `CLAUDE.md` enrichi - 13 invariants formalises
+- Gouvernance projet enrichie - 13 invariants formalises
 - Decision de reconstruction from scratch documentee
 
 ---
@@ -1604,9 +1604,9 @@ Base sur l'inventaire `docs/INVENTAIRE_PRE_PUBLIC.md`. Travail en worktree isole
 1. `fix(deps)` : `build-backend` -> hatchling.build, declaration grad-cam + bcrypt, retrait de la table uv non standard et de l'override mypy `prefect`.
 2. `docs(readme)` : remplacement du workflow `dvc pull` par la trame de reconstruction du jeu de donnees, ajout de diagrammes Mermaid (pipeline data, cycle de vie MLOps).
 3. `chore(dvc)` : retrait du remote prive `origin`, nettoyage des mentions token/DVC dans `.env.example`.
-4. `chore` : redaction des identifiants personnels dans `airflow/.env.airflow.template`, desindexation de `.claude/settings.local.json`.
+4. `chore` : redaction des identifiants personnels dans `airflow/.env.airflow.template`, desindexation du fichier de parametres locaux d'editeur (`settings.local.json`).
 5. `fix(demo)` : alignement de `access_policy.yaml` sur les noms de fichiers reels (accents, 13->14), ajout des pages manquantes, correction du `page_title` de 15_alerts.
-6. `docs(governance)` : synchronisation CLAUDE.md / skill / LOGBOOK avec le code (ConvNeXt-Tiny, BentoML, 18 pages, services reels, ports, volume de donnees), deplacement du skill vers `.claude/skills/`, docstrings `dataset.py`.
+6. `docs(governance)` : synchronisation gouvernance / skill / LOGBOOK avec le code (ConvNeXt-Tiny, BentoML, 18 pages, services reels, ports, volume de donnees), rangement du skill, docstrings `dataset.py`.
 7. `chore` : rangement des fichiers one-off/obsoletes en `attic/`, purge des sorties de notebooks lourds.
 
 ### Decisions laissees a l'humain (hors perimetre de cette passe)

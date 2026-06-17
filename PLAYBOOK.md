@@ -151,12 +151,12 @@
 **A produire** :
 - [x] Tableau des choix techniques (techno / alternatives / justification)
 - [x] Schema d'architecture (machines, services, flux de donnees)
-- [x] CLAUDE.md ou equivalent (gouvernance, invariants, conventions)
+- [x] Un fichier de gouvernance (invariants, conventions)
 - [x] Arborescence cible du repo
 
 **Pieges connus** :
 - Prevoir le contexte OS des le depart (Windows vs Linux) : impacte le task runner, les chemins, les line endings, Docker GPU
-- Ne pas sous-estimer le temps de cadrage : un CLAUDE.md bien fait evite des dizaines de decisions ad hoc plus tard
+- Ne pas sous-estimer le temps de cadrage : un fichier de gouvernance bien fait evite des dizaines de decisions ad hoc plus tard
 
 **Commandes cles** :
 - Aucune (etape de reflexion)
