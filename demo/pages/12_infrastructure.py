@@ -198,14 +198,18 @@ _MERMAID_HTML = """
   }
 
   .mermaid {
+    width: 100%;
+    max-height: 1300px;
+    overflow-y: auto;
+    overflow-x: auto;
     display: flex;
     justify-content: center;
-    width: 100%;
   }
 
   .mermaid svg {
-    max-width: 100%;
-    height: auto;
+    width: 100% !important;
+    max-width: 1200px !important;
+    height: auto !important;
   }
 </style>
   </style>

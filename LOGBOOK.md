@@ -1621,3 +1621,81 @@ Base sur l'inventaire `docs/INVENTAIRE_PRE_PUBLIC.md`. Travail en worktree isole
 
 - `attic/` + `attic/README.md` (10 fichiers archives).
 - Branche `prepub-finalization` (7 commits + ce recap, non poussee).
+
+---
+
+## Exploitation - Airflow muet pendant 34 jours : fichier PID perime - 2026-09-14
+
+**Date** : 2026-09-14
+**Objectif** : Remettre en service `champy_airflow`, declare `unhealthy` par la
+surveillance SBDG, et comprendre pourquoi personne ne s'en etait apercu.
+
+### Le constat
+
+Le conteneur tournait depuis le 11 aout, `State.Status = running`, et son
+controle de sante echouait **97 560 fois de suite** -- soit 34 jours, sans
+interruption, depuis son propre demarrage. Le scheduler et le triggerer
+fonctionnaient normalement et journalisaient chaque minute ; seul le webserver
+etait absent. Aucune tache n'a ete perdue : l'ordonnanceur a continue de
+tourner. C'est l'interface qui avait disparu.
+
+### La cause, trouvee dans les journaux du 11 aout
+
+```
+webserver  | [2026-08-11 20:24:04] [97] [INFO] Starting gunicorn 23.0.0
+webserver  | Error: Already running on PID 104 (or pid file
+           | '/opt/airflow/airflow-webserver.pid' is stale)
+webserver  | [2026-08-11T20:29:00] ERROR - No response from gunicorn master within 300 seconds
+webserver  | [2026-08-11T20:29:00] ERROR - Shutting down webserver
+```
+
+`/opt/airflow/airflow-webserver.pid` contenait `104`, ecrit par le webserver
+d'un demarrage precedent. Ce fichier vit dans la couche inscriptible du
+conteneur : il survit a `docker restart`, il ne disparait qu'a la recreation.
+
+**Le detail qui a rendu le diagnostic trompeur** : au redemarrage, le PID 104
+avait ete reattribue -- au **triggerer**. Le processus existait donc vraiment.
+La detection habituelle de « PID perime » repose sur l'absence du processus ;
+ici elle ne pouvait pas fonctionner. Gunicorn a conclu qu'un webserver
+tournait deja, Airflow a attendu 300 secondes puis l'a eteint.
+
+### Decisions prises
+
+| Decision | Choix | Alternatives envisagees | Justification |
+|----------|-------|------------------------|---------------|
+| Reparation immediate | `docker exec rm -f` du fichier PID, puis `docker restart` | `docker compose up -d --force-recreate airflow` | La recreation aurait aussi efface le fichier, mais elle relit `.env` et l'image : elle embarque des changements non voulus dans un geste de depannage. Le retrait cible ne touche que la cause |
+| Capture avant reparation | Journaux du 11 aout releves AVANT le redemarrage | Redemarrer d'abord, analyser ensuite | Un redemarrage n'efface pas `docker logs`, mais il ajoute 34 jours de bruit entre la cause et le constat. La cause a ete figee d'abord |
+| Lecture des journaux | `docker logs --tail N` puis `grep` | `docker logs \| grep` depuis le debut | Ce journal fait plus de 155 000 lignes ; une lecture depuis le debut n'aboutit pas dans un delai raisonnable et rend des reponses tronquees |
+| Correction durable | Non appliquee ce jour, proposee a l'arbitrage | Modifier le `command:` du compose pour retirer le PID au demarrage | Toucher au demarrage d'Airflow demande un essai a froid ; la panne est levee, la correction de fond merite sa propre passe |
+
+### Verification
+
+| Controle | Avant | Apres |
+|---|---|---|
+| `State.Health.Status` | `unhealthy` | `healthy` |
+| Echecs consecutifs | 97 560 | 0 |
+| `http://localhost:8081/airflow/health` | pas de reponse | `200` |
+| Alertes actives (Alertmanager SBDG) | 1 | **0** |
+| `docker_container_healthy == 0` | 1 | **0** |
+
+### Ce que cet incident dit de la surveillance
+
+La panne a dure 34 jours alors qu'une alerte etait levee en permanence. Le
+signal existait ; c'est son traitement qui manquait. Une alerte qui dure un
+mois cesse d'etre lue -- c'est le meme defaut qu'une tuile rouge permanente sur
+un tableau de bord.
+
+### Restant pour cloturer
+
+- Correction durable : retirer le fichier PID au demarrage du conteneur.
+- **Webhook Discord en clair dans `docker-compose.yml` ligne 337**, commit
+  `4aae613`, present sur quatre branches distantes de depots GitHub **publics**
+  (`LoicFocraud/Champy_Classifier` et `DominiqueGEORGES/Champy_Classifier`,
+  tous deux repondent 200 sans authentification). Toutes les autres valeurs
+  sensibles du fichier passent par `${VAR}` -- la ligne 211 le fait
+  correctement pour ce meme webhook. **Le revoquer et le recreer dans Discord
+  est la seule action utile** : reecrire l'historique ne desexpose pas ce qui
+  a ete publie.
+  **Fait le 2026-11-09** : webhook supprime et recree dans Discord ; le
+  compose lit desormais `${DISCORD_WEBHOOK_URL}` (ADR 0001, branche
+  `vitrine-securite`).
