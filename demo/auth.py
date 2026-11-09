@@ -136,6 +136,13 @@ _POLICY: dict[str, int] = _USERS_CONFIG["security_policy"]
 _DEMO_VISIBLE: bool = _USERS_CONFIG.get("demo_credentials_visible", False)
 _DEMO_CREDENTIALS: list[dict[str, str]] = _USERS_CONFIG.get("demo_credentials", [])
 
+# Hash factice VALIDE, pour un identifiant inconnu ou désactivé : même coût
+# bcrypt qu'un vrai compte (on ne révèle pas si le compte existe). Un hash
+# mal formé faisait lever ValueError (« Invalid salt ») et planter la page.
+_DUMMY_HASH: bytes = bcrypt.hashpw(
+    b"dummy_password", bcrypt.gensalt(rounds=int(_POLICY.get("bcrypt_rounds", 12)))
+)
+
 _ACCESS_POLICY = _load_access_policy()
 _ROLE_HIERARCHY: dict[str, int] = _ACCESS_POLICY["roles"]
 _DEFAULT_MIN_ROLE: str = _ACCESS_POLICY.get("default_min_role", "admin")
@@ -408,10 +415,7 @@ def authenticate(username: str, password: str) -> tuple[bool, str]:
     if user_data is None or not is_account_enabled(user_data):
         # Pour éviter de révéler si le username existe ou pas, on effectue
         # quand même un hash bcrypt factice (timing equalization).
-        _ = bcrypt.checkpw(
-            b"dummy_password",
-            b"$2b$12$dummyhashplaceholderxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        )
+        _ = bcrypt.checkpw(b"dummy_password", _DUMMY_HASH)
         _register_failed_attempt(username)
         return False, "Identifiants incorrects."
 
