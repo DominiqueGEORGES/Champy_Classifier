@@ -28,6 +28,10 @@ st.set_page_config(
     layout="wide",
 )
 
+from demo import auth
+
+auth.setup_page()
+
 st.title("Industrialiser un projet de prédiction en entreprise")
 
 st.markdown(

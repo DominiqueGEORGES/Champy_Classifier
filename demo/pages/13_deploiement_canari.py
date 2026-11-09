@@ -9,6 +9,10 @@ import streamlit as st
 
 st.set_page_config(page_title="Deploiement canari", layout="wide")
 
+from demo import auth
+
+auth.setup_page()
+
 # Schema du flux, embarque en dur pour que la page soit autonome.
 # Le style sur la balise svg le rend responsive a la largeur de la colonne.
 SCHEMA_SVG = """<svg viewBox="0 0 820 700" style="width:100%;max-width:880px;height:auto" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
