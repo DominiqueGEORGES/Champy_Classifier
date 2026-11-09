@@ -249,7 +249,7 @@ st.html('<p class="champy-section-title">Équipe et cadre académique</p>')
 st.markdown(
     "**Travail de Fin d'Études** — Master *Intelligence Artificielle*, "
     "DataScientest x Mines Paris PSL (RNCP niveau 7). "
-    "Soutenance prévue le **16 juin 2026**."
+    "Soutenu en **juin 2026**."
 )
 
 team_cols = st.columns(5)
