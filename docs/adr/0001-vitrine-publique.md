@@ -27,8 +27,8 @@ Deux portes distinctes sur la même façade nginx :
 
 ```mermaid
 flowchart LR
-    R[Recruteur] -->|sans connexion| CFp[Cloudflare<br/>nom public de la vitrine]
-    E[Équipe] -->|Cloudflare Access| CFa[Cloudflare<br/>champy.sbdg-ia.fr]
+    R[Recruteur] -->|sans connexion| CFp[Cloudflare<br/>champy.sbdg-ia.fr]
+    E[Équipe] -->|Cloudflare Access| CFa[Cloudflare<br/>champy-admin.sbdg-ia.fr]
     CFp --> P8089[nginx :8089<br/>porte publique]
     CFa --> P8088[nginx :8088<br/>porte privée]
     P8089 -->|liste blanche| D[Démo Streamlit]
@@ -112,7 +112,16 @@ flowchart LR
    ports changent).
 3. Vérifier en local : `curl -I http://127.0.0.1:8089/` → 200 ;
    `curl -I http://127.0.0.1:8089/mlflow/` → 403.
-4. Dans Cloudflare Zero Trust, sur le tunnel existant : ajouter un nom public
-   (par exemple `demo-champy.sbdg-ia.fr`) vers `http://<adresse du NUC3>:8089`,
-   **sans** application Access. Ne rien changer à `champy.sbdg-ia.fr`.
-5. Recommandé : une règle de limitation de débit Cloudflare sur ce nom.
+4. Noms publics. `champy.sbdg-ia.fr` figure déjà sur les CV et LinkedIn : c'est
+   lui qui devient la vitrine. L'administration passe sur `champy-admin.sbdg-ia.fr`.
+   Le tunnel est géré par fichier (`~/.cloudflared/config.yml` sur collab-stack).
+   Ordre suivi pour ne jamais exposer l'administration :
+   1. ajouter `champy-admin.sbdg-ia.fr` à l'application Cloudflare Access existante ;
+   2. tunnel : `champy` → `http://192.168.50.55:8089`,
+      `champy-admin` → `http://192.168.50.55:8088`, puis redémarrer `cloudflared` ;
+   3. `.env` : `CHAMPY_PUBLIC_BASE_URL=https://champy-admin.sbdg-ia.fr` (liens et
+      URL racines de Grafana, Prometheus, Alertmanager), puis `docker compose up -d` ;
+   4. DNS : `cloudflared tunnel route dns <tunnel> champy-admin.sbdg-ia.fr` ;
+   5. vérifier que `champy-admin` exige la connexion ;
+   6. retirer `champy.sbdg-ia.fr` de l'application Access : la vitrine devient publique.
+5. Recommandé : une règle de limitation de débit Cloudflare sur `champy.sbdg-ia.fr`.
