@@ -759,6 +759,43 @@ invoke test-integration
 
 ---
 
+### Pieges d'exploitation : le conteneur qui tourne sans travailler
+
+Transposable a tout service conteneurise, pas seulement Airflow.
+
+- **`docker ps` ne dit pas qu'un service fonctionne.** Il dit que le
+  conteneur n'est pas sorti. Un composant interne peut etre mort depuis des
+  semaines pendant que les autres journalisent normalement. Le seul verdict
+  utile est un controle de sante -- et encore faut-il le LIRE :
+  `docker inspect --format '{{.State.Health.Status}} {{.State.Health.FailingStreak}}'`.
+  Un `FailingStreak` a cinq chiffres est un incident qui dure depuis des
+  semaines.
+- **Un fichier PID peut etre perime ET pointer un processus vivant.** Au
+  redemarrage, le systeme reattribue les numeros : le PID ecrit par le service
+  mort peut appartenir a un autre processus du meme conteneur. La detection
+  classique (« ce PID existe-t-il ? ») conclut alors a tort qu'un service
+  tourne deja, et le vrai refuse de demarrer. Tout fichier PID range ailleurs
+  que dans un `tmpfs` doit etre retire au demarrage.
+- **Un fichier de la couche inscriptible survit a `docker restart`.** Il ne
+  disparait qu'a la recreation du conteneur. C'est ce qui fait qu'un
+  redemarrage « pour voir » ne corrige rien et entretient le mystere.
+- **Ne jamais lire un journal de conteneur depuis le debut.** Un service qui
+  boucle sur une erreur produit des centaines de milliers de lignes ;
+  `docker logs | grep` n'aboutit pas et rend une reponse tronquee -- donc
+  fausse, ce qui est pire que lente. Toujours `docker logs --tail N`, ou
+  `--since` qui utilise les horodatages de Docker.
+- **Ne jamais analyser l'horodatage ECRIT DANS la ligne de journal.** Beaucoup
+  d'applications journalisent en UTC alors que l'hote est en heure locale :
+  un `date -d` sur cette chaine decale de plusieurs heures et fait conclure
+  qu'un service sain est muet. Laisser `--since` faire le filtrage.
+- **Capturer la cause AVANT de reparer.** Un redemarrage n'efface pas les
+  journaux, mais il insere des semaines de bruit entre la cause et le constat.
+  Relever d'abord, redemarrer ensuite.
+- **Une alerte qui dure un mois cesse d'etre lue.** Le signal existait ici
+  depuis 34 jours. Ce n'est pas la detection qui a manque, c'est son
+  traitement. Une alerte permanente doit etre soit traitee, soit retiree --
+  jamais laissee.
+
 ## Aide-mémoire transversal
 
 ### Commandes invoke les plus utilisées
