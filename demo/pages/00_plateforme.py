@@ -51,8 +51,6 @@ class ServiceCard:
     description: str  # rôle dans la stack (1 phrase)
     internal_health: str  # URL de health en réseau Docker interne
     public_path: str  # path public, concaténé à PUBLIC_BASE_URL
-    auth_user_env: str = ""  # nom de la variable d'env contenant l'utilisateur
-    auth_pwd_env: str = ""  # nom de la variable d'env contenant le mot de passe
     auth_note: str = ""  # remarque éventuelle (ex. "pas d'authentification")
 
 
@@ -105,8 +103,7 @@ SERVICES: list[ServiceCard] = [
         ),
         internal_health="http://airflow:8080/airflow/health",
         public_path="/airflow/",
-        auth_user_env="AIRFLOW_ADMIN_USERNAME",
-        auth_pwd_env="AIRFLOW_ADMIN_PASSWORD",
+        auth_note="Identifiants communiqués sur demande (compte nominatif).",
     ),
     ServiceCard(
         key="grafana",
@@ -118,8 +115,7 @@ SERVICES: list[ServiceCard] = [
         ),
         internal_health="http://grafana:3000/api/health",
         public_path="/grafana/",
-        auth_user_env="GRAFANA_USER",
-        auth_pwd_env="GRAFANA_PASSWORD",
+        auth_note="Identifiants communiqués sur demande (compte nominatif).",
     ),
     ServiceCard(
         key="prometheus",
@@ -155,8 +151,7 @@ SERVICES: list[ServiceCard] = [
         ),
         internal_health="http://minio:9000/minio/health/live",
         public_path="/minio/",
-        auth_user_env="MINIO_ROOT_USER",
-        auth_pwd_env="MINIO_ROOT_PASSWORD",
+        auth_note="Identifiants communiqués sur demande (compte nominatif).",
     ),
 ]
 
@@ -192,25 +187,6 @@ def get_service_statuses() -> dict[str, bool]:
 
 
 # ----------------------------------------------------------------------------
-# Lecture des identifiants
-# ----------------------------------------------------------------------------
-
-
-def get_credentials(service: ServiceCard) -> tuple[str, str] | None:
-    """Retourne (utilisateur, mot_de_passe) ou None si pas d'auth applicable.
-
-    Les variables d'environnement doivent être injectées dans le container
-    Streamlit via le `docker-compose.yml`. Si une variable manque, on retourne
-    une chaîne d'avertissement plutôt que de masquer silencieusement.
-    """
-    if not service.auth_user_env and not service.auth_pwd_env:
-        return None
-    user = os.getenv(service.auth_user_env, "(variable non définie)")
-    pwd = os.getenv(service.auth_pwd_env, "(variable non définie)")
-    return user, pwd
-
-
-# ----------------------------------------------------------------------------
 # Affichage
 # ----------------------------------------------------------------------------
 
@@ -219,6 +195,10 @@ st.set_page_config(
     page_icon="🍄",
     layout="wide",
 )
+
+from demo import auth
+
+auth.setup_page()
 
 st.title("🍄 Plateforme Champy Classifier")
 st.markdown(
@@ -272,7 +252,6 @@ for row_start in range(0, len(SERVICES), COLS):
         service = SERVICES[service_idx]
         is_up = statuses.get(service.key, False)
         public_url = f"{PUBLIC_BASE_URL}{service.public_path}"
-        creds = get_credentials(service)
 
         with col, st.container(border=True):
             badge = "🟢 UP" if is_up else "🔴 DOWN"
@@ -284,17 +263,9 @@ for row_start in range(0, len(SERVICES), COLS):
                 use_container_width=True,
             )
 
-            # Bloc identifiants : repli pour éviter la surcharge visuelle.
-            # st.code() expose un bouton "copier" natif au survol.
-            with st.expander("🔑 Identifiants de connexion", expanded=False):
-                if creds is None:
-                    st.caption(service.auth_note or "Pas d'authentification applicative.")
-                else:
-                    user, pwd = creds
-                    st.caption("Utilisateur")
-                    st.code(user, language="text")
-                    st.caption("Mot de passe")
-                    st.code(pwd, language="text")
+            # Aucun identifiant n'est affiché : l'accès passe par Cloudflare Access
+            # et des comptes nominatifs (ADR vitrine publique).
+            st.caption(service.auth_note or "Accès réservé.")
 st.divider()
 
 # Section pédagogique pour la défense : explique l'architecture

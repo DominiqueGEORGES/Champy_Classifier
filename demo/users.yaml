@@ -19,7 +19,7 @@ users:
   admin:
     display_name: Administrateur
     role: admin
-    password_hash: $2b$12$CdyuPXV9ZdBqBWNxU.q4pu6.v9XHImW4zxAN.zxandvL/A2nwUegC
+    password_hash: ""  # vide = compte désactivé ; hash fourni par CHAMPY_ADMIN_PASSWORD_HASH (.env)
     description: Compte avec droits etendus (actions administratives, retrain, reset baseline).
 
   user:
@@ -32,10 +32,8 @@ users:
 # Cette section est destinee a l'usage pedagogique : tout visiteur peut tester
 # les deux roles. EN PRODUCTION CETTE SECTION SERAIT SUPPRIMEE.
 demo_credentials_visible: true
+# Le compte admin n'est jamais affiché : démonstration sur demande (vitrine publique).
 demo_credentials:
-  - username: admin
-    password: ChampyAdmin2026!
-    role_display: Administrateur
   - username: user
     password: ChampyUser2026!
     role_display: Utilisateur standard

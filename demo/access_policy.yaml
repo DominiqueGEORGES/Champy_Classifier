@@ -93,10 +93,10 @@ pages:
     description: Comparaison des architectures testees (ResNet, EfficientNet, ConvNeXt).
 
   # ----- Pages d'action et supports (ajoutees pour completer la matrice) -----
-  # Note : 00, 13, 16, 17 sont rendues sans appel a auth.setup_page() dans le
-  # code (acces de fait public) ; leur min_role ici documente l'intention.
+  # 00, 13, 16, 17 appellent auth.setup_page() (vitrine publique, nov. 2026).
+  # 00 liste les services internes : reservee aux utilisateurs identifies.
   "00_plateforme.py":
-    min_role: guest
+    min_role: user
     description: Panneau d'acces unifie aux services de la plateforme.
 
   "13_deploiement_canari.py":

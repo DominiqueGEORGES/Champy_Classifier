@@ -23,7 +23,7 @@ services:
     command: ["bentoml", "serve", "src.serving_bentoml.service:ChampyService", "--host", "0.0.0.0", "--port", "8000"]
     container_name: champy_api
     ports:
-      - "8010:8000"
+      - "127.0.0.1:8010:8000"
     volumes:
       - ./models:/app/models:ro
       - bentoml_data:/root/bentoml
@@ -51,7 +51,7 @@ services:
       dockerfile: docker/Dockerfile.demo
     container_name: champy_demo
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     env_file: .env
     environment:
       # La demo Streamlit tape sur l'API via le network interne du compose.
@@ -64,12 +64,6 @@ services:
       - CHAMPY_GRAFANA_URL=http://grafana:3000
       - CHAMPY_GRAFANA_URL_EXTERNAL=${CHAMPY_PUBLIC_BASE_URL:-http://localhost:8088}/grafana
       - TZ=Europe/Paris
-      - AIRFLOW_ADMIN_USERNAME=${AIRFLOW_ADMIN_USERNAME:-admin}
-      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
-      - GRAFANA_USER=${GRAFANA_USER:-admin}
-      - GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - CHAMPY_GITHUB_OWNER=${CHAMPY_GITHUB_OWNER:-LoicFocraud}
       - CHAMPY_GITHUB_REPO=${CHAMPY_GITHUB_REPO:-Champy_Classifier}
@@ -85,7 +79,7 @@ services:
         condition: service_started
     restart: unless-stopped
     volumes:
-      - ./demo:/app/demo                  # ← ajouter en haut pour code live
+      - ./demo:/app/demo:ro               # lecture seule (vitrine publique, ADR 0001)
       - ./models:/app/models:ro
       - ./data:/app/data
       - ./configs:/app/configs:ro
@@ -105,7 +99,7 @@ services:
     container_name: champy_prometheus
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./configs/alerts:/etc/prometheus/alerts:ro
@@ -115,7 +109,7 @@ services:
     image: grafana/grafana:latest
     container_name: champy_grafana
     ports:
-      - "3010:3000"
+      - "127.0.0.1:3010:3000"
     volumes:
       # Provisioning auto : datasource Prometheus + provider de dashboards.
       # Lu au boot par Grafana, recharge automatiquement les dashboards si
@@ -124,7 +118,7 @@ services:
       - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-changeme}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD manquant dans .env}
       - GF_SECURITY_ALLOW_EMBEDDING=true
       # Auth anonyme + embedding pour les iframes Streamlit (page 10).
       # Acceptable en demo locale ; en prod il faudrait un reverse proxy
@@ -156,7 +150,7 @@ services:
       - CONTAINER_FILTER=${CHAMPY_CONTAINER_FILTER:-champy_}
       - TZ=Europe/Paris
     ports:
-      - "9417:9417"                  # acces direct optionnel ; scrape interne via docker_exporter:9417
+      - "127.0.0.1:9417:9417"                  # acces direct optionnel ; scrape interne via docker_exporter:9417
     volumes:
       # Socket Docker monte en LECTURE SEULE : acces minimal pour lister les
       # containers et lire leurs stats, aucune capacite de modification.
@@ -181,7 +175,7 @@ services:
       # permettre au container de les modifier.
       - '/:/host:ro'
     ports:
-      - "9101:9100"   # 9100 interne (scrape) ; 9101 cote hote pour eviter un conflit eventuel
+      - "127.0.0.1:9101:9100"   # 9100 interne (scrape) ; 9101 cote hote pour eviter un conflit eventuel
     restart: unless-stopped
 
 # =====================================================================
@@ -193,7 +187,7 @@ services:
     container_name: champy_alertmanager
     restart: unless-stopped
     ports:
-      - "9193:9093"
+      - "127.0.0.1:9193:9093"
     volumes:
       - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
@@ -218,13 +212,13 @@ services:
     container_name: champy_minio
     restart: unless-stopped
     ports:
-      - "9010:9000"   # API S3 (host:container) - offset +10 par coherence projet
-      - "9011:9001"   # Console web
+      - "127.0.0.1:9010:9000"   # API S3 (host:container) - offset +10 par coherence projet
+      - "127.0.0.1:9011:9001"   # Console web
     volumes:
       - minio_data:/data
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-changeme_in_env_file}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD manquant dans .env}
       - MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL:-http://localhost:8088/minio}
     command: server /data --console-address ":9001"
     healthcheck:
@@ -237,7 +231,7 @@ services:
     build: ./mlflow
     container_name: champy_mlflow
     ports:
-      - "5050:5000"
+      - "127.0.0.1:5050:5000"
     volumes:
       - mlflow_data:/mlflow
     environment:
@@ -268,7 +262,8 @@ services:
       image: nginx:1.27-alpine
       container_name: champy_nginx
       ports:
-        - "8088:80"
+        - "8088:80"   # privé : Cloudflare Access (champy.sbdg-ia.fr)
+        - "8089:8089" # public : vitrine, démo seule (ADR 0001)
       volumes:
         - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
         - ./configs/nginx/favicon.ico:/etc/nginx/favicon.ico:ro
@@ -287,12 +282,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
-      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:?AIRFLOW_DB_PASSWORD manquant dans .env}
       POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
     volumes:
       - postgres_airflow_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER:-airflow} -d ${AIRFLOW_DB_NAME:-airflow}"]
       interval: 10s
@@ -321,11 +316,11 @@ services:
       AIRFLOW__WEBSERVER__BASE_URL: ${AIRFLOW_BASE_URL:-http://localhost:8088/airflow}
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@postgres_airflow:5432/${AIRFLOW_DB_NAME:-airflow}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:?AIRFLOW_DB_PASSWORD manquant dans .env}@postgres_airflow:5432/${AIRFLOW_DB_NAME:-airflow}
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?AIRFLOW_ADMIN_PASSWORD manquant dans .env}
       _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
@@ -334,9 +329,9 @@ services:
       AWS_DEFAULT_REGION: us-east-1
       PYTHONPATH: /opt/champy:/opt/airflow
       AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
-      DISCORD_WEBHOOK_URL: https://discord.com/api/webhooks/1507306844891119647/nzyJK53M-yX5EKTzZTrmEJCkvkS8IBN0kMrF7ZZM9sVA9UbNQh9gFASra-4946iXz__U
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
