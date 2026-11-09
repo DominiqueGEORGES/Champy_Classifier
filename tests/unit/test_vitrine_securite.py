@@ -143,3 +143,50 @@ def test_compte_sans_hash_desactive() -> None:
     assert auth.is_account_enabled({"password_hash": ""}) is False
     assert auth.is_account_enabled({"password_hash": None}) is False
     assert auth.is_account_enabled({}) is False
+
+
+class _SessionFactice(dict):
+    """Imite st.session_state : accès par clé et par attribut."""
+
+    def __getattr__(self, nom: str):
+        try:
+            return self[nom]
+        except KeyError as exc:
+            raise AttributeError(nom) from exc
+
+    def __setattr__(self, nom: str, valeur) -> None:
+        self[nom] = valeur
+
+
+@pytest.fixture
+def auth_session(monkeypatch: pytest.MonkeyPatch):
+    auth = pytest.importorskip("demo.auth")
+    session = _SessionFactice(
+        auth_failed_attempts=0, auth_locked_until=0.0, auth_user=None, auth_role="guest"
+    )
+    monkeypatch.setattr(auth.st, "session_state", session)
+    return auth, session
+
+
+def test_hash_factice_valide() -> None:
+    auth = pytest.importorskip("demo.auth")
+    import bcrypt
+
+    assert bcrypt.checkpw(b"autre", auth._DUMMY_HASH) is False
+
+
+def test_identifiant_inconnu_refuse_sans_planter(auth_session) -> None:
+    auth, session = auth_session
+    ok, message = auth.authenticate("inconnu_total", "UnMotDePasse123!")
+    assert ok is False
+    assert message == "Identifiants incorrects."
+    assert session["auth_failed_attempts"] == 1
+
+
+def test_compte_desactive_refuse_sans_planter(auth_session, monkeypatch) -> None:
+    auth, session = auth_session
+    monkeypatch.setitem(auth._USERS, "admin", {"role": "admin", "password_hash": ""})
+    ok, message = auth.authenticate("admin", "UnMotDePasse123!")
+    assert ok is False
+    assert message == "Identifiants incorrects."
+    assert session["auth_user"] is None
