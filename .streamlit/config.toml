@@ -18,8 +18,15 @@ textColor = "#1A1A1A"
 font = "sans serif"
 
 [server]
-# Conserver les configs existantes
-runOnSave = true
+# Vitrine publique (ADR 0001) : pas de rechargement automatique du code,
+# envoi de fichier limité à 5 Mo, protection XSRF explicite.
+runOnSave = false
+maxUploadSize = 5
+enableXsrfProtection = true
+
+[client]
+# Ne pas montrer les traces Python (chemins, versions) aux visiteurs.
+showErrorDetails = "none"
 
 [browser]
 gatherUsageStats = false

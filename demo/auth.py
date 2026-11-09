@@ -44,7 +44,9 @@ Par défaut : admin > user > guest.
 from __future__ import annotations
 
 import inspect
+import os
 import time
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -94,8 +96,42 @@ def _load_access_policy() -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def apply_password_hash_overrides(
+    users: dict[str, dict[str, Any]], environ: Mapping[str, str]
+) -> dict[str, dict[str, Any]]:
+    """Remplace le hash d'un compte par la variable d'environnement correspondante.
+
+    Le hash du compte ``admin`` n'est pas versionné (le dépôt est public) :
+    il est fourni par ``CHAMPY_ADMIN_PASSWORD_HASH`` dans le ``.env``. La règle
+    vaut pour tout compte : ``CHAMPY_<NOM>_PASSWORD_HASH``. Un compte dont le
+    hash reste vide est désactivé (aucune connexion possible).
+
+    Args:
+        users: Comptes lus dans ``users.yaml``.
+        environ: Variables d'environnement (``os.environ`` en production).
+
+    Returns:
+        Une copie des comptes, avec les hash surchargés.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for username, data in users.items():
+        merged = dict(data)
+        override = environ.get(f"CHAMPY_{username.upper()}_PASSWORD_HASH", "").strip()
+        if override:
+            merged["password_hash"] = override
+        result[username] = merged
+    return result
+
+
+def is_account_enabled(user_data: dict[str, Any]) -> bool:
+    """Indique si un compte peut se connecter (hash bcrypt renseigné)."""
+    return bool(str(user_data.get("password_hash") or "").strip())
+
+
 _USERS_CONFIG = _load_users_config()
-_USERS: dict[str, dict[str, Any]] = _USERS_CONFIG["users"]
+_USERS: dict[str, dict[str, Any]] = apply_password_hash_overrides(
+    _USERS_CONFIG["users"], os.environ
+)
 _POLICY: dict[str, int] = _USERS_CONFIG["security_policy"]
 _DEMO_VISIBLE: bool = _USERS_CONFIG.get("demo_credentials_visible", False)
 _DEMO_CREDENTIALS: list[dict[str, str]] = _USERS_CONFIG.get("demo_credentials", [])
@@ -369,7 +405,7 @@ def authenticate(username: str, password: str) -> tuple[bool, str]:
 
     # Vérification du username
     user_data = _USERS.get(username)
-    if user_data is None:
+    if user_data is None or not is_account_enabled(user_data):
         # Pour éviter de révéler si le username existe ou pas, on effectue
         # quand même un hash bcrypt factice (timing equalization).
         _ = bcrypt.checkpw(

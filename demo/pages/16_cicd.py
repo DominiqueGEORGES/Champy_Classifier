@@ -204,6 +204,10 @@ def render_status_badge(label: str, color: str, size: str = "large") -> str:
 # =====================================================================
 
 st.set_page_config(page_title="CI/CD", page_icon=":rocket:", layout="wide")
+
+from demo import auth
+
+auth.setup_page()
 st.title("CI/CD - Statuts GitHub Actions + rapports")
 
 st.caption(
